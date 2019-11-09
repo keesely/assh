@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	yaml "gopkg.in/yaml.v2"
-	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
@@ -15,26 +14,32 @@ import (
 type Yaml struct {
 	originData yaml.MapSlice
 	data       map[string]interface{}
-	filename   string
 	sync.RWMutex
 }
 
+var saveFile string
+
 func NewYamlLoad(filename string) *Yaml {
-	f, e := ioutil.ReadFile(filename)
+	saveFile = RealPath(filename)
+	f, e := FileGetContents(saveFile)
 	if e != nil {
 		log.Fatal("Get Yaml Error: ", e)
 	}
 
+	return NewYaml(f)
+}
+
+func NewYaml(yc []byte) *Yaml {
 	cnf := make(map[string]interface{})
-	e = yaml.Unmarshal(f, cnf)
+	e := yaml.Unmarshal(yc, cnf)
 	data := &yaml.MapSlice{}
-	e = yaml.Unmarshal(f, data)
+	e = yaml.Unmarshal(yc, data)
 	if e != nil {
 		log.Fatal("Unmarshal Yaml: ", e)
 	}
 
 	cnf = FormatValueMaps(cnf)
-	return &Yaml{data: cnf, filename: filename, originData: *data}
+	return &Yaml{data: cnf, originData: *data}
 }
 
 func FormatValueMaps(m map[string]interface{}) map[string]interface{} {
@@ -188,7 +193,7 @@ func (this *Yaml) Set(key string, value interface{}) error {
 }
 
 func (this *Yaml) Save() error {
-	return this.SaveAs(this.filename)
+	return this.SaveAs(saveFile)
 }
 
 func (this *Yaml) SaveAs(filename string) error {

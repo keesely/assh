@@ -15,18 +15,18 @@ const (
 )
 
 // 获取文件内容
-func FileGetContents(file string) (string, error) {
+func FileGetContents(file string) ([]byte, error) {
 	fl, err := os.Open(file)
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	defer fl.Close()
 
 	content, err := ioutil.ReadAll(fl)
 
-	return string(content), err
+	return content, err
 }
 
 // 写入文件内容
