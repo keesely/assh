@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/keesely/kiris"
 	"github.com/urfave/cli"
-	"gossh/config"
-	"gossh/gossh"
+	"gossh/src/config"
+	"gossh/src/gossh"
 	"os"
 	"reflect"
 )

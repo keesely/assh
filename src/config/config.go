@@ -3,10 +3,10 @@
 package config
 
 import (
-	"encoding/gob"
+	//"encoding/gob"
 	"fmt"
 	"github.com/keesely/kiris"
-	"gossh/gossh"
+	gossh "gossh/src/gossh"
 	"log"
 	"os"
 	//"os/exec"
@@ -23,7 +23,7 @@ func NewConfig() *Config {
 	db := kiris.NewK_VMaps()
 
 	// 注册格式化结构
-	gob.Register(gossh.Server{})
+	//gob.Register(gossh.Server{})
 
 	if !kiris.IsDir(dbpath) {
 		//cmd := exec.Command("sh", "-c", "mkdir -p "+dbpath)
