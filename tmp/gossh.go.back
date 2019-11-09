@@ -1,0 +1,72 @@
+/*************************************************************************
+   > File Name: gossh.go
+   > Author: Kee
+   > Mail: chinboy2012@gmail.com
+   > Created Time: 2019.11.07
+************************************************************************/
+package main
+
+import (
+	"fmt"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/terminal"
+	"log"
+	"net"
+	"os"
+)
+
+func main() {
+	check := func(err error, msg string) {
+		if err != nil {
+			log.Fatalf("%s error: %v", msg, err)
+		}
+	}
+
+	hostKeyCallbk := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		return nil
+	}
+	client, err := ssh.Dial("tcp", "114.116.210.144:3389", &ssh.ClientConfig{
+		User:            "kee",
+		Auth:            []ssh.AuthMethod{ssh.Password("63cde1acb470Huawei2019")},
+		HostKeyCallback: hostKeyCallbk,
+	})
+	check(err, "dial")
+
+	session, err := client.NewSession()
+	check(err, "new session")
+	defer session.Close()
+
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
+	session.Stdin = os.Stdin
+
+	fd := int(os.Stdin.Fd())
+	oldState, err := terminal.MakeRaw(fd)
+	if err != nil {
+		log.Fatal("创建文件描述符出错:" + err.Error())
+	}
+	defer terminal.Restore(fd, oldState)
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          0,
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
+	}
+	termType := os.Getenv("TERM")
+	if termType == "" {
+		termType = "xterm-256color"
+	}
+	fmt.Println("Your Term Type: ", termType)
+
+	w, h, _ := terminal.GetSize(fd)
+	fmt.Printf("Termain Width: %d, Height: %d \n", w, h)
+
+	err = session.RequestPty(termType, 800, 1000, modes)
+	check(err, "request pty")
+
+	err = session.Shell()
+	check(err, "start shell")
+
+	err = session.Wait()
+	check(err, "return")
+}
