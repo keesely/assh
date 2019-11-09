@@ -32,7 +32,7 @@ function build () {
   cd ./build
   zip -r "${package}.zip" "./${package}"
   echo "Clean ${package}..."
-  #rm -rf "./${package}"
+  rm -rf "./${package}"
   cd ..
 }
 
