@@ -12,6 +12,7 @@ import (
 
 //var passwd = hash.Md5("keesely.net")
 var passwd string
+var cPath = kiris.RealPath("~/.gossh")
 
 type GoSSH struct {
 	data   *kiris.Yaml
@@ -24,6 +25,10 @@ func init() {
 		log.Fatal("请输入启动密码")
 	}
 	// 判断是否存在密码文件
+	//passFile := cPath + "/account.key"
+	//if !kiris.FileExists(passFile) {
+
+	//}
 	fmt.Println("Passwd: ", passwd)
 	passwd = hash.Md5(passwd)
 	fmt.Println("Passwd => : ", passwd)
@@ -31,7 +36,6 @@ func init() {
 }
 
 func NewGoSSH() *GoSSH {
-	cPath := kiris.RealPath("~/.gossh")
 	cFile := cPath + "/servers.ydb"
 
 	passwd = hash.Md5("keesely.net")
