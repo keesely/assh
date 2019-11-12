@@ -106,7 +106,7 @@ func SshKeygen(private *bytes.Buffer, privateKey *rsa.PrivateKey) (string, strin
 		hostname, _ := os.Hostname()
 		uName := u.Username
 		pubStr = strings.Replace(pubStr, "\n", "", -1)
-		pubStr = fmt.Sprintf("%s %s@%s", pubStr, uName, hostname)
+		pubStr = fmt.Sprintf("%s %s@%s \n", pubStr, uName, hostname)
 	}
 	return pubStr, private.String(), nil
 }
