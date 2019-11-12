@@ -1,190 +1,130 @@
+// gossh.go kee > 2019/11/08
+
 package gossh
 
 import (
 	"fmt"
 	"github.com/keesely/kiris"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/terminal"
-	"io/ioutil"
-	"net"
+	"github.com/keesely/kiris/hash"
+	"log"
 	"os"
-	//"os/signal"
-	//"runtime"
-	"strconv"
-	//"syscall"
-	"time"
 )
 
-type Server struct {
-	Name     string                 `json:name`
-	Host     string                 `json:name`
-	Port     int                    `json:port`
-	User     string                 `json:user`
-	Password string                 `json:password`
-	PemKey   string                 `json:key`
-	Options  map[string]interface{} `json:options`
-	//GroupName  string                 `json:group_name`
-	termWidth  int
-	termHeight int
+//var passwd = hash.Md5("keesely.net")
+var passwd string
+
+type GoSSH struct {
+	data   *kiris.Yaml
+	dbFile string
 }
 
-type SSHConfig struct {
-	Addr   string
-	Port   int
-	Config *ssh.ClientConfig
+// 初始化必要数据
+func init() {
+	if "" == passwd {
+		log.Fatal("请输入启动密码")
+	}
+	// 判断是否存在密码文件
+	fmt.Println("Passwd: ", passwd)
+	passwd = hash.Md5(passwd)
+	fmt.Println("Passwd => : ", passwd)
+
 }
 
-func (this *Server) getAuth() ([]ssh.AuthMethod, error) {
-	var sshs []ssh.AuthMethod
+func NewGoSSH() *GoSSH {
+	cPath := kiris.RealPath("~/.gossh")
+	cFile := cPath + "/servers.ydb"
 
-	if "" != this.Password {
-		sshs = append(sshs, ssh.Password(this.Password))
-		fmt.Println("Password Login")
-	}
-	pubKey, _ := sshPemKey(this.PemKey, this.Password)
-	sshs = append(sshs, pubKey)
-	return sshs, nil
-}
-
-func (this *Server) SSHConfig() (*SSHConfig, error) {
-	auth, err := this.getAuth()
-	if err != nil {
-		return nil, err
-	}
-
-	port := kiris.Ternary(0 == this.Port, 22, this.Port).(int)
-	addr := this.Host + ":" + strconv.Itoa(port)
-	return &SSHConfig{
-		Addr: addr,
-		Port: port,
-		Config: &ssh.ClientConfig{
-			User: this.User,
-			Auth: auth,
-			HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-				return nil
-			},
-			//Timeout: 0,
-		},
-	}, nil
-}
-
-func (this *Server) SSHClient() (*ssh.Client, error) {
-	cnf, err := this.SSHConfig()
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println("Connection: ", cnf.Addr)
-	return ssh.Dial("tcp", cnf.Addr, cnf.Config)
-}
-
-func (this *Server) Connection() error {
-	client, err := this.SSHClient()
-	if err != nil {
-		check(err, " gossh > dial")
-		return fmt.Errorf("GoSSH: Connection fail: unable to authenticate \n")
-	}
-
-	defer client.Close()
-
-	session, err := client.NewSession()
-	if err != nil {
-		check(err, "gossh > create session")
-		return fmt.Errorf("GoSSH: Create SESSION fail: %s \n", err.Error())
-	}
-	defer session.Close()
-
-	fd := int(os.Stdin.Fd())
-	oldState, err := terminal.MakeRaw(fd)
-	if err != nil {
-		check(err, "gossh > create session(fd)")
-		return fmt.Errorf("GoSSH: Create SESSION(fd) fail: %s \n", err.Error())
-	}
-	defer terminal.Restore(fd, oldState)
-
-	stopKeepAliveLoop := this.startKeepAliveLoop(session)
-	defer close(stopKeepAliveLoop)
-
-	if err = this.stdIO(session); err != nil {
-		check(err, "gossh > std I/O")
-		return fmt.Errorf("GoSSH: Std I/O fail: %s \n", err.Error())
-	}
-
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          1,
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400,
-	}
-	this.termWidth, this.termHeight, _ = terminal.GetSize(fd)
-	termType := kiris.GetEnv("TERM", "xterm-256color").(string)
-
-	if err = session.RequestPty(termType, this.termHeight, this.termWidth, modes); err != nil {
-		check(err, "gossh > request tty")
-		return fmt.Errorf("GoSSH: Request TTY fail: %s \n", err.Error())
-	}
-
-	listenWindowChange(session, fd)
-
-	if err = session.Shell(); err != nil {
-		check(err, "gossh > exec Shell")
-		return fmt.Errorf("GoSSH: exec shell fail: %s \n", err.Error())
-	}
-
-	_ = session.Wait()
-	return nil
-}
-
-// 心跳包
-func (this *Server) startKeepAliveLoop(session *ssh.Session) chan struct{} {
-	term := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-term:
-				return
-			default:
-				if val, ok := this.Options["ServerAliveInterval"]; ok && val != nil {
-					_, e := session.SendRequest("keepalive@bbr", true, nil)
-					if e != nil {
-						check(e, "gossh > keepAliveLoop")
-					}
-					t := time.Duration(this.Options["ServerAliveInterval"].(float64))
-					time.Sleep(time.Second * t)
-				} else {
-					return
-				}
-			}
+	passwd = hash.Md5("keesely.net")
+	if !kiris.IsDir(cPath) {
+		// 创建配置目录
+		if err := os.MkdirAll(cPath, os.ModePerm); err != nil {
+			log.Fatalf("mkdir %s fail", cPath, err.Error())
 		}
-	}()
-	return term
+	}
+
+	var _data = []byte{}
+	if kiris.FileExists(cFile) {
+		// 导入数据文件
+		_data = getDataContents(cFile)
+	}
+	data := kiris.NewYaml(_data)
+
+	return &GoSSH{data, cFile}
 }
 
-// 重定向标准输入输出
-func (this *Server) stdIO(session *ssh.Session) error {
-	session.Stderr = os.Stderr
-	session.Stdin = os.Stdin
+// 获取数据文件内容
+func getDataContents(datafile string) []byte {
+	content, err := kiris.FileGetContents(datafile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// 解码还原数据
+	_c := kiris.AESDecrypt([]byte(content), passwd, "cbc")
+	return []byte(_c)
+}
 
-	session.Stdout = os.Stdout
+func (c *GoSSH) ListServers() {
+	fmt.Println(kiris.StrPad("", "=", 100, 0))
+	fmt.Printf("| %-20s | %-20s | %-50s |\n", "Group Name", "Server Name", "Server Host")
+	fmt.Println(kiris.StrPad("", "-", 100, 0))
+	data := c.data.Get("")
+	for g, ss := range data.(map[string]interface{}) {
+		for n, _s := range ss.(map[string]interface{}) {
+			s := &Server{}
+			kiris.ConverStruct(_s.(map[string]interface{}), s, "yaml")
+			passwd := kiris.Ternary(s.Password != "", "yes", "no").(string)
+			fmt.Printf("> %-20s | %-20s | %s@%s:%d (password:%s) \n", g, n, s.User, s.Host, s.Port, passwd)
+		}
+	}
+	c.save()
+	fmt.Println(kiris.StrPad("", "=", 100, 0))
+}
+
+func (c *GoSSH) AddServer(name string, server *Server) {
+	name = "default." + name
+	c.data.Set(name, &server)
+	// 保存
+	c.save()
+	fmt.Printf("Server [%s] add success!\n", name)
+	//fmt.Println("Save to ", saveFs)
+}
+
+func (c *GoSSH) GetServer(name string) *Server {
+	if server := c.data.Get(name); server != nil {
+		ss := &Server{}
+		kiris.ConverStruct(server.(map[string]interface{}), ss, "yaml")
+		return ss
+		/*
+			return &Server{
+				Name:     s.Name,
+				Host:     s.Host,
+				Port:     s.Port,
+				User:     s.User,
+				Options:  s.Options,
+				Password: s.Password,
+				PemKey:   s.PemKey,
+			}
+		*/
+	}
 	return nil
 }
 
-func sshPemKey(key, passwd string) (ssh.AuthMethod, error) {
-	if key == "" {
-		key = "~/.ssh/id_rsa"
-	}
-	keyPath := kiris.RealPath(key)
-	pemBytes, err := ioutil.ReadFile(keyPath)
-	if err != nil {
-		return nil, err
-	}
+func (c *GoSSH) DelServer(name string) {
+	c.data.Set(name, nil)
+	c.save()
+	fmt.Println("删除成功: ", name)
+	return
+}
 
-	var signer ssh.Signer
-	if passwd != "" {
-		signer, err = ssh.ParsePrivateKeyWithPassphrase(pemBytes, []byte(passwd))
-	} else {
-		signer, err = ssh.ParsePrivateKey(pemBytes)
+func (c *GoSSH) save() {
+	str, _ := c.data.SaveToString()
+	// 加密
+	save := kiris.AESEncrypt(string(str), passwd, "cbc")
+	//fmt.Println("encrypt: ", string(kiris.Base64Decode(save)))
+
+	saveFs := kiris.RealPath(c.dbFile)
+	//if e := c.data.SaveAs(saveFs); e != nil {
+	if e := kiris.FilePutContents(saveFs, string(save), 0); e != nil {
+		log.Fatal(e)
 	}
-	if err != nil {
-		return nil, err
-	}
-	return ssh.PublicKeys(signer), nil
 }

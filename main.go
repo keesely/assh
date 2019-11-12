@@ -3,15 +3,25 @@ package main
 import (
 	"fmt"
 	"github.com/keesely/kiris"
+	"github.com/keesely/kiris/hash"
 	"github.com/urfave/cli"
-	"gossh/src/config"
 	"gossh/src/gossh"
 	"os"
 	"reflect"
 )
 
 func main() {
-	cnf := config.NewConfig()
+
+	// 加密测试
+	str := "这是一段加密文本"
+	key := hash.Md5("keesely.net")
+	fmt.Println("Key: ", key, " LEN: ", len(key))
+	encrypt := kiris.AESEncrypt(str, key, "cbc")
+	fmt.Printf("加密后的文本: %s \n", encrypt)
+	decrypt := kiris.AESDecrypt(encrypt, key, "cbc")
+	fmt.Printf("解码: %s \n", decrypt)
+
+	cnf := gossh.NewGoSSH()
 	app := cli.NewApp()
 	app.Name = "gossh"
 	app.Usage = "欢迎使用 goSSH 服务"
@@ -88,7 +98,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func showServerDetail(name string, cnf *config.Config) {
+func showServerDetail(name string, cnf *gossh.GoSSH) {
 	if name == "" {
 		fmt.Println("请输入您服务器名称")
 		return
@@ -100,7 +110,6 @@ func showServerDetail(name string, cnf *config.Config) {
 		ss := reflect.ValueOf(s).Elem()
 		for i, k := range []string{"Name", "Host", "Port", "User", "Password", "PemKey"} {
 			fmt.Printf("%20s:   %v\n", "Server "+k, ss.Field(i))
-
 		}
 	} else {
 		fmt.Printf("服务器(%s) 不存在\n", name)
@@ -108,7 +117,7 @@ func showServerDetail(name string, cnf *config.Config) {
 	fmt.Println(kiris.StrPad("", "=", 100, 0))
 }
 
-func addServer(cnf *config.Config) error {
+func addServer(cnf *gossh.GoSSH) error {
 	keys := []string{"Name", "Host", "Port", "User", "Password", "PemKey"}
 	var server = new(gossh.Server)
 	fmt.Println("请按照提示填入服务器信息(标记* 为必要填写项目): ")
@@ -161,6 +170,6 @@ func addServer(cnf *config.Config) error {
 	return nil
 }
 
-func editServer(name string, cnf *config.Config) error {
+func editServer(name string, cnf *gossh.GoSSH) error {
 	return nil
 }
