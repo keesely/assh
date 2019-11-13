@@ -21,14 +21,13 @@ type GoSSH struct {
 
 // 初始化必要数据
 func init() {
-	if "" == passwd {
-		log.Fatal("请输入启动密码")
-	}
 	// 判断是否存在密码文件
 	//passFile := cPath + "/account.key"
 	//if !kiris.FileExists(passFile) {
-
 	//}
+	if "" == passwd {
+		log.Fatal("请输入启动密码")
+	}
 	fmt.Println("Passwd: ", passwd)
 	passwd = hash.Md5(passwd)
 	fmt.Println("Passwd => : ", passwd)

@@ -8,9 +8,10 @@ import (
 )
 
 func TestKeygen(t *testing.T) {
-	//RsaKeyGen(1024)
-	//RsaKeyGen(2048)
-	private, priKey, _ := RsaPrivateKey(2048)
-	pub, pri, err := SshKeygen(private, priKey)
-	fmt.Println(pub, "\n", pri, err)
+	keygen, _ := NewRsa(2048)
+	pub, pri, _ := keygen.GenSshKey()
+	fmt.Println(pub, "\n", pri)
+
+	public, private := keygen.GenPem()
+	fmt.Println(public, "\n", private)
 }

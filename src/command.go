@@ -3,7 +3,9 @@
 package src
 
 import (
+	"fmt"
 	"github.com/urfave/cli"
+	"gossh/src/keygen"
 )
 
 type App struct {
@@ -24,6 +26,20 @@ func (app *App) list() cli.Command {
 		Aliases: []string{"ls"},
 		Usage:   "打印服务器列表信息",
 		Action: func(c *cli.Context) error {
+			return nil
+		},
+	}
+}
+
+func (app *App) Keygen() cli.Command {
+	return cli.Command{
+		Name:    "keygen",
+		Aliases: []string{"key"},
+		Usage:   "生成ssh公钥",
+		Action: func(c *cli.Context) error {
+			key, _ := keygen.NewRsa(2048)
+			public, private, _ := key.GenSshKey()
+			fmt.Println(public, "\n", private)
 			return nil
 		},
 	}

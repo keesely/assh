@@ -5,13 +5,14 @@ import (
 	"github.com/keesely/kiris"
 	"github.com/keesely/kiris/hash"
 	"github.com/urfave/cli"
+	"gossh/src"
 	"gossh/src/gossh"
 	"os"
 	"reflect"
 )
 
+//main
 func main() {
-
 	// 加密测试
 	str := "这是一段加密文本"
 	key := hash.Md5("keesely.net")
@@ -20,6 +21,8 @@ func main() {
 	fmt.Printf("加密后的文本: %s \n", encrypt)
 	decrypt := kiris.AESDecrypt(encrypt, key, "cbc")
 	fmt.Printf("解码: %s \n", decrypt)
+	_app := src.NewCli()
+	keygen := _app.Keygen()
 
 	cnf := gossh.NewGoSSH()
 	app := cli.NewApp()
@@ -93,6 +96,7 @@ func main() {
 				return nil
 			},
 		},
+		keygen,
 	}
 
 	app.Run(os.Args)

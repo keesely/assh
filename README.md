@@ -31,7 +31,7 @@
 
 # 使用
 
-### 添加服务器
+### 响应式添加服务器
 
 ```shell
 $ gossh add
@@ -43,3 +43,48 @@ $ gossh add
 1. Please input [Password] > 
 1. Please input [PemKey] > 
 ```
+
+### 登陆服务器
+
+
+```shell
+## 安全启动密码
+$ gossh account (密码)
+
+## 快捷登陆
+$ gossh (groupName.serverName)
+
+$ gossh login groupName.serverName
+
+## 陌生登陆
+$ gossh login [-u 用户名] [-p 密码] [-k 公钥] [-h 远程主机名/ip] [-P 端口] [-c 执行命令]
+
+## 添加服务器
+$ gossh add (groupName.serverName) [-h 远程主机名/ip] [-P 端口/22] [-u 用户名/root] [-p 登陆密码] [-k 指定公钥]
+
+## 同步配置
+$ gossh sync (配置的同步云端名称)
+
+## 检测更新
+$ gossh upgrade
+
+## 推送文件
+$ gossh push (groupName.serverName) [local file] [remote file]
+
+## 服务器群组(批量)文件推送
+$ gossh push (groupName) [local file] [remote file]
+
+## 拉取文件
+$ gossh pull (groupName.serverName) [remote file] [local file]
+## 服务器群组(批量)文件拉取
+$ gossh pull (groupName) [remote file] [local file]
+
+## 生成ssh key
+$ gossh keygen [-c 指定密钥描述] [-f 密钥文件名称]
+
+## 指定主机生成ssh key
+### 指定主机生成ssh key 会执行key的生成和 ssh-copy-id 文件
+$ gossh keygen (groupName.serverName)
+
+```
+
