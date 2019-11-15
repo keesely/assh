@@ -10,9 +10,9 @@ import (
 	"os"
 )
 
-//var passwd = hash.Md5("keesely.net")
 var passwd string
-var cPath = kiris.RealPath("~/.gossh")
+
+//var cPath = kiris.RealPath("~/.gossh")
 
 type GoSSH struct {
 	data   *kiris.Yaml
@@ -22,9 +22,14 @@ type GoSSH struct {
 // 初始化必要数据
 func init() {
 	// 判断是否存在密码文件
-	//passFile := cPath + "/account.key"
-	//if !kiris.FileExists(passFile) {
-	//}
+	passFile := cPath + "/account.key"
+	if kiris.FileExists(passFile) {
+		pfile, err := kiris.FileGetContents(passFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(pfile)
+	}
 	if "" == passwd {
 		log.Fatal("请输入启动密码")
 	}
