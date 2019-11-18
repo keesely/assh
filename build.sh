@@ -8,7 +8,7 @@
 export GO11MODULE="on"
 go mod tidy
 
-PROJECT="gossh"
+PROJECT="assh"
 VERSION="v0.0.1"
 BUILD=`date +%FT%T%z`
 
@@ -22,11 +22,11 @@ function build () {
 
   BuildPath="./build/${package}"
   mkdir -p $BuildPath
-  CGO_ENABLED=0 GOOS=${os} GOARH=${arch} go build -o "${BuildPath}/gossh" -ldflags "-X main.Version=${VERSION} -X main.Build=${BUILD}" ./
+  CGO_ENABLED=0 GOOS=${os} GOARH=${arch} go build -o "${BuildPath}/assh" -ldflags "-X main.Version=${VERSION} -X main.Build=${BUILD}" ./
 
   if [ ${os} == "windows" ]; then
     cd ${BuildPath}
-    mv gossh gossh.exe
+    mv assh assh.exe
     cd -
   fi
   cd ./build

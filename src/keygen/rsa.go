@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 )
 
 // 生成RSA私钥
@@ -61,4 +62,35 @@ func RsaPublicKey(publicKey *rsa.PublicKey, block *PemBlock) (*bytes.Buffer, err
 		return nil, err
 	}
 	return &public, err
+}
+
+func RsaEncrypt(origin []byte, publicKey []byte) ([]byte, error) {
+	block, _ := pem.Decode(publicKey)
+	if block == nil {
+		return nil, errors.New("public key error")
+	}
+
+	// 解析公钥
+	pubInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// 类型断言
+	pub := pubInterface.(*rsa.PublicKey)
+	// 加密
+	return rsa.EncryptPKCS1v15(rand.Reader, pub, origin)
+}
+
+func RsaDecrypt(ciphertext []byte, privateKey []byte) ([]byte, error) {
+	block, _ := pem.Decode(privateKey)
+	if block == nil {
+		return nil, errors.New("private key error")
+	}
+	private, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return rsa.DecryptPKCS1v15(rand.Reader, private, ciphertext)
 }

@@ -1,12 +1,12 @@
 package main
 
 import (
+	"assh/src"
+	"assh/src/assh"
 	"fmt"
 	"github.com/keesely/kiris"
-	"github.com/keesely/kiris/hash"
+	//"github.com/keesely/kiris/hash"
 	"github.com/urfave/cli"
-	"gossh/src"
-	"gossh/src/gossh"
 	"os"
 	"reflect"
 )
@@ -14,19 +14,19 @@ import (
 //main
 func main() {
 	// 加密测试
-	str := "这是一段加密文本"
-	key := hash.Md5("keesely.net")
-	fmt.Println("Key: ", key, " LEN: ", len(key))
-	encrypt := kiris.AESEncrypt(str, key, "cbc")
-	fmt.Printf("加密后的文本: %s \n", encrypt)
-	decrypt := kiris.AESDecrypt(encrypt, key, "cbc")
-	fmt.Printf("解码: %s \n", decrypt)
+	//str := "这是一段加密文本"
+	//key := hash.Md5("keesely.net")
+	//fmt.Println("Key: ", key, " LEN: ", len(key))
+	//encrypt := kiris.AESEncrypt(str, key, "cbc")
+	//fmt.Printf("加密后的文本: %s \n", encrypt)
+	//decrypt := kiris.AESDecrypt(encrypt, key, "cbc")
+	//fmt.Printf("解码: %s \n", decrypt)
 	_app := src.NewCli()
 	keygen := _app.Keygen()
+	setPasswd := _app.SetPasswd()
 
-	cnf := gossh.NewGoSSH()
 	app := cli.NewApp()
-	app.Name = "gossh"
+	app.Name = "assh"
 	app.Usage = "欢迎使用 goSSH 服务"
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
@@ -36,6 +36,7 @@ func main() {
 			Usage:   "show the server list",
 			Action: func(c *cli.Context) error {
 				fmt.Println("Server List")
+				cnf := assh.NewAssh()
 				cnf.ListServers()
 				return nil
 			},
@@ -44,6 +45,7 @@ func main() {
 			Name:  "add",
 			Usage: "add the server",
 			Action: func(c *cli.Context) error {
+				cnf := assh.NewAssh()
 				addServer(cnf)
 				return nil
 			},
@@ -53,6 +55,7 @@ func main() {
 			Aliases: []string{"rm"},
 			Usage:   "reomve the server",
 			Action: func(c *cli.Context) error {
+				cnf := assh.NewAssh()
 				name := c.Args().First()
 				if name != "" {
 					if s := cnf.GetServer(name); s != nil {
@@ -78,6 +81,7 @@ func main() {
 			Aliases: []string{"conn", "c"},
 			Usage:   "connection to login server",
 			Action: func(c *cli.Context) error {
+				cnf := assh.NewAssh()
 				name := c.Args().First()
 				if s := cnf.GetServer(name); s != nil {
 					s.Connection()
@@ -91,18 +95,20 @@ func main() {
 			Aliases: []string{"i"},
 			Usage:   "get the server detail info",
 			Action: func(c *cli.Context) error {
+				cnf := assh.NewAssh()
 				name := c.Args().First()
 				showServerDetail(name, cnf)
 				return nil
 			},
 		},
 		keygen,
+		setPasswd,
 	}
 
 	app.Run(os.Args)
 }
 
-func showServerDetail(name string, cnf *gossh.GoSSH) {
+func showServerDetail(name string, cnf *assh.Assh) {
 	if name == "" {
 		fmt.Println("请输入您服务器名称")
 		return
@@ -121,9 +127,9 @@ func showServerDetail(name string, cnf *gossh.GoSSH) {
 	fmt.Println(kiris.StrPad("", "=", 100, 0))
 }
 
-func addServer(cnf *gossh.GoSSH) error {
+func addServer(cnf *assh.Assh) error {
 	keys := []string{"Name", "Host", "Port", "User", "Password", "PemKey"}
-	var server = new(gossh.Server)
+	var server = new(assh.Server)
 	fmt.Println("请按照提示填入服务器信息(标记* 为必要填写项目): ")
 	for i, key := range keys {
 		var opt string
@@ -174,6 +180,6 @@ func addServer(cnf *gossh.GoSSH) error {
 	return nil
 }
 
-func editServer(name string, cnf *gossh.GoSSH) error {
+func editServer(name string, cnf *assh.Assh) error {
 	return nil
 }

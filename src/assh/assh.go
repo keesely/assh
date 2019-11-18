@@ -1,77 +1,56 @@
-// gossh.go kee > 2019/11/08
+// assh.go kee > 2019/11/08
 
-package gossh
+package assh
 
 import (
 	"fmt"
 	"github.com/keesely/kiris"
 	"github.com/keesely/kiris/hash"
 	"log"
-	"os"
 )
 
-var passwd string
-
-//var cPath = kiris.RealPath("~/.gossh")
-
-type GoSSH struct {
+type Assh struct {
 	data   *kiris.Yaml
 	dbFile string
 }
 
-// 初始化必要数据
-func init() {
-	// 判断是否存在密码文件
-	passFile := cPath + "/account.key"
-	if kiris.FileExists(passFile) {
-		pfile, err := kiris.FileGetContents(passFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(pfile)
-	}
-	if "" == passwd {
-		log.Fatal("请输入启动密码")
-	}
-	fmt.Println("Passwd: ", passwd)
-	passwd = hash.Md5(passwd)
-	fmt.Println("Passwd => : ", passwd)
+var passwd string
 
-}
-
-func NewGoSSH() *GoSSH {
+func NewAssh() *Assh {
 	cFile := cPath + "/servers.ydb"
+	passwd = GetPasswd()
 
-	passwd = hash.Md5("keesely.net")
-	if !kiris.IsDir(cPath) {
-		// 创建配置目录
-		if err := os.MkdirAll(cPath, os.ModePerm); err != nil {
-			log.Fatalf("mkdir %s fail", cPath, err.Error())
-		}
-	}
-
-	var _data = []byte{}
+	var (
+		_data = []byte{}
+		pwd   = ""
+	)
 	if kiris.FileExists(cFile) {
 		// 导入数据文件
-		_data = getDataContents(cFile)
+		_data, pwd = getDataContents(cFile)
+		if pwd != hash.Md5(passwd) {
+			log.Fatal("Access denied for password. run assh account [your password]")
+		}
 	}
 	data := kiris.NewYaml(_data)
 
-	return &GoSSH{data, cFile}
+	return &Assh{data, cFile}
 }
 
 // 获取数据文件内容
-func getDataContents(datafile string) []byte {
+func getDataContents(datafile string) ([]byte, string) {
 	content, err := kiris.FileGetContents(datafile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// 解码还原数据
-	_c := kiris.AESDecrypt([]byte(content), passwd, "cbc")
-	return []byte(_c)
+	_c := kiris.AESDecrypt(content[0:len(content)-32], passwd, "cbc")
+	if _c == "" && string(content) != "" {
+		log.Fatal("the password is error")
+	}
+	return []byte(_c), string(content[len(content)-32:])
 }
 
-func (c *GoSSH) ListServers() {
+func (c *Assh) ListServers() {
 	fmt.Println(kiris.StrPad("", "=", 100, 0))
 	fmt.Printf("| %-20s | %-20s | %-50s |\n", "Group Name", "Server Name", "Server Host")
 	fmt.Println(kiris.StrPad("", "-", 100, 0))
@@ -84,11 +63,11 @@ func (c *GoSSH) ListServers() {
 			fmt.Printf("> %-20s | %-20s | %s@%s:%d (password:%s) \n", g, n, s.User, s.Host, s.Port, passwd)
 		}
 	}
-	c.save()
+	//c.save()
 	fmt.Println(kiris.StrPad("", "=", 100, 0))
 }
 
-func (c *GoSSH) AddServer(name string, server *Server) {
+func (c *Assh) AddServer(name string, server *Server) {
 	name = "default." + name
 	c.data.Set(name, &server)
 	// 保存
@@ -97,7 +76,7 @@ func (c *GoSSH) AddServer(name string, server *Server) {
 	//fmt.Println("Save to ", saveFs)
 }
 
-func (c *GoSSH) GetServer(name string) *Server {
+func (c *Assh) GetServer(name string) *Server {
 	if server := c.data.Get(name); server != nil {
 		ss := &Server{}
 		kiris.ConverStruct(server.(map[string]interface{}), ss, "yaml")
@@ -117,22 +96,23 @@ func (c *GoSSH) GetServer(name string) *Server {
 	return nil
 }
 
-func (c *GoSSH) DelServer(name string) {
+func (c *Assh) DelServer(name string) {
 	c.data.Set(name, nil)
 	c.save()
 	fmt.Println("删除成功: ", name)
 	return
 }
 
-func (c *GoSSH) save() {
+func (c *Assh) save() {
 	str, _ := c.data.SaveToString()
 	// 加密
 	save := kiris.AESEncrypt(string(str), passwd, "cbc")
 	//fmt.Println("encrypt: ", string(kiris.Base64Decode(save)))
+	content := string(save) + hash.Md5(passwd)
 
 	saveFs := kiris.RealPath(c.dbFile)
 	//if e := c.data.SaveAs(saveFs); e != nil {
-	if e := kiris.FilePutContents(saveFs, string(save), 0); e != nil {
+	if e := kiris.FilePutContents(saveFs, content, 0); e != nil {
 		log.Fatal(e)
 	}
 }

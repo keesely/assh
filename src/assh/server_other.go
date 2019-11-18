@@ -1,6 +1,6 @@
 // +build !windows
 
-package gossh
+package assh
 
 import (
 	"golang.org/x/crypto/ssh"
@@ -22,7 +22,7 @@ func listenWindowChange(session *ssh.Session, fd int) {
 		//}
 		termW, termH, _ := terminal.GetSize(fd)
 		//if e != nil {
-		//check(e, "gossh > terminal window resize")
+		//check(e, "assh > terminal window resize")
 		//}
 
 		for {

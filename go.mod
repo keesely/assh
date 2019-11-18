@@ -1,4 +1,4 @@
-module gossh
+module assh
 
 go 1.13
 

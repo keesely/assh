@@ -1,4 +1,4 @@
-package gossh
+package assh
 
 import (
 	"log"

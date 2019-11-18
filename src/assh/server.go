@@ -1,4 +1,4 @@
-package gossh
+package assh
 
 import (
 	"fmt"
@@ -80,24 +80,24 @@ func (this *Server) SSHClient() (*ssh.Client, error) {
 func (this *Server) Connection() error {
 	client, err := this.SSHClient()
 	if err != nil {
-		check(err, " gossh > dial")
-		return fmt.Errorf("GoSSH: Connection fail: unable to authenticate \n")
+		check(err, " assh > dial")
+		return fmt.Errorf("Assh: Connection fail: unable to authenticate \n")
 	}
 
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		check(err, "gossh > create session")
-		return fmt.Errorf("GoSSH: Create SESSION fail: %s \n", err.Error())
+		check(err, "assh > create session")
+		return fmt.Errorf("Assh: Create SESSION fail: %s \n", err.Error())
 	}
 	defer session.Close()
 
 	fd := int(os.Stdin.Fd())
 	oldState, err := terminal.MakeRaw(fd)
 	if err != nil {
-		check(err, "gossh > create session(fd)")
-		return fmt.Errorf("GoSSH: Create SESSION(fd) fail: %s \n", err.Error())
+		check(err, "assh > create session(fd)")
+		return fmt.Errorf("Assh: Create SESSION(fd) fail: %s \n", err.Error())
 	}
 	defer terminal.Restore(fd, oldState)
 
@@ -105,8 +105,8 @@ func (this *Server) Connection() error {
 	defer close(stopKeepAliveLoop)
 
 	if err = this.stdIO(session); err != nil {
-		check(err, "gossh > std I/O")
-		return fmt.Errorf("GoSSH: Std I/O fail: %s \n", err.Error())
+		check(err, "assh > std I/O")
+		return fmt.Errorf("Assh: Std I/O fail: %s \n", err.Error())
 	}
 
 	modes := ssh.TerminalModes{
@@ -118,15 +118,15 @@ func (this *Server) Connection() error {
 	termType := kiris.GetEnv("TERM", "xterm-256color").(string)
 
 	if err = session.RequestPty(termType, this.termHeight, this.termWidth, modes); err != nil {
-		check(err, "gossh > request tty")
-		return fmt.Errorf("GoSSH: Request TTY fail: %s \n", err.Error())
+		check(err, "assh > request tty")
+		return fmt.Errorf("Assh: Request TTY fail: %s \n", err.Error())
 	}
 
 	listenWindowChange(session, fd)
 
 	if err = session.Shell(); err != nil {
-		check(err, "gossh > exec Shell")
-		return fmt.Errorf("GoSSH: exec shell fail: %s \n", err.Error())
+		check(err, "assh > exec Shell")
+		return fmt.Errorf("Assh: exec shell fail: %s \n", err.Error())
 	}
 
 	_ = session.Wait()
@@ -145,7 +145,7 @@ func (this *Server) startKeepAliveLoop(session *ssh.Session) chan struct{} {
 				if val, ok := this.Options["ServerAliveInterval"]; ok && val != nil {
 					_, e := session.SendRequest("keepalive@bbr", true, nil)
 					if e != nil {
-						check(e, "gossh > keepAliveLoop")
+						check(e, "assh > keepAliveLoop")
 					}
 					t := time.Duration(this.Options["ServerAliveInterval"].(float64))
 					time.Sleep(time.Second * t)
