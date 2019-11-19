@@ -21,26 +21,11 @@ func main() {
 	//fmt.Printf("加密后的文本: %s \n", encrypt)
 	//decrypt := kiris.AESDecrypt(encrypt, key, "cbc")
 	//fmt.Printf("解码: %s \n", decrypt)
-	_app := src.NewCli()
-	keygen := _app.Keygen()
-	setPasswd := _app.SetPasswd()
-
-	app := cli.NewApp()
-	app.Name = "assh"
-	app.Usage = "欢迎使用 goSSH 服务"
-	app.Version = "0.0.1"
-	app.Commands = []cli.Command{
-		{
-			Name:    "list",
-			Aliases: []string{"ls"},
-			Usage:   "show the server list",
-			Action: func(c *cli.Context) error {
-				fmt.Println("Server List")
-				cnf := assh.NewAssh()
-				cnf.ListServers()
-				return nil
-			},
-		},
+	app := src.NewCli()
+	app.Runtime.Commands = []cli.Command{
+    app.ListServers(),
+    app.Keygen(),
+    app.SetPasswd(),
 		{
 			Name:  "add",
 			Usage: "add the server",
@@ -78,7 +63,7 @@ func main() {
 		},
 		{
 			Name:    "connect",
-			Aliases: []string{"conn", "c"},
+			Aliases: []string{"conn", "c", "login", "sign"},
 			Usage:   "connection to login server",
 			Action: func(c *cli.Context) error {
 				cnf := assh.NewAssh()
@@ -101,11 +86,9 @@ func main() {
 				return nil
 			},
 		},
-		keygen,
-		setPasswd,
 	}
 
-	app.Run(os.Args)
+	app.Runtime.Run(os.Args)
 }
 
 func showServerDetail(name string, cnf *assh.Assh) {

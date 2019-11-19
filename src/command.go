@@ -10,14 +10,14 @@ import (
 )
 
 type App struct {
-	app *cli.App
+	Runtime *cli.App
 }
 
 func NewCli() *App {
 	app := cli.NewApp()
 	app.Name = "assh"
-	app.Usage = "欢迎使用 goSSH 工具"
-	app.Version = "0.0.1"
+	app.Usage = "欢迎使用 Assh 工具"
+  app.Version = "0.0.1"
 	return &App{app}
 }
 
@@ -57,4 +57,18 @@ func (app *App) SetPasswd() cli.Command {
 			return nil
 		},
 	}
+}
+
+func (app *App) ListServers () cli.Command {
+  return cli.Command{
+    Name: "list",
+    Aliases: []string{"ls"},
+    Usage: "show the server list",
+    Action: func (c *cli.Context) error {
+      fmt.Println("Server List")
+      cnf := assh.NewAssh()
+      cnf.ListServers()
+      return nil
+    },
+  }
 }
