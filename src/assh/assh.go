@@ -3,116 +3,160 @@
 package assh
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/keesely/kiris"
 	"github.com/keesely/kiris/hash"
 	"log"
+	"strings"
+	"sync"
 )
 
 type Assh struct {
-	data   *kiris.Yaml
+	data   map[string]map[string]*Server
 	dbFile string
+	sync.RWMutex
 }
 
 var passwd string
 
 func NewAssh() *Assh {
-	cFile := cPath + "/servers.ydb"
+	cFile := cPath + "/servers.db"
 	passwd = GetPasswd()
-
-	var (
-		_data = []byte{}
-		pwd   = ""
-	)
-	if kiris.FileExists(cFile) {
-		// 导入数据文件
-		_data, pwd = getDataContents(cFile)
-		if pwd != hash.Md5(passwd) {
-			log.Fatal("Access denied for password. run assh account [your password]")
-		}
-	}
-	data := kiris.NewYaml(_data)
-
-	return &Assh{data, cFile}
+	return loadData(cFile)
 }
 
-// 获取数据文件内容
-func getDataContents(datafile string) ([]byte, string) {
-	content, err := kiris.FileGetContents(datafile)
-	if err != nil {
-		log.Fatal(err)
+// 载入数据
+func loadData(file string) *Assh {
+	data := make(map[string]map[string]*Server)
+	if kiris.FileExists(file) {
+		c, err := kiris.FileGetContents(file)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if hash.Md5(passwd) != string(c[:32]) {
+			log.Fatal("Access denied for password. run assh account [your password]")
+		}
+		cryptoStr := string(c[64:])
+		_c := kiris.AESDecrypt([]byte(cryptoStr), passwd, "cbc")
+		if err := json.Unmarshal([]byte(_c), &data); err != nil {
+			log.Fatal(err)
+		}
+		servers := Assh{data: data, dbFile: file}
+		return &servers
 	}
-	// 解码还原数据
-	_c := kiris.AESDecrypt(content[0:len(content)-32], passwd, "cbc")
-	if _c == "" && string(content) != "" {
-		log.Fatal("the password is error")
-	}
-	return []byte(_c), string(content[len(content)-32:])
+	return &Assh{data: data, dbFile: file}
 }
 
 func (c *Assh) ListServers() {
-	fmt.Println(kiris.StrPad("", "=", 100, 0))
-	fmt.Printf("| %-20s | %-20s | %-50s |\n", "Group Name", "Server Name", "Server Host")
-	fmt.Println(kiris.StrPad("", "-", 100, 0))
-	data := c.data.Get("")
-	for g, ss := range data.(map[string]interface{}) {
-		for n, _s := range ss.(map[string]interface{}) {
-			s := &Server{}
-			kiris.ConverStruct(_s.(map[string]interface{}), s, "yaml")
-			passwd := kiris.Ternary(s.Password != "", "yes", "no").(string)
-			fmt.Printf("> %-20s | %-20s | %s@%s:%d (password:%s) \n", g, n, s.User, s.Host, s.Port, passwd)
+	fmt.Println(kiris.StrPad("", "=", 160, 0))
+	fmt.Printf("  %-20s | %-20s | %-50s | %-50s \n", "Group Name", "Server Name", "Server Host", "Remark")
+	fmt.Println(kiris.StrPad("", "-", 160, 0))
+	data := c.data
+	for g, ss := range data {
+		for n, s := range ss {
+			sInfo := fmt.Sprintf("%s@%s:%d (%s)",
+				s.User,
+				s.Host,
+				s.Port,
+				kiris.Ternary(s.Password != "",
+					"passwd:yes",
+					kiris.Ternary(s.PemKey != "", "pub key:yes", "passwd:no").(string),
+				).(string),
+			)
+			remark := kiris.Ternary(s.Remark != "", s.Remark, " (no remark) ")
+			fmt.Printf("> %-20s | %-20s | %-50s | %s \n", g, n, sInfo, remark)
 		}
 	}
 	//c.save()
-	fmt.Println(kiris.StrPad("", "=", 100, 0))
+	fmt.Println(kiris.StrPad("", "=", 160, 0))
 }
 
-func (c *Assh) AddServer(name string, server *Server) {
-	name = "default." + name
-	c.data.Set(name, &server)
-	// 保存
-	c.save()
-	fmt.Printf("Server [%s] add success!\n", name)
-	//fmt.Println("Save to ", saveFs)
+func (c *Assh) GetGroup(group string) map[string]*Server {
+	_s, ok := c.data[group]
+	if !ok {
+		return nil
+	}
+	return _s
 }
 
 func (c *Assh) GetServer(name string) *Server {
-	if server := c.data.Get(name); server != nil {
-		ss := &Server{}
-		kiris.ConverStruct(server.(map[string]interface{}), ss, "yaml")
-		return ss
-		/*
-			return &Server{
-				Name:     s.Name,
-				Host:     s.Host,
-				Port:     s.Port,
-				User:     s.User,
-				Options:  s.Options,
-				Password: s.Password,
-				PemKey:   s.PemKey,
-			}
-		*/
+	group, _name := parseName(name)
+	if server, ok := c.data[group][_name]; ok {
+		return server
 	}
 	return nil
 }
 
-func (c *Assh) DelServer(name string) {
-	c.data.Set(name, nil)
+func (c *Assh) AddServer(name string, server Server) {
+	group, _name := parseName(name)
+	g, ok := c.data[group]
+	if !ok {
+		c.data[group] = make(map[string]*Server)
+		g = c.data[group]
+	}
+	g[_name] = &server
+
+	// 保存
 	c.save()
-	fmt.Println("删除成功: ", name)
-	return
+	//fmt.Printf("Server [%s] add success!\n", name)
+}
+
+func (c *Assh) MoveServer(name, newName string) {
+	s := c.GetServer(name)
+	if s == nil {
+		log.Fatalf("Server [%s] is not exists \n", name)
+	}
+	c.AddServer(newName, Server{
+		Name:     s.Name,
+		Host:     s.Host,
+		Port:     s.Port,
+		User:     s.User,
+		Password: s.Password,
+		PemKey:   s.PemKey,
+		Remark:   s.Remark,
+	})
+
+	c.DelServer(name)
+}
+
+func (c *Assh) SetRemark(name, remark string) {
+	ss := c.GetServer(name)
+	if ss == nil {
+		log.Fatalf("Server (%s) not found \n", name)
+	}
+	ss.Remark = remark
+	c.save()
+}
+
+func (c *Assh) DelServer(name string) {
+	group, _name := parseName(name)
+	g := c.GetGroup(group)
+
+	if _, ok := g[_name]; !ok {
+		log.Fatalf("Server (%s) not found\n", name)
+	}
+	delete(g, _name)
+	c.save()
 }
 
 func (c *Assh) save() {
-	str, _ := c.data.SaveToString()
-	// 加密
-	save := kiris.AESEncrypt(string(str), passwd, "cbc")
-	//fmt.Println("encrypt: ", string(kiris.Base64Decode(save)))
-	content := string(save) + hash.Md5(passwd)
-
 	saveFs := kiris.RealPath(c.dbFile)
-	//if e := c.data.SaveAs(saveFs); e != nil {
+	jsonBytes, _ := json.Marshal(c.data)
+	jsonStr := string(jsonBytes)
+	cryptoBytes := kiris.AESEncrypt(jsonStr, passwd, "cbc")
+	cryptoHash := hash.Md5(string(cryptoBytes))
+	content := hash.Md5(passwd) + cryptoHash + string(cryptoBytes)
 	if e := kiris.FilePutContents(saveFs, content, 0); e != nil {
 		log.Fatal(e)
 	}
+}
+
+func parseName(name string) (string, string) {
+	keys := strings.Split(name, ".")
+	if len(keys) < 2 {
+		def := []string{""}
+		keys = append(def, keys[0])
+	}
+	return keys[0], keys[1]
 }

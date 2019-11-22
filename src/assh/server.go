@@ -16,16 +16,18 @@ import (
 )
 
 type Server struct {
-	Name     string                 `yaml:"name"`
-	Host     string                 `yaml:"host"`
-	Port     int                    `yaml:"port"`
-	User     string                 `yaml:"user"`
-	Password string                 `yaml:"password"`
-	PemKey   string                 `yaml:"key"`
-	Options  map[string]interface{} `yaml:"options"`
-	//GroupName  string                 `yaml:group_name`
-	termWidth  int
-	termHeight int
+	Name     string                 `json:"name"`
+	Host     string                 `json:"host"`
+	Port     int                    `json:"port"`
+	User     string                 `json:"user"`
+	Password string                 `json:"password"`
+	PemKey   string                 `json:"key"`
+	Remark   string                 `json:"remark"`
+	Options  map[string]interface{} `json:"options"`
+	//GroupName  string                 `json:group_name`
+	termWidth              int
+	termHeight             int
+	command, commandOutput string
 }
 
 type SSHConfig struct {
@@ -92,6 +94,12 @@ func (this *Server) Connection() error {
 		return fmt.Errorf("Assh: Create SESSION fail: %s \n", err.Error())
 	}
 	defer session.Close()
+
+	if this.command != "" {
+		buf, err := session.CombinedOutput(this.command)
+		this.commandOutput = string(buf)
+		return err
+	}
 
 	fd := int(os.Stdin.Fd())
 	oldState, err := terminal.MakeRaw(fd)
@@ -187,4 +195,12 @@ func sshPemKey(key, passwd string) (ssh.AuthMethod, error) {
 		return nil, err
 	}
 	return ssh.PublicKeys(signer), nil
+}
+
+func (this *Server) Command(cmd string) {
+	this.command = cmd
+}
+
+func (this *Server) CombinedOutput() string {
+	return this.commandOutput
 }
