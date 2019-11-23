@@ -180,7 +180,6 @@ func sshPemKey(key, passwd string) (ssh.AuthMethod, error) {
 		key = "~/.ssh/id_rsa"
 	}
 	keyPath := kiris.RealPath(key)
-	fmt.Println("load pem key> ", keyPath)
 	pemBytes, err := ioutil.ReadFile(keyPath)
 	if err != nil {
 		return nil, err
