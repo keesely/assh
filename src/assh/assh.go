@@ -89,6 +89,9 @@ func (c *Assh) GetServer(name string) *Server {
 }
 
 func (c *Assh) AddServer(name string, server Server) {
+	if server.Password == "" && server.PemKey == "" {
+		server.PemKey = "~/.ssh/id_rsa"
+	}
 	group, _name := parseName(name)
 	g, ok := c.data[group]
 	if !ok {
