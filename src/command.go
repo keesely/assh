@@ -36,6 +36,8 @@ func (app *App) command() {
 		app.AddServer(),
 		app.RemoveServer(),
 		app.Connection(),
+		app.PushFiles(),
+		app.PullFiles(),
 		app.ServerInfo(),
 		app.MoveServer(),
 		app.SetRemark(),
@@ -206,6 +208,84 @@ func (app *App) Connection() cli.Command {
 	}
 }
 
+func (app *App) PushFiles() cli.Command {
+	return cli.Command{
+		Name:  cSet("push"),
+		Usage: "scp put file to remote server",
+		Flags: []cli.Flag{},
+		Action: func(c *cli.Context) error {
+			var (
+				local  []string
+				remote string
+			)
+			args := c.Args()
+			name := args.First()
+			if len(args) > 2 {
+				local = args[1 : len(args)-1]
+				remote = args[len(args)-1]
+			} else {
+				local = args[1:]
+				remote = "~/"
+			}
+
+			if 0 >= len(local) {
+				fmt.Printf("请选择需要上传的本地文件\n")
+				return nil
+			}
+			ss := assh.NewAssh()
+			s := ss.GetServer(name)
+			if s != nil {
+				err := s.ScpPushFiles(local, remote)
+				if err != nil {
+					fmt.Println(err)
+				}
+				return nil
+			}
+			return fmt.Errorf("Login %s fail: not found the server config\n", name)
+			return nil
+		},
+	}
+}
+
+func (app *App) PullFiles() cli.Command {
+	return cli.Command{
+		Name:  cSet("pull"),
+		Usage: "scp get file from remote server",
+		Flags: []cli.Flag{},
+		Action: func(c *cli.Context) error {
+			var (
+				local  string
+				remote []string
+			)
+			args := c.Args()
+			name := args.First()
+			if len(args) > 2 {
+				remote = args[1 : len(args)-1]
+				local = args[len(args)-1]
+			} else {
+				remote = args[1:]
+				local = "./"
+			}
+
+			if 0 >= len(remote) {
+				fmt.Printf("请选择需要获取的远程文件\n")
+				return nil
+			}
+			ss := assh.NewAssh()
+			s := ss.GetServer(name)
+			if s != nil {
+				err := s.ScpPullFiles(remote, local)
+				if err != nil {
+					fmt.Println(err)
+				}
+				return nil
+			}
+			return fmt.Errorf("Login %s fail: not found the server config\n", name)
+			return nil
+		},
+	}
+}
+
 func (app *App) ServerInfo() cli.Command {
 	return cli.Command{
 		Name:  cSet("info"),
@@ -314,7 +394,6 @@ func addServer(server *assh.Server, ss *assh.Assh) error {
 }
 
 func loginServer(s *assh.Server, cmd string) {
-
 	if cmd != "" {
 		s.Command(cmd)
 	}

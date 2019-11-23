@@ -8,11 +8,11 @@
 - [x] 支持记录ssh密码
 - [x] 支持独立公钥登陆(每个服务器用户可以独立关联一个公钥)
 - [x] `assh [add/mod/rm/info/ls]` 服务器记录(新增/修改/删除/查看详情/列表)
-- [ ] 支持服务器群组编排
-- [ ] 使用数据文件密钥加密
-- [ ] 支持安全启动密码
+- [x] 支持服务器群组编排
+- [x] 使用数据文件密钥加密
+- [x] 支持安全启动密码
+- [x] `assh push / assh pull` 支持 push / pull 文件及文件夹
 - [ ] `assh sync [云端标识]` 同步备份服务器列表到自定义云端(七牛/OSS/AWS)
-- [ ] `assh sftp / assh scp` 支持 sftp / scp 功能
 - [ ] `assh fs`支持 sshfs 挂载
 - [ ] `assh upgrade`自动检测更新/自动升级
 - [ ] `assh logs [服务器名称]`日志记录/查看
