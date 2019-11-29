@@ -22,7 +22,7 @@ var (
 )
 
 var cnfDefaultContent = `logPath: ~/.assh/assh.log
-logLevel: INFO
+logLevel: OFF
 dbPath: ` + dbPath + `
 qiniuAccessKey: 
 qiniuSecretKey:
