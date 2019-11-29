@@ -145,20 +145,37 @@ func SetPemKey(server *Server) {
 	}
 	serverName := strings.Replace(server.Name, ".", "/", 0)
 	pemKeyPath := strings.Join([]string{GetDbPath(), serverName}, "/")
-	os.Mkdir(pemKeyPath, os.ModePerm)
+	dstPemFile := path.Join(pemKeyPath, path.Base(server.PemKey))
 
 	// copy ...
-	src, err := os.Open(server.PemKey)
+	os.Mkdir(pemKeyPath, os.ModePerm)
+	copyFile(server.PemKey, dstPemFile)
+
+	// copy public key file
+	pubFile := server.PemKey + ".pub"
+	if kiris.FileExists(pubFile) {
+		dstPubFile := dstPemFile + ".pub"
+		copyFile(pubFile, dstPubFile)
+	}
+
+	server.PemKey = dstPemFile
+	return
+}
+
+// copy ...
+func copyFile(srcFile, dstFile string) error {
+	if !kiris.FileExists(srcFile) {
+		return fmt.Errorf("file not found: %s\n", srcFile)
+	}
+	src, err := os.Open(srcFile)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer src.Close()
 
-	fmt.Println("< base path >", pemKeyPath, path.Base(server.PemKey))
-	dstPemFile := path.Join(pemKeyPath, path.Base(server.PemKey))
-	dst, err := os.Create(dstPemFile)
+	dst, err := os.Create(dstFile)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer dst.Close()
 
@@ -170,8 +187,7 @@ func SetPemKey(server *Server) {
 		}
 		dst.Write(buf[:n])
 	}
-	server.PemKey = dstPemFile
-	return
+	return nil
 }
 
 func (c *Assh) DelServer(name string) {
