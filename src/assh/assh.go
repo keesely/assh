@@ -3,11 +3,14 @@
 package assh
 
 import (
+	"assh/src/log"
 	"encoding/json"
 	"fmt"
 	"github.com/keesely/kiris"
 	"github.com/keesely/kiris/hash"
-	"log"
+	//"log"
+	"os"
+	"path"
 	"strings"
 	"sync"
 )
@@ -92,6 +95,9 @@ func (c *Assh) AddServer(name string, server Server) {
 	if server.Password == "" && server.PemKey == "" {
 		server.PemKey = "~/.ssh/id_rsa"
 	}
+	if server.PemKey != "" {
+		SetPemKey(&server)
+	}
 	group, _name := parseName(name)
 	g, ok := c.data[group]
 	if !ok {
@@ -130,6 +136,42 @@ func (c *Assh) SetRemark(name, remark string) {
 	}
 	ss.Remark = remark
 	c.save()
+}
+
+// 设置密钥
+func SetPemKey(server *Server) {
+	if server.PemKey != "" && !kiris.FileExists(server.PemKey) {
+		return
+	}
+	serverName := strings.Replace(server.Name, ".", "/", 0)
+	pemKeyPath := strings.Join([]string{GetDbPath(), serverName}, "/")
+	os.Mkdir(pemKeyPath, os.ModePerm)
+
+	// copy ...
+	src, err := os.Open(server.PemKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer src.Close()
+
+	fmt.Println("< base path >", pemKeyPath, path.Base(server.PemKey))
+	dstPemFile := path.Join(pemKeyPath, path.Base(server.PemKey))
+	dst, err := os.Create(dstPemFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dst.Close()
+
+	var buf = make([]byte, 2048)
+	for {
+		n, err := src.Read(buf)
+		if err != nil {
+			break
+		}
+		dst.Write(buf[:n])
+	}
+	server.PemKey = dstPemFile
+	return
 }
 
 func (c *Assh) DelServer(name string) {

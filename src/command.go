@@ -5,6 +5,7 @@ package src
 import (
 	"assh/src/assh"
 	"assh/src/keygen"
+	"assh/src/log"
 	"fmt"
 	"github.com/keesely/kiris"
 	"github.com/urfave/cli"
@@ -85,7 +86,8 @@ func (app *App) SetPasswd() cli.Command {
 		Action: func(c *cli.Context) error {
 			passwd := c.Args().First()
 			assh.SetPasswd(passwd)
-			fmt.Println("The password set success")
+			log.Info("Set new password")
+			//fmt.Println("The password set success")
 			return nil
 		},
 	}
@@ -132,6 +134,7 @@ func (app *App) AddServer() cli.Command {
 				s.Remark = c.String("remark")
 			}
 			ss.AddServer(s.Name, s)
+			log.Infof("Add new Server [%s] (%s)\n", s.Name, s)
 			return nil
 		},
 	}
@@ -159,6 +162,7 @@ func (app *App) RemoveServer() cli.Command {
 				if name != "" {
 					ss.DelServer(name)
 				}
+				log.Infof("Remove Server [%s]\n", name)
 				return nil
 			}
 		},
@@ -189,7 +193,8 @@ func (app *App) Connection() cli.Command {
 					loginServer(s, cmd)
 					return nil
 				}
-				return fmt.Errorf("Login %s fail: not found the server config\n", name)
+				log.Errorf("Connection [%s] fail: not found the server config\n", name)
+				return fmt.Errorf("Connection [%s] fail: not found the server config\n", name)
 			} else {
 				s := &assh.Server{}
 
@@ -201,6 +206,7 @@ func (app *App) Connection() cli.Command {
 				s.PemKey = c.String("k")
 				s.Remark = c.String("remark")
 
+				log.Infof("Connection server [unknown]: %s \n", s)
 				loginServer(s, cmd)
 			}
 			return nil
@@ -230,6 +236,7 @@ func (app *App) PushFiles() cli.Command {
 
 			if 0 >= len(local) {
 				fmt.Printf("请选择需要上传的本地文件\n")
+				log.Errorf("Connection server [%s] fail: the local file/directory is empty \n", name)
 				return nil
 			}
 			ss := assh.NewAssh()
@@ -237,12 +244,13 @@ func (app *App) PushFiles() cli.Command {
 			if s != nil {
 				err := s.ScpPushFiles(local, remote)
 				if err != nil {
+					log.Errorf("Connection server [%s] fail: %s \n", name, err.Error())
 					fmt.Println(err)
 				}
 				return nil
 			}
-			return fmt.Errorf("Login %s fail: not found the server config\n", name)
-			return nil
+			log.Errorf("Connection server [%s] fail: not found the server config \n", name)
+			return fmt.Errorf("Connection %s fail: not found the server config\n", name)
 		},
 	}
 }
@@ -269,6 +277,7 @@ func (app *App) PullFiles() cli.Command {
 
 			if 0 >= len(remote) {
 				fmt.Printf("请选择需要获取的远程文件\n")
+				log.Errorf("Connection server [%s] fail: the remote file/directory is nil \n", name)
 				return nil
 			}
 			ss := assh.NewAssh()
@@ -280,8 +289,8 @@ func (app *App) PullFiles() cli.Command {
 				}
 				return nil
 			}
-			return fmt.Errorf("Login %s fail: not found the server config\n", name)
-			return nil
+			log.Errorf("Connection server [%s] fail: not found the server config \n", name)
+			return fmt.Errorf("Connection %s fail: not found the server config\n", name)
 		},
 	}
 }
@@ -307,6 +316,7 @@ func (app *App) ServerInfo() cli.Command {
 				}
 			} else {
 				fmt.Printf("服务器(%s) 不存在\n", name)
+				log.Debugf("show info: Server [%s] not found\n", name)
 			}
 			fmt.Println(kiris.StrPad("", "=", 100, 0))
 			return nil
@@ -397,9 +407,19 @@ func loginServer(s *assh.Server, cmd string) {
 	if cmd != "" {
 		s.Command(cmd)
 	}
+	host := fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
+	log.Infof("Connection server [%s]\n", host)
 	s.Connection()
+	log.Infof("%s connection closed.", host)
 
 	if cout := s.CombinedOutput(); cout != "" {
 		fmt.Printf("> Result (%s): \n%s\n", s.Name, cout)
+		log.Infof(`Executive (%s):
+===============================================================================
+Command > %s
+-------------------------------------------------------------------------------
+%s
+===============================================================================
+`, host, cmd, cout)
 	}
 }
