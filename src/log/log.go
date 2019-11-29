@@ -3,10 +3,12 @@
 package log
 
 import (
+	"fmt"
 	"github.com/keesely/kiris"
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -49,7 +51,7 @@ func SetInit() {
 		logger = log.New(fl, "", log.LstdFlags)
 		//logger.SetFlags(log.Lshortfile | log.Lmicroseconds)
 	} else {
-		logger = &log.Logger{}
+		logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 }
 
@@ -76,95 +78,105 @@ func formatLogLevel(lv int) string {
 		WARN:  ("\033[0;33m [WARN] \033[0m"),
 		INFO:  ("\033[0;36m [INFO] \033[0m"),
 		DEBUG: ("\033[0;37m[DEBUG] \033[0m"),
-		PANIC: ("\033[5;35m[Panic] \033[0;35;47m"),
+		PANIC: ("\033[5;35m[Panic] \033[0m"),
 	}
-	if output, ok := lvMaps[lv]; ok {
-		return output
+	if Output, ok := lvMaps[lv]; ok {
+		return Output
 	}
 	return ""
 }
 
 func Print(args ...interface{}) {
-	logger.SetPrefix("\033[0m")
 	logger.Print(args...)
 }
 
 func Printf(format string, args ...interface{}) {
-	logger.SetPrefix("\033[0m")
 	logger.Printf(format, args...)
 }
 
 func Println(args ...interface{}) {
-	logger.SetPrefix("\033[0m")
 	logger.Println(args...)
 }
 
 func Fatal(args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(FATAL))
-	logger.Fatal(args...)
+	echo(FATAL, args)
 }
 
 func Fatalln(args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(FATAL))
-	logger.Fatalln(args...)
+	echo(FATAL, args)
 }
 
 func Fatalf(format string, args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(FATAL))
-	logger.Fatalf(format, args...)
+	echof(FATAL, format, args)
 }
 
 func Panic(args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(PANIC))
-	logger.Panic(args...)
+	echo(PANIC, args)
 }
 
 func Panicln(args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(PANIC))
-	logger.Panicln(args...)
+	echo(PANIC, args)
 }
 
 func Panicf(format string, args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(PANIC))
-	logger.Panicf(format, args...)
+	echof(PANIC, format, args)
 }
 
 func Debug(args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(DEBUG))
-	logger.Print(args...)
+	echo(DEBUG, args)
 }
 
 func Info(args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(INFO))
-	logger.Print(args...)
+	echo(INFO, args)
 }
 
 func Warn(args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(WARN))
-	logger.Print(args...)
+	echo(WARN, args)
 }
 
 func Error(args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(ERROR))
-	logger.Print(args...)
+	echo(ERROR, args)
 }
 
 func Debugf(format string, args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(DEBUG))
-	logger.Printf(format, args...)
+	echof(DEBUG, format, args)
 }
 
 func Infof(format string, args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(INFO))
-	logger.Printf(format, args...)
+	echof(INFO, format, args)
 }
 
 func Warnf(format string, args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(WARN))
-	logger.Printf(format, args...)
+	echof(WARN, format, args)
 }
 
 func Errorf(format string, args ...interface{}) {
-	logger.SetPrefix(formatLogLevel(ERROR))
-	logger.Printf(format, args...)
+	echof(ERROR, format, args)
+}
+
+func output(level int, s string) string {
+	logger.SetPrefix("\033[0m")
+	if level > 0 && level <= LogLevel {
+		Lvf := formatLogLevel(level)
+
+		logger.SetPrefix(Lvf)
+		logger.Output(2, s)
+
+		fmt.Println(Lvf, time.Now().Format("2006/01/02 15:04:05"), s)
+
+		if PANIC == level {
+			panic(s)
+		} else if FATAL == level {
+			os.Exit(1)
+		}
+	}
+	return s
+}
+
+func echo(level int, args []interface{}) {
+	output(level, fmt.Sprint(args...))
+}
+
+func echof(level int, format string, args []interface{}) {
+	output(level, fmt.Sprintf(format, args))
 }

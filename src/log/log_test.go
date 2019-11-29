@@ -3,22 +3,22 @@
 package log
 
 import (
-	"assh/src/assh"
 	"testing"
 	"time"
 )
 
 func TestLog(t *testing.T) {
-	assh.SetLogPath("./test.log")
-	assh.SetLogLevel("DEBUG")
+	LogFile = "./test.log"
+	LogLevel = DEBUG
+	SetInit()
 	Print("======================================================================")
-	Print("start.")
+	Println("start.")
 	Debug("debug ...")
 	Println("to day", time.Now())
 	Warn("warning ...")
 	Info("info ... ")
 	Error("error ...")
-	Panic("panic to do")
 	Println("hello world")
+	//Panic("panic to do")
 	Fatal("end.")
 }
