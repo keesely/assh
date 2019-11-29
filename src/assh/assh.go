@@ -24,7 +24,7 @@ type Assh struct {
 var passwd string
 
 func NewAssh() *Assh {
-	cFile := cPath + "/servers.db"
+	cFile := GetDbPath() + "/servers.db"
 	passwd = GetPasswd()
 	return loadData(cFile)
 }

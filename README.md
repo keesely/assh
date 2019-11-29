@@ -12,10 +12,8 @@
 - [x] 使用数据文件密钥加密
 - [x] 支持安全启动密码
 - [x] `assh push / assh pull` 支持 push / pull 文件及文件夹
-- [ ] `assh sync [云端标识]` 同步备份服务器列表到自定义云端(七牛/OSS/AWS)
-- [ ] `assh fs`支持 sshfs 挂载
+- [x] `assh sync [云端标识]` 同步备份服务器列表到自定义云端(七牛/OSS/AWS)
 - [ ] `assh upgrade`自动检测更新/自动升级
-- [ ] `assh logs [服务器名称]`日志记录/查看
 - [ ] `assh ping [服务器名称]` ping服务器
 
 # 安装

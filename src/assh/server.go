@@ -170,7 +170,6 @@ func (this *Server) startKeepAliveLoop(session *ssh.Session) chan struct{} {
 func (this *Server) stdIO(session *ssh.Session) error {
 	session.Stderr = os.Stderr
 	session.Stdin = os.Stdin
-
 	session.Stdout = os.Stdout
 	return nil
 }

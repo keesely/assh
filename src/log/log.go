@@ -22,9 +22,10 @@ const (
 )
 
 var (
-	LogFile  = ""
-	LogLevel = OFF
-	logger   *log.Logger
+	LogPath       = ""
+	LogLevel      = OFF
+	LogLevelPrint = WARN
+	logger        *log.Logger
 )
 
 func init() {
@@ -32,16 +33,16 @@ func init() {
 }
 
 func SetInit() {
-	if LogLevel > 0 && LogFile != "" {
+	if LogLevel > 0 && LogPath != "" {
 		var (
 			fl  *os.File
 			err error
 		)
-		LogFile = kiris.RealPath(LogFile)
-		if _, err := os.Stat(LogFile); err != nil {
-			fl, err = os.Create(LogFile)
+		LogPath = kiris.RealPath(LogPath)
+		if _, err := os.Stat(LogPath); err != nil {
+			fl, err = os.Create(LogPath)
 		} else {
-			fl, err = os.OpenFile(LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+			fl, err = os.OpenFile(LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		}
 
 		if err != nil {
@@ -162,7 +163,9 @@ func output(level int, s string) string {
 		logger.SetPrefix(Lvf)
 		logger.Output(2, s)
 
-		fmt.Println(Lvf, time.Now().Format("2006/01/02 15:04:05"), s)
+		if level <= LogLevelPrint {
+			fmt.Println(Lvf, time.Now().Format("2006/01/02 15:04:05"), s)
+		}
 
 		if PANIC == level {
 			panic(s)

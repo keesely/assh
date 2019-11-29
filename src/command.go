@@ -6,10 +6,13 @@ import (
 	"assh/src/assh"
 	"assh/src/keygen"
 	"assh/src/log"
+	"assh/src/qiniu"
 	"fmt"
 	"github.com/keesely/kiris"
 	"github.com/urfave/cli"
+	"os"
 	"reflect"
+	"time"
 )
 
 type App struct {
@@ -42,6 +45,7 @@ func (app *App) command() {
 		app.ServerInfo(),
 		app.MoveServer(),
 		app.SetRemark(),
+		app.Sync(),
 	}
 
 	app.Runtime.Action = func(c *cli.Context) error {
@@ -87,7 +91,7 @@ func (app *App) SetPasswd() cli.Command {
 			passwd := c.Args().First()
 			assh.SetPasswd(passwd)
 			log.Info("Set new password")
-			//fmt.Println("The password set success")
+			fmt.Println("Set new password")
 			return nil
 		},
 	}
@@ -316,7 +320,7 @@ func (app *App) ServerInfo() cli.Command {
 				}
 			} else {
 				fmt.Printf("服务器(%s) 不存在\n", name)
-				log.Debugf("show info: Server [%s] not found\n", name)
+				log.Infof("show info: Server [%s] not found\n", name)
 			}
 			fmt.Println(kiris.StrPad("", "=", 100, 0))
 			return nil
@@ -347,6 +351,66 @@ func (app *App) MoveServer() cli.Command {
 			toGroup := c.Args().Get(1)
 			ss := assh.NewAssh()
 			ss.MoveServer(name, toGroup)
+			return nil
+		},
+	}
+}
+
+func (app *App) Sync() cli.Command {
+	return cli.Command{
+		Name:  cSet("sync"),
+		Usage: "同步数据到云端",
+		Action: func(c *cli.Context) error {
+			args := c.Args()
+			first := args.First()
+			if "account" == first {
+				if len(args) < 4 {
+					fmt.Println("Assh sync: account <accessKey> <secretKey> <bucket> to set sync service account")
+					return nil
+				}
+				accessKey, secretKey, bucket := args[1], args[2], args[3]
+				assh.SetQiniuAccessKey(accessKey, secretKey, bucket)
+			}
+
+			accessKey, secretKey, bucket := assh.GetQiniuAccessKey()
+			if accessKey == "" || secretKey == "" || bucket == "" {
+				fmt.Println("Assh sync > Undefined the sync configuration, please use `assh sync account` to set AccessKey and SecretKey and Bucket first")
+				return nil
+			}
+
+			// 处理同步
+			qN := qiniu.New(accessKey, secretKey, bucket)
+			src := kiris.RealPath("~/.assh/assh.zip")
+			err := Zip(assh.GetDbPath(), src)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if "push" == first {
+				date := time.Now().Format("2006-01-02/1504")
+				err := qN.Upload(src, "assh/backup.zip")
+				qN.Upload(src, "assh/"+date+"/backup.zip")
+				if err != nil {
+					log.Fatal(err)
+				}
+				fmt.Println("sync upload success.")
+			}
+
+			if "pull" == first {
+				dst := assh.GetDbPath() + "/backup.zip"
+				src := "assh/backup.zip"
+
+				err := qN.Download(src, dst)
+				if err != nil {
+					log.Fatal(err)
+				}
+				err = Unzip(dst, assh.GetDbPath())
+				if err != nil {
+					log.Fatal(err)
+				}
+				os.Remove(dst)
+				fmt.Println("sync download success.")
+			}
+
 			return nil
 		},
 	}
@@ -409,7 +473,10 @@ func loginServer(s *assh.Server, cmd string) {
 	}
 	host := fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
 	log.Infof("Connection server [%s]\n", host)
-	s.Connection()
+	err := s.Connection()
+	if err != nil {
+		log.Error(err.Error())
+	}
 	log.Infof("%s connection closed.", host)
 
 	if cout := s.CombinedOutput(); cout != "" {

@@ -5,6 +5,7 @@ package assh
 import (
 	key "assh/src/keygen"
 	"assh/src/log"
+	//"fmt"
 	"github.com/keesely/kiris"
 	"github.com/keesely/kiris/hash"
 	"os"
@@ -26,6 +27,7 @@ logLevel: OFF
 dbPath: ` + dbPath + `
 qiniuAccessKey: 
 qiniuSecretKey:
+qiniuBucket:
 `
 
 func init() {
@@ -66,31 +68,41 @@ func init() {
 	}
 
 	// 初始化日志
-	log.LogFile = cnfYaml.Get("logPath").(string)
-	log.LogLevel = log.GetLogLevel(cnfYaml.Get("logLevel").(string))
+	log.LogPath = cnfYaml.Get("logPath").(string)
+	logLevel := cnfYaml.Get("logLevel")
+	if "string" == kiris.Typeof(logLevel) {
+		log.LogLevel = log.GetLogLevel(logLevel.(string))
+	}
 	log.SetInit()
 }
 
 func SetDbPath(dbPath string) {
 	cnfYaml.Set("dbPath", dbPath)
-	cnfYaml.Save()
+	cnfSave()
 }
 func SetLogPath(logPath string) {
 	cnfYaml.Set("logPath", logPath)
-	log.LogFile = logPath
-	cnfYaml.Save()
+	log.LogPath = logPath
+	cnfSave()
 }
 
 func SetLogLevel(logLevel string) {
 	cnfYaml.Set("logLevel", logLevel)
 	log.LogLevel = log.GetLogLevel(logLevel)
-	cnfYaml.Save()
+	cnfSave()
 }
 
-func SetQiniuAccessKey(accessKey, secretKey string) {
+func SetQiniuAccessKey(accessKey, secretKey, bucket string) {
 	cnfYaml.Set("qiniuAccessKey", accessKey)
 	cnfYaml.Set("qiniuSecretKey", secretKey)
+	cnfYaml.Set("qiniuBucket", bucket)
+	cnfSave()
+}
+
+func cnfSave() {
 	cnfYaml.Save()
+	c, _ := cnfYaml.SaveToString()
+	saveConfig(string(c))
 }
 
 func getConfig() *kiris.Yaml {
@@ -130,6 +142,13 @@ func GetLogPath() string {
 
 func GetLogLevel() string {
 	return cnfYaml.Get("logLevel", "OFF").(string)
+}
+
+func GetQiniuAccessKey() (accessKey, secretKey, bucket string) {
+	accessKey = cnfYaml.Get("qiniuAccessKey", "").(string)
+	secretKey = cnfYaml.Get("qiniuSecretKey", "").(string)
+	bucket = cnfYaml.Get("qiniuBucket", "").(string)
+	return
 }
 
 func GetPasswd() string {

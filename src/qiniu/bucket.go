@@ -4,14 +4,15 @@ package qiniu
 
 import (
 	"context"
+	//"fmt"
 	"github.com/qiniu/api.v7/v7/auth"
 	"github.com/qiniu/api.v7/v7/auth/qbox"
 	"github.com/qiniu/api.v7/v7/storage"
-	"io"
+	//"io"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
+	//"path/filepath"
 	"strings"
 )
 
@@ -78,28 +79,27 @@ func (m *BucketManager) Get(bucket, key string, dst string) (err error) {
 	ctx := auth.WithCredentials(context.Background(), m.Mac)
 	headers := http.Header{}
 
-	//fmt.Printf("GET: %s\n\tHEADER: %v\n", url, headers)
 	err = storage.DefaultClient.Call(ctx, &data, "GET", url, headers)
 	if err != nil {
 		return
 	}
 	resp, err := storage.DefaultClient.DoRequest(context.Background(), "GET", data.URL, headers)
-	//fmt.Printf("RESPONSE > \n GET: %s\n\tHEADER: %v\n", data.URL, headers)
 	if err != nil {
 		return
 	}
 	defer resp.Body.Close()
 
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
 	if resp.StatusCode/100 != 2 {
-		_, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return
-		}
 		os.Exit(1)
 	}
-	if strings.ContainsRune(dst, os.PathSeparator) {
-		dst = filepath.Base(dst)
-	}
+
+	//if strings.ContainsRune(dst, os.PathSeparator) {
+	//dst = filepath.Base(dst)
+	//}
 
 	//f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, 0666)
@@ -107,9 +107,10 @@ func (m *BucketManager) Get(bucket, key string, dst string) (err error) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
 
-	io.Copy(f, resp.Body)
+	defer f.Close()
+	f.Write(body)
+	//io.Copy(f, resp.Body)
 	return
 }
 
