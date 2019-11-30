@@ -1,5 +1,4 @@
-# Assh  (An ssh client)
-----
+# Assh  (An ssh) Client
 
 一个可以记录密码的SSH客户端
 
