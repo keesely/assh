@@ -13,8 +13,36 @@ import (
 )
 
 //压缩文件
-//files 文件数组，可以是不同dir下的文件或者文件夹
-//dest 压缩文件存放地址
+func Zip(src string, dest string) (err error) {
+	localFiles, err := ioutil.ReadDir(src)
+	if err != nil {
+		log.Println(err)
+	}
+
+	fzip, err := os.Create(dest)
+	if err != nil {
+		return
+	}
+	defer fzip.Close()
+
+	w := zip.NewWriter(fzip)
+	defer w.Close()
+
+	for _, backupDir := range localFiles {
+		f, ferr := os.Open(path.Join(src, backupDir.Name()))
+		if ferr != nil {
+			err = ferr
+			return
+		}
+		err = compress(f, ".", w)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+// 批量文件压缩
 func Compress(files []*os.File, dest string) error {
 	d, _ := os.Create(dest)
 	defer d.Close()
@@ -148,33 +176,4 @@ func subString(str string, start, end int) string {
 	}
 
 	return string(rs[start:end])
-}
-
-func Zip(src string, dest string) (err error) {
-	localFiles, err := ioutil.ReadDir(src)
-	if err != nil {
-		log.Println(err)
-	}
-
-	fzip, err := os.Create(dest)
-	if err != nil {
-		return
-	}
-	defer fzip.Close()
-
-	w := zip.NewWriter(fzip)
-	defer w.Close()
-
-	for _, backupDir := range localFiles {
-		f, ferr := os.Open(path.Join(src, backupDir.Name()))
-		if ferr != nil {
-			err = ferr
-			return
-		}
-		err = compress(f, ".", w)
-		if err != nil {
-			return
-		}
-	}
-	return
 }

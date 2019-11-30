@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/keesely/kiris"
 	"github.com/keesely/kiris/hash"
-	//"log"
 	"os"
 	"path"
 	"strings"
