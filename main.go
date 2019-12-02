@@ -1,12 +1,11 @@
 package main
 
 import (
-	"assh/src"
-	"os"
+	"assh/cmd"
 )
 
 //main
 func main() {
-	app := src.NewCli(os.Args)
+	app := cmd.NewCli()
 	app.Run()
 }
