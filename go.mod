@@ -10,5 +10,6 @@ require (
 	github.com/qiniu/x v7.0.8+incompatible // indirect
 	github.com/urfave/cli v1.22.1
 	golang.org/x/crypto v0.0.0-20191108234033-bd318be0434a
+	golang.org/x/sys v0.0.0-20190412213103-97732733099d
 	qiniupkg.com/x v7.0.8+incompatible // indirect
 )

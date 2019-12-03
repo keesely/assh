@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 )
 
 func (this *Server) sftpClient() (*sftp.Client, error) {
@@ -35,6 +36,7 @@ func (this *Server) ScpPushFiles(localList []string, remote string) error {
 		local = kiris.RealPath(local)
 		remote = getRemoteRealPath(remote)
 
+		local = filepath.ToSlash(local)
 		fname := path.Base(local)
 		remoteFile := path.Join(remote, fname)
 		fmt.Printf("%d: '%s' -> %s\n", n, local, fmt.Sprintf("%s@%s:%s", this.User, this.Host, remoteFile))

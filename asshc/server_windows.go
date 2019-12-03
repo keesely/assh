@@ -7,6 +7,7 @@ import (
 	"os"
 	//"os/signal"
 	//"runtime"
+	"golang.org/x/sys/windows"
 	//"syscall"
 )
 
@@ -17,6 +18,8 @@ func listenWindowChange(session *ssh.Session, fd int) {
 		defer close(sigWinCh)
 		//signal.Notify(sigWinCh, syscall.SIGWINCH)
 
+		//fd := int(os.Stdin.Fd())
+		//fd := getStdoutFd()
 		fd := int(os.Stdout.Fd())
 		termW, termH, err := terminal.GetSize(fd)
 		if err != nil {
@@ -45,4 +48,12 @@ func listenWindowChange(session *ssh.Session, fd int) {
 			}
 		}
 	}()
+}
+
+func getStdinFd() int {
+	return int(windows.Stdin)
+}
+
+func getStdoutFd() int {
+	return int(windows.Stdout)
 }

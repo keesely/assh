@@ -99,16 +99,16 @@ func (this *Server) Connection() error {
 		return err
 	}
 
-	fd := int(os.Stdin.Fd())
+	stopKeepAliveLoop := this.startKeepAliveLoop(session)
+	defer close(stopKeepAliveLoop)
+
+	fd := getStdinFd()
 	oldState, err := terminal.MakeRaw(fd)
 	if err != nil {
 		check(err, "assh > create session(fd)")
 		return fmt.Errorf("Assh: Create SESSION(fd) fail: %s \n", err.Error())
 	}
 	defer terminal.Restore(fd, oldState)
-
-	stopKeepAliveLoop := this.startKeepAliveLoop(session)
-	defer close(stopKeepAliveLoop)
 
 	/**
 	if err = this.stdIO(session); err != nil {
@@ -170,9 +170,9 @@ func (this *Server) startKeepAliveLoop(session *ssh.Session) chan struct{} {
 
 // 重定向标准输入输出
 func (this *Server) stdIO(session *ssh.Session) error {
-	session.Stderr = os.Stderr
 	session.Stdin = os.Stdin
-	session.Stdout = os.Stdout
+	//session.Stderr = os.Stderr
+	//session.Stdout = os.Stdout
 	return nil
 }
 

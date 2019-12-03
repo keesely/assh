@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	//"runtime"
+	"golang.org/x/sys/unix"
 	"syscall"
 )
 
@@ -47,4 +48,12 @@ func listenWindowChange(session *ssh.Session, fd int) {
 			}
 		}
 	}()
+}
+
+func getStdinFd() int {
+	return int(unix.Stdin)
+}
+
+func getStdoutFd() int {
+	return int(unix.Stdout)
 }
