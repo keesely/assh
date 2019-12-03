@@ -47,9 +47,8 @@ build linux 386 linux
 build linux arm linux
 
 # Windows
-# [Bug: 编译后windows termial 出现显示问题/暂时无法处理]
-# build windows amd64 windows
-# build windows 386 windows
+ build windows amd64 windows
+ build windows 386 windows
 else
   build $@
 fi
