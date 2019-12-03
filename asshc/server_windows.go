@@ -1,6 +1,7 @@
 package asshc
 
 import (
+	"assh/log"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
 	"os"
@@ -14,14 +15,13 @@ func listenWindowChange(session *ssh.Session, fd int) {
 	go func() {
 		sigWinCh := make(chan os.Signal, 1)
 		defer close(sigWinCh)
-
-		//if runtime.GOOS != "windows" {
 		//signal.Notify(sigWinCh, syscall.SIGWINCH)
-		//}
-		termW, termH, _ := terminal.GetSize(fd)
-		//if e != nil {
-		//check(e, "assh > terminal window resize")
-		//}
+
+		fd := int(os.Stdout.Fd())
+		termW, termH, err := terminal.GetSize(fd)
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		for {
 			select {

@@ -9,6 +9,8 @@ import (
 	"net"
 	"os"
 	//"os/signal"
+	"assh/log"
+	"io"
 	"strconv"
 	"time"
 )
@@ -108,10 +110,12 @@ func (this *Server) Connection() error {
 	stopKeepAliveLoop := this.startKeepAliveLoop(session)
 	defer close(stopKeepAliveLoop)
 
+	/**
 	if err = this.stdIO(session); err != nil {
 		check(err, "assh > std I/O")
 		return fmt.Errorf("Assh: Std I/O fail: %s \n", err.Error())
 	}
+	*/
 
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
@@ -127,6 +131,8 @@ func (this *Server) Connection() error {
 	}
 
 	listenWindowChange(session, fd)
+
+	stdPipe(session)
 
 	if err = session.Shell(); err != nil {
 		check(err, "assh > exec Shell")
@@ -168,6 +174,44 @@ func (this *Server) stdIO(session *ssh.Session) error {
 	session.Stdin = os.Stdin
 	session.Stdout = os.Stdout
 	return nil
+}
+
+func stdPipe(session *ssh.Session) {
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	stderr, err := session.StderrPipe()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	go io.Copy(os.Stderr, stderr)
+	go io.Copy(os.Stdout, stdout)
+	go func() {
+		buf := make([]byte, 128)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			if n > 0 {
+				_, err = stdin.Write(buf[:n])
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+			}
+		}
+	}()
 }
 
 func sshPemKey(key, passwd string) (ssh.AuthMethod, error) {
