@@ -179,15 +179,17 @@ func Account(c *cli.Context) (err error) {
 		aPasswd string
 	)
 	nPasswd = c.Args().First()
-	if passwd := assh.GetPasswd(); "" != passwd {
-		fmt.Print("Current Password: ")
-		fmt.Scanln(&cPasswd)
-		if passwd != hash.Md5(cPasswd) {
-			log.Error("passwd: Authentication failed")
-			return
+	if assh.HasPasswd() {
+		if passwd := assh.GetPasswd(); "" != passwd {
+			fmt.Print("Current Password: ")
+			fmt.Scanln(&cPasswd)
+			if passwd != hash.Md5(cPasswd) {
+				log.Error("passwd: Authentication failed")
+				return
+			}
 		}
 	}
-	if nPasswd != "" {
+	if nPasswd == "" {
 		fmt.Print("New Password: ")
 		fmt.Scanln(&nPasswd)
 	}
@@ -195,6 +197,7 @@ func Account(c *cli.Context) (err error) {
 	fmt.Scanln(&aPasswd)
 	if hash.Md5(nPasswd) != hash.Md5(aPasswd) {
 		log.Error("passwd: Inconsistent, please try again.")
+		return
 	}
 	assh.SetPasswd(nPasswd, cPasswd)
 	log.Info("passwd: Set new password")

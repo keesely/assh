@@ -151,9 +151,16 @@ func GetQiniuAccessKey() (accessKey, secretKey, bucket string) {
 	return
 }
 
+func HasPasswd() bool {
+	if kiris.FileExists(passFile) {
+		return true
+	}
+	return false
+}
+
 func GetPasswd() string {
 	// 判断是否存在密码文件
-	if !kiris.FileExists(passFile) {
+	if !HasPasswd() {
 		log.Fatal("You have not set the password.")
 	}
 
@@ -181,11 +188,6 @@ func SetPasswd(passwd string, oldPasswd string) (err error) {
 		return
 	}
 	passwd = hash.Md5(passwd)
-	oldPasswd = hash.Md5(oldPasswd)
-	if oldPasswd != GetPasswd() {
-		err = fmt.Errorf("Invalid old password")
-		return
-	}
 
 	publicKey, err := kiris.FileGetContents(pubFile)
 	if err != nil {
@@ -196,15 +198,24 @@ func SetPasswd(passwd string, oldPasswd string) (err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if kiris.FileExists(passFile) {
-		CopyFile(passFile, passFile+"-old")
-	}
-	// 重编码数据文件
-	dbFile := kiris.RealPath(GetDbPath() + "/servers.db")
-	if c := decryptData(dbFile, GetPasswd()); c != "" {
-		cc := encryptSave([]byte(c), passwd)
-		if e := kiris.FilePutContents(dbFile, cc, 0); e != nil {
-			log.Fatal(e)
+
+	if HasPasswd() {
+		oldPasswd = hash.Md5(oldPasswd)
+		if oldPasswd != GetPasswd() {
+			err = fmt.Errorf("Invalid old password")
+			return
+		}
+
+		if kiris.FileExists(passFile) {
+			CopyFile(passFile, passFile+"-old")
+		}
+		// 重编码数据文件
+		dbFile := kiris.RealPath(GetDbPath() + "/servers.db")
+		if c := decryptData(dbFile, GetPasswd()); c != "" {
+			cc := encryptSave([]byte(c), passwd)
+			if e := kiris.FilePutContents(dbFile, cc, 0); e != nil {
+				log.Fatal(e)
+			}
 		}
 	}
 	kiris.FilePutContents(passFile, string(encrypt), 0)
