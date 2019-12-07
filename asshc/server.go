@@ -80,7 +80,7 @@ func (this *Server) SSHClient() (*ssh.Client, error) {
 func (this *Server) Connection() error {
 	client, err := this.SSHClient()
 	if err != nil {
-		check(err, " assh > dial")
+		check(err, "assh > dial")
 		return fmt.Errorf("Assh: Connection fail: unable to authenticate \n")
 	}
 

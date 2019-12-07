@@ -76,8 +76,8 @@ func formatLogLevel(lv int) string {
 	lvMaps := map[int]string{
 		FATAL: ("\033[0;31m[FATAL] \033[0m"),
 		ERROR: ("\033[0;35m[ERROR] \033[0m"),
-		WARN:  ("\033[0;33m [WARN] \033[0m"),
-		INFO:  ("\033[0;36m [INFO] \033[0m"),
+		WARN:  ("\033[0;33m[WARN]  \033[0m"),
+		INFO:  ("\033[0;36m[INFO]  \033[0m"),
 		DEBUG: ("\033[0;37m[DEBUG] \033[0m"),
 		PANIC: ("\033[5;35m[Panic] \033[0m"),
 	}
@@ -156,15 +156,15 @@ func Errorf(format string, args ...interface{}) {
 }
 
 func output(level int, s string) string {
-	logger.SetPrefix("\033[0m")
+	//logger.SetPrefix("\033[0m")
 	if level > 0 && level <= LogLevel {
-		Lvf := formatLogLevel(level)
-
-		logger.SetPrefix(Lvf)
+		//Lvf := formatLogLevel(level)
+		//logger.SetPrefix(Lvf)
 		logger.Output(2, s)
 
 		if level <= LogLevelPrint {
-			fmt.Println(Lvf, time.Now().Format("2006/01/02 15:04:05"), s)
+			//fmt.Println(Lvf, time.Now().Format("2006/01/02 15:04:05"), s)
+			fmt.Println(time.Now().Format("2006/01/02 15:04:05"), s)
 		}
 
 		if PANIC == level {
@@ -177,9 +177,11 @@ func output(level int, s string) string {
 }
 
 func echo(level int, args []interface{}) {
-	output(level, fmt.Sprint(args...))
+	lv := formatLogLevel(level)
+	output(level, fmt.Sprint(lv, fmt.Sprint(args...)))
 }
 
 func echof(level int, format string, args []interface{}) {
-	output(level, fmt.Sprintf(format, args...))
+	lv := formatLogLevel(level)
+	output(level, fmt.Sprint(lv, fmt.Sprintf(format, args...)))
 }

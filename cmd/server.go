@@ -312,8 +312,12 @@ func getSshClient(c *cli.Context) *assh.Server {
 func connection(s *assh.Server, c *cli.Context) {
 	// 执行远程命令
 	var cmd string
-	if _c := lookupShortFlag(c, "c"); _c != nil {
-		cmd = _c.(string)
+	if _c := lookupShortFlag(c, "c"); _c != nil || c.IsSet("c") {
+		if _c != nil {
+			cmd = _c.(string)
+		} else {
+			cmd = c.String("c")
+		}
 		s.Command(cmd)
 	}
 

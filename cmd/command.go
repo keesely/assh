@@ -162,13 +162,17 @@ func (cmd *App) cmdAction() {
 			if x := lookupShortFlag(c, f); x != nil {
 				c.Set(f, x.(string))
 				vf = true
+			} else if c.IsSet(f) {
+				vf = true
 			}
 		}
 
-		if vf || len(c.Args()) > 0 {
+		fmt.Printf("vf: %v cArgs: %d\n", vf, len(c.Args()))
+		if vf || 0 < len(c.Args()) {
 			return Connection(c)
 		}
 		return
+
 	}
 }
 
