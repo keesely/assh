@@ -240,6 +240,40 @@ func Connection(c *cli.Context) (err error) {
 	return
 }
 
+func BatchCommand(c *cli.Context) (err error) {
+	args := c.Args()
+	Assh := assh.NewAssh()
+	cmd := args.Get(1)
+	if f := c.String("f"); f != "" {
+		if _c, ferr := kiris.FileGetContents(f); ferr == nil {
+			cmd = string(_c)
+		}
+	}
+
+	if name := args.First(); "" != name && "" != cmd {
+		defer timeCost(time.Now(), "BATCH COMMAND: ")
+		c.Set("c", cmd)
+		ch := make(chan string)
+
+		var chConnect = func(s *assh.Server, cmd string, ch chan string) {
+			_connection(s, cmd)
+			ch <- s.Name
+		}
+		if g := Assh.GetGroup(name); g != nil {
+			for _, s := range g {
+				s.Name = fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
+				go chConnect(s, cmd, ch)
+			}
+
+			for i := 0; i < len(g); i++ {
+				println("connection closed.", <-ch)
+			}
+		}
+	}
+
+	return
+}
+
 func parseHostString(s string) (host, user string, port int) {
 	if i := strings.Index(s, "@"); i > 0 {
 		user = s[:i]
@@ -310,6 +344,8 @@ func getSshClient(c *cli.Context) *assh.Server {
 }
 
 func connection(s *assh.Server, c *cli.Context) {
+	fmt.Println(c.IsSet("c"))
+	return
 	// 执行远程命令
 	var cmd string
 	if _c := lookupShortFlag(c, "c"); _c != nil || c.IsSet("c") {
@@ -318,16 +354,22 @@ func connection(s *assh.Server, c *cli.Context) {
 		} else {
 			cmd = c.String("c")
 		}
+	}
+	_connection(s, cmd)
+}
+
+func _connection(s *assh.Server, cmd string) {
+	if cmd != "" {
 		s.Command(cmd)
 	}
+
+	defer timeCost(time.Now())
 
 	host := fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
 	passwd := kiris.Ternary(s.PemKey != "",
 		"(pemKey: yes)",
 		fmt.Sprintf("(password: %s)", kiris.Ternary(s.Password != "", "yes", "no")),
 	)
-
-	defer timeCost(time.Now())
 
 	fmt.Printf("> connection: %s %s \n", host, passwd)
 	log.Infof("connection server [%s]\n", host)
@@ -370,9 +412,28 @@ func ScpPush(c *cli.Context) (err error) {
 		fmt.Println("sftp push fail: the local file/directory is empty")
 	}
 
+	defer timeCost(time.Now(), "SFTP PUSH")
+	name := args.First()
+	if g := assh.NewAssh().GetGroup(name); g != nil {
+		ch := make(chan string)
+		var chPush = func(s *assh.Server, localPath []string, remotePath string, ch chan string) {
+			if err := s.ScpPushFiles(localPath, remotePath); err != nil {
+				log.Errorf("sftp push[%s] fail: %s", s.Name, err.Error())
+			}
+			ch <- fmt.Sprintf("[%s] pushed.\n", s.Name)
+		}
+		for _, s := range g {
+			go chPush(s, localPath, remotePath, ch)
+		}
+		for i := 0; i < len(g); i++ {
+			print(<-ch)
+		}
+		return
+	}
+
 	if s := getSshClient(c); s != nil {
 		if err := s.ScpPushFiles(localPath, remotePath); err != nil {
-			log.Errorf("sftp push [%s] fail: ", err.Error())
+			log.Error("sftp push fail: ", err.Error())
 		}
 		return
 	}
@@ -397,6 +458,24 @@ func ScpPull(c *cli.Context) (err error) {
 
 	if 0 >= len(remotePath) {
 		fmt.Println("sftp pull fail: the remote file/directory is nil")
+	}
+
+	name := args.First()
+	if g := assh.NewAssh().GetGroup(name); g != nil {
+		ch := make(chan string)
+		var chPull = func(s *assh.Server, remotePath []string, localPath string, ch chan string) {
+			if err := s.ScpPullFiles(remotePath, localPath); err != nil {
+				log.Errorf("sftp push[%s] fail: %s", s.Name, err.Error())
+			}
+			ch <- fmt.Sprintf("[%s] pushed.\n", s.Name)
+		}
+		for _, s := range g {
+			go chPull(s, remotePath, localPath, ch)
+		}
+		for i := 0; i < len(g); i++ {
+			println(<-ch)
+		}
+		return
 	}
 
 	if s := getSshClient(c); s != nil {
@@ -427,15 +506,27 @@ func Keygen(c *cli.Context) (err error) {
 
 	// 生成服务器公钥
 	if name := c.Args().First(); name != "" {
-		ss := assh.NewAssh()
-		if s := ss.Get(name); s != nil {
-			pemKey := "/tmp/" + hash.Md5(name)
-			saveKey(pemKey, private, public)
-			sshCopyId(s, public)
-			s.PemKey = pemKey
-			ss.Set(name, *s)
+		Assh := assh.NewAssh()
+		var ss []*assh.Server
+
+		if g := Assh.GetGroup(name); g != nil {
+			for _, s := range g {
+				ss = append(ss, s)
+			}
+		} else if s := Assh.Get(name); s != nil {
+			ss = append(ss, s)
+		}
+		if len(ss) > 0 {
+			for _, s := range ss {
+				pemKey := "/tmp/" + hash.Md5(name)
+				saveKey(pemKey, private, public)
+				sshCopyId(s, public)
+				s.PemKey = pemKey
+				Assh.Set(name, *s)
+			}
 		}
 	}
+
 	saveKey(saveFs, private, public)
 	return
 }
@@ -458,7 +549,8 @@ func sshCopyId(s *assh.Server, public string) {
 	}
 }
 
-func timeCost(start time.Time) {
+func timeCost(start time.Time, prefix ...string) {
 	tc := time.Since(start)
-	fmt.Printf("> time cost: %v\n", tc)
+	px := strings.Join(prefix, "")
+	fmt.Printf("> %s time cost: %v\n", px, tc)
 }

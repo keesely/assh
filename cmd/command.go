@@ -78,6 +78,14 @@ var commands = []cli.Command{
 		Action: Connection,
 	},
 	cli.Command{
+		Name:  "bc",
+		Usage: "batch remote command execution",
+		Flags: []cli.Flag{
+			cli.StringFlag{Name: "f", Usage: "the Bash script file"},
+		},
+		Action: BatchCommand,
+	},
+	cli.Command{
 		Name:   "push",
 		Usage:  "sftp push file to remote server",
 		Action: ScpPush,
