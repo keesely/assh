@@ -20,8 +20,15 @@ func printListServer(data map[string]map[string]*assh.Server) {
 	fmt.Println(kiris.StrPad("", "=", 160, 0))
 	fmt.Printf("  %-20s | %-20s | %-50s | %-50s \n", "Group Name", "Server Name", "Server Host", "Remark")
 	fmt.Println(kiris.StrPad("", "-", 160, 0))
+	var i = 0
 	for g, ss := range data {
 		for n, s := range ss {
+			i++
+			var color = fmt.Sprintf("\033[0m")
+			if i%4 == 0 {
+				color = fmt.Sprintf("\033[1m")
+			}
+
 			sInfo := fmt.Sprintf("%s@%s:%d (%s)",
 				s.User,
 				s.Host,
@@ -31,8 +38,9 @@ func printListServer(data map[string]map[string]*assh.Server) {
 					kiris.Ternary(s.PemKey != "", "pub key:yes", "passwd:no").(string),
 				).(string),
 			)
-			remark := kiris.Ternary(s.Remark != "", s.Remark, " (no remark) ")
-			fmt.Printf("> %-20s | %-20s | %-50s | %s \n", g, n, sInfo, remark)
+			remark := kiris.Ternary(s.Remark != "", s.Remark, "\033[0;37m (no remark) \033[0m")
+
+			fmt.Printf("> "+color+"%-20s\033[0m | "+color+"%-20s\033[0m | "+color+"%-50s\033[0m | %s \n", g, n, sInfo, remark)
 		}
 	}
 	fmt.Println(kiris.StrPad("", "=", 160, 0))
@@ -56,7 +64,7 @@ func printServerInfo(s *assh.Server) {
 	fmt.Println(kiris.StrPad(" Server Information Detail ", "+", 100, kiris.KIRIS_STR_PAD_BOTH))
 	fmt.Println(kiris.StrPad("", "-", 100, 0))
 	ss := reflect.ValueOf(s).Elem()
-	for i, k := range []string{"Name", "Host", "Port", "User", "Password", "PemKey"} {
+	for i, k := range []string{"Name", "Host", "Port", "User", "Password", "PemKey", "Remark"} {
 		fmt.Printf("%20s:   %v\n", "Server "+k, ss.Field(i))
 	}
 	fmt.Println(kiris.StrPad("", "=", 100, 0))
@@ -86,11 +94,13 @@ func SetServer(c *cli.Context) (err error) {
 	host := c.Args().Get(1)
 	if s := ss.Get(name); s != nil {
 		server = s
-		fmt.Printf("The server %s is exists, do you sure cover it? [y/n]:", name)
-		var yes string
-		fmt.Scanln(&yes)
-		if "Y" != strings.ToUpper(yes) {
-			return
+		if !c.IsSet("f") {
+			fmt.Printf("The server %s is exists, do you sure cover it? [y/n]:", name)
+			var yes string
+			fmt.Scanln(&yes)
+			if "Y" != strings.ToUpper(yes) {
+				return
+			}
 		}
 	}
 	if host != "" {
@@ -344,8 +354,6 @@ func getSshClient(c *cli.Context) *assh.Server {
 }
 
 func connection(s *assh.Server, c *cli.Context) {
-	fmt.Println(c.IsSet("c"))
-	return
 	// 执行远程命令
 	var cmd string
 	if _c := lookupShortFlag(c, "c"); _c != nil || c.IsSet("c") {

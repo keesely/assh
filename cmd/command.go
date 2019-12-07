@@ -12,12 +12,22 @@ import (
 	"github.com/urfave/cli"
 	"os"
 	//"reflect"
+	"strings"
 	"time"
-	//"strings"
 )
 
 type App struct {
 	app *cli.App
+}
+
+type server struct {
+	Name     string            `yaml:"name"`
+	Host     string            `yaml:"host"`
+	Port     int               `yaml:"port"`
+	User     string            `yaml:"user"`
+	Password string            `yaml:"password"`
+	Remark   string            `yaml:"remark"`
+	PemKey   map[string]string `yaml:"pemkey"`
 }
 
 var commonFlags = []cli.Flag{
@@ -54,6 +64,7 @@ var commands = []cli.Command{
 		Usage: "Add/Modify the server",
 		Flags: append(commonFlags,
 			cli.StringFlag{Name: "R", Value: "", Usage: "Server remark"},
+			cli.BoolFlag{Name: "f", Usage: "force set, don't tip"},
 		),
 		Action: SetServer,
 	},
@@ -128,6 +139,17 @@ var commands = []cli.Command{
 			},
 		},
 	},
+	cli.Command{
+		Name:   "export",
+		Action: ExportData,
+	},
+	cli.Command{
+		Name: "import",
+		Flags: []cli.Flag{
+			cli.BoolFlag{Name: "f", Usage: "force import, don't tip"},
+		},
+		Action: ImportData,
+	},
 }
 
 func NewCli() *App {
@@ -150,6 +172,7 @@ func (cmd *App) Run() {
 	cmd.app.Run(os.Args)
 }
 
+// 基础命令
 func (cmd *App) cmdAction() {
 	cmd.app.Flags = append(commonFlags,
 		cli.StringFlag{Name: "c", Value: "", Usage: "run command"},
@@ -175,7 +198,6 @@ func (cmd *App) cmdAction() {
 			}
 		}
 
-		fmt.Printf("vf: %v cArgs: %d\n", vf, len(c.Args()))
 		if vf || 0 < len(c.Args()) {
 			return Connection(c)
 		}
@@ -184,6 +206,7 @@ func (cmd *App) cmdAction() {
 	}
 }
 
+// 权限设置
 func Account(c *cli.Context) (err error) {
 	var (
 		cPasswd string
@@ -217,6 +240,7 @@ func Account(c *cli.Context) (err error) {
 	return
 }
 
+// 同步帐号设置
 func SyncAccount(c *cli.Context) (err error) {
 	args := c.Args()
 	if len(args) < 3 {
@@ -228,6 +252,7 @@ func SyncAccount(c *cli.Context) (err error) {
 	return
 }
 
+// 同步上传
 func SyncUp(c *cli.Context) (err error) {
 	src := kiris.RealPath("~/.assh/assh.zip")
 	err = Zip(assh.GetDbPath(), src)
@@ -261,6 +286,7 @@ func SyncUp(c *cli.Context) (err error) {
 	return
 }
 
+// 同步下载
 func SyncDown(c *cli.Context) (err error) {
 	ident := c.Args().First()
 	if ident == "" {
@@ -286,6 +312,122 @@ func SyncDown(c *cli.Context) (err error) {
 	}
 	os.Remove(dst)
 	fmt.Println("sync download success.")
+	return
+}
+
+// 导出数据
+func ExportData(c *cli.Context) (err error) {
+	var export = c.Args().First()
+	if export == "" {
+		export = "./output.yml"
+	}
+	export = kiris.RealPath(export)
+
+	Assh := assh.NewAssh()
+	data := kiris.NewYaml([]byte(""))
+
+	for gn, g := range Assh.List() {
+		for n, v := range g {
+			s := server{
+				Name:     v.Name,
+				Host:     v.Host,
+				Port:     v.Port,
+				User:     v.User,
+				Password: v.Password,
+				Remark:   v.Remark,
+			}
+
+			if v.PemKey != "" {
+				v.PemKey = kiris.RealPath(v.PemKey)
+				s.PemKey = map[string]string{
+					//"path":    v.PemKey,
+					"private": "",
+					"public":  "",
+				}
+				if pri, e := kiris.FileGetContents(v.PemKey); e == nil && len(pri) > 0 {
+					s.PemKey["private"] = string(pri)
+				}
+				if pub, e := kiris.FileGetContents(v.PemKey + ".pub"); e == nil && len(pub) > 0 {
+					s.PemKey["public"] = string(pub)
+				}
+			}
+			name := n
+			if gn != "" {
+				name = gn + "." + name
+			} else {
+				name = "nil" + "." + name
+			}
+			if err = data.Set(name, s); err != nil {
+				return
+			}
+		}
+	}
+	data.SaveAs(export)
+	return
+}
+
+// 导入数据
+func ImportData(c *cli.Context) (err error) {
+	name := c.Args().First()
+	if name == "" {
+		name = "./servers.yml"
+	}
+	Assh := assh.NewAssh()
+
+	name = kiris.RealPath(name)
+	yaml := kiris.NewYamlLoad(name)
+	servers := yaml.Get("").(map[string]interface{})
+	for gn, gs := range servers {
+		g := gs.(map[string]interface{})
+		for n, ss := range g {
+			name := n
+			if gn != "nil" {
+				name = gn + "." + name
+			}
+
+			fmt.Println("import < ", name)
+			s := ss.(map[string]interface{})
+			ser := assh.Server{User: "root", Port: 22}
+			kiris.ConverStruct(ss.(map[string]interface{}), &ser, "json")
+
+			if ser.Name == "" {
+				ser.Name = name
+			}
+
+			if _pem, ok := s["pemkey"]; ok {
+				pem := _pem.(map[string]interface{})
+
+				if _path, ok := pem["path"]; ok {
+					path := kiris.RealPath(_path.(string))
+					if kiris.FileExists(path) {
+						ser.PemKey = path
+					}
+				}
+				tmp := "/tmp/_assh_pemkey_" + name
+				if pri, ok := pem["private"]; ok && pri.(string) != "" {
+					if err = kiris.FilePutContents(tmp, pri.(string), 0); err != nil {
+						return
+					}
+					ser.PemKey = tmp
+				}
+				if pub, ok := pem["public"]; ok && pub.(string) != "" {
+					kiris.FilePutContents(tmp+".pub", pub.(string), 0)
+				}
+			}
+			if !c.IsSet("f") {
+				if s := Assh.Get(name); s != nil {
+					fmt.Printf("The server %s is exists, do you sure cover it? [y/n]:", name)
+					var yes string
+					fmt.Scanln(&yes)
+					if "Y" != strings.ToUpper(yes) {
+						continue
+					}
+				}
+			}
+			Assh.Set(name, ser)
+			fmt.Println("imported: ", name)
+		}
+	}
 	return
 }
 
