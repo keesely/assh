@@ -12,8 +12,8 @@
 - [x] 使用数据文件密钥加密
 - [x] `assh push / assh pull` 支持 scp [push / pull] 文件及文件夹
 - [x] `assh sync [云端标识]` 同步备份服务器列表到自定义云端 - 目前只支持七牛云
+- [x] `assh import/export <file.yml` 导入/导出服务器配置数据
 - [ ] `assh upgrade`自动检测更新/自动升级
-- [ ] `assh import/export <file.yml` 导入/导出服务器配置数据
 - [ ] `assh ping [服务器名称]` ping服务器
 
 # 安装
