@@ -30,133 +30,149 @@ type server struct {
 	PemKey   map[string]string `yaml:"pemkey"`
 }
 
-var commonFlags = []cli.Flag{
-	cli.StringFlag{Name: "H", Value: "", Usage: "server host"},
-	cli.IntFlag{Name: "p", Value: 0, Usage: "bind address port"},
-	cli.StringFlag{Name: "l", Value: "", Usage: "login name"},
-	cli.StringFlag{Name: "P", Value: "", Usage: "login password"},
-	cli.StringFlag{Name: "k", Value: "", Usage: "automatic login public key"},
-}
+var (
+	version = "v1.0.0"
 
-var commands = []cli.Command{
-	cli.Command{
-		Name:   "account",
-		Usage:  "Set the data crypto key (password)",
-		Action: Account,
-	},
-	cli.Command{
-		Name:   "ls",
-		Usage:  "Print all servers list",
-		Action: ListServer,
-	},
-	cli.Command{
-		Name:   "search",
-		Usage:  "(New) Search the server name",
-		Action: SearchServer,
-	},
-	cli.Command{
-		Name:   "info",
-		Usage:  "Print the server information",
-		Action: InfoServer,
-	},
-	cli.Command{
-		Name:  "set",
-		Usage: "Add/Modify the server",
-		Flags: append(commonFlags,
-			cli.StringFlag{Name: "R", Value: "", Usage: "Server remark"},
-			cli.BoolFlag{Name: "f", Usage: "force set, don't tip"},
-		),
-		Action: SetServer,
-	},
-	cli.Command{
-		Name:   "mv",
-		Usage:  "Move/Rename Server Name",
-		Action: MoveServer,
-	},
-	cli.Command{
-		Name:  "rm",
-		Usage: "Remove Server",
-		Flags: []cli.Flag{
-			cli.BoolFlag{Name: "f", Usage: "force delete, don't tip"},
-			cli.BoolFlag{Name: "g", Usage: "delete group"},
+	commonFlags = []cli.Flag{
+		cli.StringFlag{Name: "H", Value: "", Usage: "server host"},
+		cli.IntFlag{Name: "p", Value: 0, Usage: "bind address port"},
+		cli.StringFlag{Name: "l", Value: "", Usage: "login name"},
+		cli.StringFlag{Name: "P", Value: "", Usage: "login password"},
+		cli.StringFlag{Name: "k", Value: "", Usage: "automatic login public key"},
+	}
+
+	commands = []cli.Command{
+		cli.Command{
+			Name:   "version",
+			Action: Version,
 		},
-		Action: RemoveServer,
-	},
-	cli.Command{
-		Name:   "login",
-		Usage:  "login server or exec remote server command",
-		Flags:  commonFlags,
-		Action: Connection,
-	},
-	cli.Command{
-		Name:  "bc",
-		Usage: "batch remote command execution",
-		Flags: []cli.Flag{
-			cli.StringFlag{Name: "f", Usage: "the Bash script file"},
+		cli.Command{
+			Name:   "account",
+			Usage:  "Set the data crypto key (password)",
+			Action: Account,
 		},
-		Action: BatchCommand,
-	},
-	cli.Command{
-		Name:   "push",
-		Usage:  "sftp push file to remote server",
-		Action: ScpPush,
-	},
-	cli.Command{
-		Name:   "pull",
-		Usage:  "sftp pull file from remote server",
-		Action: ScpPull,
-	},
-	cli.Command{
-		Name:  "keygen",
-		Usage: "ssh keygen",
-		Flags: []cli.Flag{
-			cli.StringFlag{Name: "c", Usage: "ssh keygen comment"},
-			cli.StringFlag{Name: "f", Usage: "save file name", Value: "./id_rsa"},
+		cli.Command{
+			Name:   "ls",
+			Usage:  "Print all servers list",
+			Action: ListServer,
 		},
-		Action: Keygen,
-	},
-	cli.Command{
-		Name:  "sync",
-		Usage: "synchronized data to the cloud storage",
-		Subcommands: []cli.Command{
-			cli.Command{
-				Name:   "account",
-				Usage:  "cloud storage account",
-				Action: SyncAccount,
+		cli.Command{
+			Name:   "search",
+			Usage:  "(New) Search the server name",
+			Action: SearchServer,
+		},
+		cli.Command{
+			Name:   "info",
+			Usage:  "Print the server information",
+			Action: InfoServer,
+		},
+		cli.Command{
+			Name:  "set",
+			Usage: "Add/Modify the server",
+			Flags: append(commonFlags,
+				cli.StringFlag{Name: "R", Value: "", Usage: "Server remark"},
+				cli.BoolFlag{Name: "f", Usage: "force set, don't tip"},
+			),
+			Action: SetServer,
+		},
+		cli.Command{
+			Name:   "mv",
+			Usage:  "Move/Rename Server Name",
+			Action: MoveServer,
+		},
+		cli.Command{
+			Name:  "rm",
+			Usage: "Remove Server",
+			Flags: []cli.Flag{
+				cli.BoolFlag{Name: "f", Usage: "force delete, don't tip"},
+				cli.BoolFlag{Name: "g", Usage: "delete group"},
 			},
-			cli.Command{
-				Name:  "push",
-				Usage: "push local data to storage",
-				Flags: []cli.Flag{
-					cli.BoolFlag{Name: "d", Usage: "whether the backup in date dirctory"},
+			Action: RemoveServer,
+		},
+		cli.Command{
+			Name:   "login",
+			Usage:  "login server or exec remote server command",
+			Flags:  commonFlags,
+			Action: Connection,
+		},
+		cli.Command{
+			Name:  "bc",
+			Usage: "batch remote command execution",
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "f", Usage: "the Bash script file"},
+			},
+			Action: BatchCommand,
+		},
+		cli.Command{
+			Name:   "push",
+			Usage:  "sftp push file to remote server",
+			Action: ScpPush,
+		},
+		cli.Command{
+			Name:   "pull",
+			Usage:  "sftp pull file from remote server",
+			Action: ScpPull,
+		},
+		cli.Command{
+			Name:  "keygen",
+			Usage: "ssh keygen",
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "c", Usage: "ssh keygen comment"},
+				cli.StringFlag{Name: "f", Usage: "save file name", Value: "./id_rsa"},
+			},
+			Action: Keygen,
+		},
+		cli.Command{
+			Name:  "sync",
+			Usage: "synchronized data to the cloud storage",
+			Subcommands: []cli.Command{
+				cli.Command{
+					Name:   "account",
+					Usage:  "cloud storage account",
+					Action: SyncAccount,
 				},
-				Action: SyncUp,
-			},
-			cli.Command{
-				Name:   "pull",
-				Usage:  "pull storage data",
-				Action: SyncDown,
+				cli.Command{
+					Name:  "push",
+					Usage: "push local data to storage",
+					Flags: []cli.Flag{
+						cli.BoolFlag{Name: "d", Usage: "whether the backup in date dirctory"},
+					},
+					Action: SyncUp,
+				},
+				cli.Command{
+					Name:   "pull",
+					Usage:  "pull storage data",
+					Action: SyncDown,
+				},
 			},
 		},
-	},
-	cli.Command{
-		Name:   "export",
-		Action: ExportData,
-	},
-	cli.Command{
-		Name: "import",
-		Flags: []cli.Flag{
-			cli.BoolFlag{Name: "f", Usage: "force import, don't tip"},
+		cli.Command{
+			Name:   "export",
+			Action: ExportData,
 		},
-		Action: ImportData,
-	},
-}
+		cli.Command{
+			Name: "import",
+			Flags: []cli.Flag{
+				cli.BoolFlag{Name: "f", Usage: "force import, don't tip"},
+			},
+			Action: ImportData,
+		},
+
+		cli.Command{
+			Name: "upgrade",
+			Flags: []cli.Flag{
+				cli.BoolFlag{Name: "f", Usage: "force upgrade, don't tips"},
+			},
+			Action: Upgrade,
+		},
+	}
+)
 
 func NewCli() *App {
 	app := cli.NewApp()
 	app.Name = "Assh - An SSH Client"
 	app.Usage = ""
-	app.Version = "0.0.1"
+	app.Version = version
 	app.EnableBashCompletion = true
 
 	return &App{app}

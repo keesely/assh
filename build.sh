@@ -9,7 +9,7 @@ export GO11MODULE="on"
 go mod tidy
 
 PROJECT="assh"
-VERSION="v0.0.1"
+VERSION="`go run . version`"
 BUILD=`date +%FT%T%z`
 
 function build () {
