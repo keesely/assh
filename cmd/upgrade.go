@@ -7,6 +7,7 @@ import (
 	"assh/log"
 	"encoding/json"
 	"fmt"
+	"github.com/keesely/kiris"
 	"github.com/urfave/cli"
 	"io"
 	"io/ioutil"
@@ -42,6 +43,7 @@ type githubAssets struct {
 	Url         string `json:"url"`
 	Name        string `json:"name"`
 	Label       string `json:"label"`
+	Size        int    `json:"size"`
 	DownloadURL string `json:"browser_download_url"`
 }
 
@@ -89,24 +91,30 @@ func Upgrade(c *cli.Context) (err error) {
 		return
 	}
 
-	var src string
+	var (
+		src string
+		dst = cwd()
+	)
+	//saveAs := kiris.SubStr(dst, 0, strings.LastIndex(dst, "/"))
 	saveAs := os.TempDir()
 	if src, err = up.Download(); err != nil {
 		log.Panic("upgrade fail: ", err.Error())
 		return
 	}
 	fmt.Println("download completed.")
+	//fmt.Println("unzip :", src)
 	if err = Unzip(src, saveAs); err != nil {
 		log.Panic("upgrade unzip fail: ", err.Error())
 	}
 	fname := path.Base(src)
 	fname = strings.Trim(fname, ".zip")
 	src = path.Join(saveAs, fname, "assh")
-	dst := cwd()
-	if err = asshc.CopyFile(src, dst); err != nil {
+	fmt.Printf("install as: %s -> %s\n", src, dst+".bin")
+	if err = asshc.CopyFile(src, dst+".bin"); err != nil {
 		log.Panic("install fail: ", err.Error())
 	}
-	fmt.Printf("save as: %s -> %s\n", src, dst)
+	fmt.Println("Instalation successful.")
+	//fmt.Printf("mv %s %s\n", dst+".bin", dst)
 	return
 }
 
@@ -135,23 +143,27 @@ func (up *upgrade) Download() (string, error) {
 			}
 			fmt.Printf("\r downloading (%s/%.2f MB) %s ", kbs, float64(length)/1024/1024, fmt.Sprintf("%.2f", process)+"%")
 		}
+		err error
 	)
 	//创建一个http client
 	client := new(http.Client)
 	//get方法获取资源
 	down := up.DownloadURL()
-	if down == "" {
+	if down == nil {
 		log.Panicf("don't support system(%s) to download upgrade, please use the source code to compile", sysOS)
 	}
-	downPath := path.Join(os.TempDir(), path.Base(down))
-	resp, err := client.Get(down)
-	if err != nil {
-		return "", err
+	downPath := path.Join(os.TempDir(), path.Base(down.DownloadURL))
+	resp, cErr := client.Get(down.DownloadURL)
+	if cErr != nil {
+		return "", cErr
 	}
 	//读取服务器返回的文件大小
 	fsize, err = strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
 	if err != nil {
 		return "", err
+	}
+	if kiris.FileExists(downPath) && fsize == int64(down.Size) {
+		return downPath, nil
 	}
 	//创建文件
 	file, err := os.Create(downPath)
@@ -201,7 +213,7 @@ func (up *upgrade) Download() (string, error) {
 	return downPath, err
 }
 
-func (up *upgrade) DownloadURL() string {
+func (up *upgrade) DownloadURL() *githubAssets {
 	os := runtime.GOOS
 	if os == "darwin" {
 		os = "macOS"
@@ -213,10 +225,10 @@ func (up *upgrade) DownloadURL() string {
 
 	for _, asset := range latest.Assets {
 		if 1 != strings.Index(asset.Name, packName) {
-			return asset.DownloadURL
+			return &asset
 		}
 	}
-	return ""
+	return nil
 }
 
 func (up *upgrade) getLatestVersion() {
