@@ -165,6 +165,10 @@ var (
 			},
 			Action: Upgrade,
 		},
+		cli.Command{
+			Name:   "ping",
+			Action: PingServers,
+		},
 	}
 )
 

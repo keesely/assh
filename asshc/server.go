@@ -77,6 +77,35 @@ func (this *Server) SSHClient() (*ssh.Client, error) {
 	return ssh.Dial("tcp", cnf.Addr, cnf.Config)
 }
 
+func (this *Server) SSHActive() (interface{}, error) {
+	cnf, err := this.SSHConfig()
+	if err != nil {
+		return -1, err
+	}
+	cnf.Config.Timeout = time.Second * 30
+	client, err := ssh.Dial("tcp", cnf.Addr, cnf.Config)
+
+	if err != nil {
+		return -2, err
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return -3, err
+	}
+	defer session.Close()
+
+	catSNMP := "cat /proc/net/snmp"
+	result, err := session.Output(catSNMP)
+	if err != nil {
+		return -4, fmt.Errorf("Failed to ping result:%d, Err:%v \n", result[0], err)
+	}
+
+	return result[0], nil
+	//return string(result), nil
+}
+
 func (this *Server) Connection() error {
 	client, err := this.SSHClient()
 	if err != nil {

@@ -539,6 +539,12 @@ func Keygen(c *cli.Context) (err error) {
 	return
 }
 
+func PingServers(c *cli.Context) (err error) {
+	ss := assh.NewAssh()
+	pingServersPrint(ss.List())
+	return
+}
+
 func sshCopyId(s *assh.Server, public string) {
 	script := `umask 077;` +
 		`test -d ~/.ssh || mkdir ~/.ssh; echo "` + public + `"  >> ~/.ssh/authorized_keys ` +
@@ -561,4 +567,54 @@ func timeCost(start time.Time, prefix ...string) {
 	tc := time.Since(start)
 	px := strings.Join(prefix, "")
 	fmt.Printf("> %s time cost: %v\n", px, tc)
+}
+
+func pingServersPrint(data map[string]map[string]*assh.Server) {
+	fmt.Println(kiris.StrPad("", "=", 160, 0))
+	fmt.Printf(" %-20s | %-50s | %-50s \n", "Server Name", "Server Host", "Result")
+	fmt.Println(kiris.StrPad("", "-", 160, 0))
+
+	var ch = make(chan string)
+	var chn = make(chan int)
+	var printServer = func(color, remark string, s *assh.Server) string {
+		sInfo := fmt.Sprintf("%s@%s:%d (%s)",
+			s.User,
+			s.Host,
+			s.Port,
+			kiris.Ternary(s.Password != "",
+				"passwd:yes",
+				kiris.Ternary(s.PemKey != "", "pub key:yes", "passwd:no").(string),
+			).(string),
+		)
+		return fmt.Sprintf("> "+color+"%-20s\033[0m | "+color+"%-50s\033[0m | "+color+"%s\033[0m", s.Name, sInfo, remark)
+	}
+	var chPrintServer = func(n int, s *assh.Server) {
+		var color = fmt.Sprintf("\033[0m")
+		start := time.Now()
+
+		if _, err := s.SSHActive(); err != nil {
+			color = fmt.Sprintf("\033[31m")
+			ch <- printServer(color, fmt.Sprintf(err.Error()), s)
+			chn <- n
+		} else {
+			tc := time.Since(start)
+			ch <- printServer(color, fmt.Sprintf("time cost: %v", tc), s)
+			chn <- n
+		}
+	}
+
+	var x = 0
+	for _, ss := range data {
+		for _, s := range ss {
+			go chPrintServer(x, s)
+			x++
+		}
+	}
+
+	for i := 0; i < x; i++ {
+		println(<-ch)
+		fmt.Printf("Scanning: %d/%d\r", i, x)
+	}
+	fmt.Println(kiris.StrPad("", "=", 160, 0))
+
 }
