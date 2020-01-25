@@ -422,16 +422,20 @@ func ScpPush(c *cli.Context) (err error) {
 
 	defer timeCost(time.Now(), "SFTP PUSH")
 	name := args.First()
+	bufSize := c.Int("b")
 	if g := assh.NewAssh().GetGroup(name); g != nil {
 		ch := make(chan string)
-		var chPush = func(s *assh.Server, localPath []string, remotePath string, ch chan string) {
-			if err := s.ScpPushFiles(localPath, remotePath); err != nil {
+		if 0 >= bufSize {
+			bufSize = 2048
+		}
+		var chPush = func(s *assh.Server, localPath []string, remotePath string, ch chan string, bufSize int) {
+			if err := s.ScpPushFiles(localPath, remotePath, bufSize); err != nil {
 				log.Errorf("sftp push[%s] fail: %s", s.Name, err.Error())
 			}
 			ch <- fmt.Sprintf("[%s] pushed.\n", s.Name)
 		}
 		for _, s := range g {
-			go chPush(s, localPath, remotePath, ch)
+			go chPush(s, localPath, remotePath, ch, bufSize)
 		}
 		for i := 0; i < len(g); i++ {
 			print(<-ch)
@@ -440,7 +444,7 @@ func ScpPush(c *cli.Context) (err error) {
 	}
 
 	if s := getSshClient(c); s != nil {
-		if err := s.ScpPushFiles(localPath, remotePath); err != nil {
+		if err := s.ScpPushFiles(localPath, remotePath, bufSize); err != nil {
 			log.Error("sftp push fail: ", err.Error())
 		}
 		return

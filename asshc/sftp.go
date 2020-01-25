@@ -6,11 +6,33 @@ import (
 	"fmt"
 	"github.com/keesely/kiris"
 	"github.com/pkg/sftp"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 )
+
+var timeCost = func(s time.Time) {
+	tc := time.Since(s)
+	fmt.Printf("\n time cost: %v \n", tc)
+}
+var formatSize = func(bt float64) string {
+	if bt > (1024 * 1024) {
+		return fmt.Sprintf("%4.1f%3s", float64(bt/1024/1024), "MB")
+	} else {
+		return fmt.Sprintf("%4.f%3s", float64(bt/1024), "KiB")
+	}
+}
+var formatTime = func(t int) string {
+	if t >= 3600 {
+		return fmt.Sprintf("%2dh%2dm%2ds", t/60/60, t/60%60, t%60)
+	} else if t >= 60 {
+		return fmt.Sprintf("%dm%ds", t/60, t%60)
+	}
+	return fmt.Sprintf("%ds", t)
+}
 
 func (this *Server) sftpClient() (*sftp.Client, error) {
 	client, err := this.SSHClient()
@@ -26,7 +48,7 @@ func (this *Server) sftpClient() (*sftp.Client, error) {
 	return c, nil
 }
 
-func (this *Server) ScpPushFiles(localList []string, remote string) error {
+func (this *Server) ScpPushFiles(localList []string, remote string, bufSize int) error {
 	scp, err := this.sftpClient()
 	if err != nil {
 		return err
@@ -42,9 +64,9 @@ func (this *Server) ScpPushFiles(localList []string, remote string) error {
 		fmt.Printf("%d: '%s' -> %s\n", n, local, fmt.Sprintf("%s@%s:%s", this.User, this.Host, remoteFile))
 		var err error
 		if kiris.IsDir(local) {
-			err = pushDir(scp, local, remoteFile)
+			err = pushDir(scp, local, remoteFile, bufSize)
 		} else {
-			err = pushFile(scp, local, remoteFile)
+			err = pushFile(scp, local, remoteFile, bufSize)
 		}
 		if err != nil {
 			return err
@@ -83,12 +105,19 @@ func (this *Server) ScpPullFiles(remoteList []string, local string) error {
 	return nil
 }
 
-func pushFile(scp *sftp.Client, local, remote string) error {
+func pushFile(scp *sftp.Client, local, remote string, bufSize int) error {
+	defer timeCost(time.Now())
+
 	src, err := os.Open(local)
 	if err != nil {
 		return fmt.Errorf("Assh: local file open fail: %s \n", err.Error())
 	}
 	defer src.Close()
+
+	// 统计文件信息
+	fi, _ := os.Stat(local)
+	fsize := float64(fi.Size())
+	tsize := formatSize(fsize)
 
 	dst, err := scp.Create(remote)
 	if err != nil {
@@ -96,18 +125,36 @@ func pushFile(scp *sftp.Client, local, remote string) error {
 	}
 	defer dst.Close()
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, bufSize)
+	size := 0
+	ss := time.Now()
 	for {
+		begin := time.Now()
 		n, err := src.Read(buf)
 		if err != nil {
 			break
 		}
 		dst.Write(buf[:n])
+		size += n
+
+		// 计算每秒速率
+		tc := float64(time.Since(begin)) / 1e9
+		bc := float64(n)
+		bc = bc / tc
+		buf = make([]byte, int(bc))
+		fmt.Printf("upload: %-100s \r", fmt.Sprintf("%s / %s (%s/s, %3.2f%%, need: %s / cost: %s)",
+			formatSize(float64(size)),
+			tsize,
+			formatSize(float64(bc)),
+			float64(float64(size)/fsize*100),
+			formatTime(int((fsize-float64(size))/(bc))),
+			formatTime((int(time.Since(ss))/1e9)),
+		))
 	}
 	return nil
 }
 
-func pushDir(scp *sftp.Client, local, remote string) error {
+func pushDir(scp *sftp.Client, local, remote string, bufSize int) error {
 	localFiles, err := ioutil.ReadDir(local)
 	if err != nil {
 		return fmt.Errorf("Assh: %s\n", err.Error())
@@ -118,9 +165,9 @@ func pushDir(scp *sftp.Client, local, remote string) error {
 		remoteFilePath := path.Join(remote, backupDir.Name())
 		if backupDir.IsDir() {
 			scp.Mkdir(remote)
-			pushDir(scp, localFilePath, remoteFilePath)
+			pushDir(scp, localFilePath, remoteFilePath, bufSize)
 		} else {
-			pushFile(scp, localFilePath, remoteFilePath)
+			pushFile(scp, localFilePath, remoteFilePath, bufSize)
 		}
 	}
 	return nil
@@ -139,8 +186,45 @@ func pullFile(scp *sftp.Client, remote, local string) error {
 	}
 	defer dst.Close()
 
-	if _, err := src.WriteTo(dst); err != nil {
-		return err
+	defer timeCost(time.Now())
+	//if _, err := src.WriteTo(dst); err != nil {
+	//return err
+	//}
+
+	fi, _ := scp.Stat(remote)
+	tfsize := float64(fi.Size())
+	buf := make([]byte, 10240)
+	size := 0
+	ss := time.Now()
+	for {
+		begin := time.Now()
+		n, err := src.Read(buf)
+
+		dst.Write(buf[:n])
+		size += n
+
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				panic(err)
+			}
+		}
+
+		// 计算速率
+		tc := float64(time.Since(begin)) / 1e9
+		bc := float64(n)
+		bc = bc / tc
+		buf = make([]byte, int(bc))
+
+		fmt.Printf("download: %-100s \r", fmt.Sprintf("%s / %s (%s/s, %3.2f%%, need: %s / cost: %s)",
+			formatSize(float64(size)),
+			formatSize(tfsize),
+			formatSize(float64(bc)),
+			float64(float64(size)/tfsize*100),
+			formatTime(int((tfsize-float64(size))/(bc))),
+			formatTime(int(time.Since(ss))/1e9),
+		))
 	}
 	return nil
 }

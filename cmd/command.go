@@ -31,7 +31,7 @@ type server struct {
 }
 
 var (
-	version = "v1.0.1-20191218"
+	version = "v1.0.2-20200126"
 
 	commonFlags = []cli.Flag{
 		cli.StringFlag{Name: "H", Value: "", Usage: "server host"},
@@ -104,8 +104,11 @@ var (
 			Action: BatchCommand,
 		},
 		cli.Command{
-			Name:   "push",
-			Usage:  "sftp push file to remote server",
+			Name:  "push",
+			Usage: "sftp push file to remote server",
+			Flags: []cli.Flag{
+				cli.IntFlag{Name: "b", Value: 1048576, Usage: "write up to BYTES bytes at a time (default: 1048576 = 1M)"},
+			},
 			Action: ScpPush,
 		},
 		cli.Command{
