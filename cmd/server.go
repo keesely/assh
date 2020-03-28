@@ -622,3 +622,21 @@ func pingServersPrint(data map[string]map[string]*assh.Server) {
 	fmt.Println(kiris.StrPad("", "=", 160, 0))
 
 }
+
+// 处理转发
+func Proxy(c *cli.Context) (err error) {
+	port := c.String("d")
+	host := c.String("i")
+	if port == "" {
+		port = "1080"
+	}
+
+	defer timeCost(time.Now(), "SSH PROXY")
+
+	args := c.Args()
+	name := args.First()
+	if server := assh.NewAssh().Get(name); server != nil {
+		server.Proxy(host, port)
+	}
+	return nil
+}
