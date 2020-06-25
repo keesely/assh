@@ -31,7 +31,7 @@ type server struct {
 }
 
 var (
-	version = "v1.0.2-20200126"
+	version = "v1.0.3-20200328"
 
 	commonFlags = []cli.Flag{
 		cli.StringFlag{Name: "H", Value: "", Usage: "server host"},
@@ -171,6 +171,15 @@ var (
 		cli.Command{
 			Name:   "ping",
 			Action: PingServers,
+		},
+		cli.Command{
+			Name:  "proxy",
+			Usage: "assh proxy -d local port -i local hostname",
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "d", Usage: "local port"},
+				cli.StringFlag{Name: "i", Usage: "local hostname", Value: ""},
+			},
+			Action: Proxy,
 		},
 	}
 )
