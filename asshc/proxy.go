@@ -6,10 +6,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"golang.org/x/crypto/ssh"
 	"io"
 	"log"
 	"net"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func socks5Proxy(conn net.Conn) {
@@ -105,4 +106,44 @@ func (this *Server) Proxy(proxy_host, proxy_port string) {
 	//proxy.Dial("tcp", fmt.Sprintf("%s:%d", proxy_host, proxy_port))
 	log.Println("本地代理: " + proxy_host + ":" + proxy_port)
 	socks5ProxyStart(proxy_host, proxy_port)
+}
+
+// 映射远程端口到本地端口
+// 实现远程端口转发: ssh -f -N -L
+func (this *Server) PortForwarding(local_host, local_port, remote_host, remote_port string) {
+	cnf, err := this.SSHConfig()
+	proxy, err = ssh.Dial("tcp", cnf.Addr, cnf.Config)
+	if err != nil {
+		check(err, " assh > dial")
+		log.Panic("Assh: Connection fail: unable to authenticate \n")
+	}
+	log.Println("Connectioned")
+	defer proxy.Close()
+	//proxy.Dial("tcp", fmt.Sprintf("%s:%d", proxy_host, proxy_port))
+	log.Println("本地代理: " + local_host + ":" + local_port)
+	//socks5ProxyStart(local_host, local_port)
+	// 本地端口
+	l, err := net.Listen("tcp", local_host+":"+local_port)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer l.Close()
+	for {
+		// 等待连接
+		conn, err := l.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+		go func() {
+			// 远程端口
+			remote, err := proxy.Dial("tcp", remote_host+":"+remote_port)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer remote.Close()
+			// 代理
+			go io.Copy(remote, conn)
+			io.Copy(conn, remote)
+		}()
+	}
 }

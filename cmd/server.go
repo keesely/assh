@@ -7,13 +7,14 @@ import (
 	keygen "assh/asshc/keygen"
 	"assh/log"
 	"fmt"
-	"github.com/keesely/kiris"
-	"github.com/keesely/kiris/hash"
-	"github.com/urfave/cli"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/keesely/kiris"
+	"github.com/keesely/kiris/hash"
+	"github.com/urfave/cli"
 )
 
 func printListServer(data map[string]map[string]*assh.Server) {
@@ -637,6 +638,26 @@ func Proxy(c *cli.Context) (err error) {
 	name := args.First()
 	if server := assh.NewAssh().Get(name); server != nil {
 		server.Proxy(host, port)
+	}
+	return nil
+}
+
+// 远程主机端口转发: ProtForwarding
+func ProxyHost(c *cli.Context) (err error) {
+	rhost := c.String("H")
+	rport := c.String("P")
+	port := c.String("d")
+	host := c.String("i")
+	if port == "" {
+		port = "1080"
+	}
+
+	defer timeCost(time.Now(), "SSH PROXY Host")
+
+	args := c.Args()
+	name := args.First()
+	if server := assh.NewAssh().Get(name); server != nil {
+		server.PortForwarding(host, port, rhost, rport)
 	}
 	return nil
 }

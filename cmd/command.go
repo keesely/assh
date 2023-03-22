@@ -7,10 +7,12 @@ import (
 	"assh/cmd/qiniu"
 	"assh/log"
 	"fmt"
+	"os"
+
 	"github.com/keesely/kiris"
 	"github.com/keesely/kiris/hash"
 	"github.com/urfave/cli"
-	"os"
+
 	//"reflect"
 	"strings"
 	"time"
@@ -31,7 +33,7 @@ type server struct {
 }
 
 var (
-	version = "v1.0.3-20200328"
+	version = "v1.0.4-20230322"
 
 	commonFlags = []cli.Flag{
 		cli.StringFlag{Name: "H", Value: "", Usage: "server host"},
@@ -180,6 +182,17 @@ var (
 				cli.StringFlag{Name: "i", Usage: "local hostname", Value: ""},
 			},
 			Action: Proxy,
+		},
+		cli.Command{
+			Name:  "hostproxy",
+			Usage: "assh prots -h remote host -p remote port -d local port -i local host [hostname]",
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "H", Usage: "remote host"},
+				cli.StringFlag{Name: "P", Usage: "remote port"},
+				cli.StringFlag{Name: "d", Usage: "local port"},
+				cli.StringFlag{Name: "i", Usage: "local host", Value: ""},
+			},
+			Action: ProxyHost,
 		},
 	}
 )
