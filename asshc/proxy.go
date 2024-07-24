@@ -120,7 +120,7 @@ func (this *Server) PortForwarding(local_host, local_port, remote_host, remote_p
 	log.Println("Connectioned")
 	defer proxy.Close()
 	//proxy.Dial("tcp", fmt.Sprintf("%s:%d", proxy_host, proxy_port))
-	log.Println("本地代理: " + local_host + ":" + local_port)
+	log.Println("Local Porxy " + local_host + ":" + local_port)
 	//socks5ProxyStart(local_host, local_port)
 	// 本地端口
 	l, err := net.Listen("tcp", local_host+":"+local_port)
@@ -147,3 +147,7 @@ func (this *Server) PortForwarding(local_host, local_port, remote_host, remote_p
 		}()
 	}
 }
+
+// 映射远程端口到本地端口, 并根据DomainList进行域名过滤
+// 实现远程端口转发: ssh -f -N -L
+// func (this *Server) PortForwardingWithDomainList(local_host, local_port, remote_host, remote_port string, domainList []string) {

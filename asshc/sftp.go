@@ -4,14 +4,15 @@ package asshc
 
 import (
 	"fmt"
-	"github.com/keesely/kiris"
-	"github.com/pkg/sftp"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"time"
+
+	"github.com/keesely/kiris"
+	"github.com/pkg/sftp"
 )
 
 var timeCost = func(s time.Time) {
@@ -254,4 +255,25 @@ func getRemoteRealPath(remote string) string {
 		remote = "." + string(remoteByte[1:])
 	}
 	return remote
+}
+
+// 挂载远程目录到本地
+func mountRemoteDir(scp *sftp.Client, remote, local string) error {
+	defer timeCost(time.Now())
+	remote = getRemoteRealPath(remote)
+	local = getRemoteRealPath(local)
+	// 检查本地目录是否存在
+	if _, err := os.Stat(local); os.IsNotExist(err) {
+		return fmt.Errorf("Assh: local dir not exist: %s \n", local)
+	}
+	// 检查远程目录是否存在
+	if _, err := scp.Stat(remote); os.IsNotExist(err) {
+		return fmt.Errorf("Assh: remote dir not exist: %s \n", remote)
+	}
+	// 挂载远程目录到本地
+	if err := scp.MkdirAll(local); err != nil {
+		return fmt.Errorf("Assh: local dir create fail: %s \n", err.Error())
+	}
+
+	return nil
 }
