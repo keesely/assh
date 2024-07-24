@@ -33,7 +33,7 @@ type server struct {
 }
 
 var (
-	version = "v1.0.4-20230322"
+	version = "v1.0.5-20240724"
 
 	commonFlags = []cli.Flag{
 		cli.StringFlag{Name: "H", Value: "", Usage: "server host"},
