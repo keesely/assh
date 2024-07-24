@@ -661,3 +661,24 @@ func ProxyHost(c *cli.Context) (err error) {
 	}
 	return nil
 }
+
+// 监听远程主机端口转发: LocalProxy
+func LocalProxy(c *cli.Context) (err error) {
+	rhost := c.String("H")
+	rport := c.String("P")
+	port := c.String("d")
+	host := c.String("i")
+	if port == "" {
+		port = "1080"
+	}
+
+	defer timeCost(time.Now(), "SSH PROXY Host")
+
+	args := c.Args()
+	name := args.First()
+	if server := assh.NewAssh().Get(name); server != nil {
+		server.LocalProxy(rhost, rport, host, port)
+		//server.LocalProxyWithRetry(rhost, rport, host, port)
+	}
+	return nil
+}

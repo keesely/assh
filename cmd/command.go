@@ -194,6 +194,17 @@ var (
 			},
 			Action: ProxyHost,
 		},
+		cli.Command{
+			Name:  "localproxy",
+			Usage: "assh prots -h remote host -p remote port -d local port -i local host [hostname]",
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "H", Usage: "remote host"},
+				cli.StringFlag{Name: "P", Usage: "remote port"},
+				cli.StringFlag{Name: "d", Usage: "local port"},
+				cli.StringFlag{Name: "i", Usage: "local host", Value: ""},
+			},
+			Action: LocalProxy,
+		},
 	}
 )
 
