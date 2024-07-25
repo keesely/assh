@@ -1,6 +1,6 @@
 module assh
 
-go 1.20
+go 1.22.0
 
 require (
 	github.com/keesely/kiris v0.0.2-0.20191118124937-3840989e8f19

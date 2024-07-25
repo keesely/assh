@@ -1,2 +1,5 @@
 Bugfix.md
 vendor
+build/*
+build.back/
+*.back
