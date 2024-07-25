@@ -7,8 +7,6 @@ import (
 	"assh/log"
 	"encoding/json"
 	"fmt"
-	"github.com/keesely/kiris"
-	"github.com/urfave/cli"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -20,6 +18,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/keesely/kiris"
+	"github.com/urfave/cli"
 )
 
 var (
@@ -109,8 +110,8 @@ func Upgrade(c *cli.Context) (err error) {
 	fname := path.Base(src)
 	fname = strings.Trim(fname, ".zip")
 	src = path.Join(saveAs, fname, "assh")
-	fmt.Printf("install as: %s -> %s\n", src, dst+".bin")
-	if err = asshc.CopyFile(src, dst+".bin"); err != nil {
+	fmt.Printf("install as: %s -> %s\n", src, dst)
+	if err = asshc.CopyFile(src, dst); err != nil {
 		log.Panic("install fail: ", err.Error())
 	}
 	fmt.Println("Instalation successful.")
