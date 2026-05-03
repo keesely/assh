@@ -4,40 +4,43 @@
 
 `assh` 是一个 Go 开发的 SSH 客户端，用于管理服务器、密码、公钥和文件传输。
 
+## 项目结构
+
+项目代码位于 `assh/` 子目录下：
+
+```
+assh/                   # Go 项目根目录
+├── main.go             # 程序入口
+├── cmd/                # CLI 命令定义 (urfave/cli)
+│   ├── command.go      # 主命令定义和核心逻辑
+│   ├── server.go       # 服务器管理命令实现
+│   ├── zip.go          # 压缩功能
+│   ├── upgrade.go      # 升级功能
+│   └── qiniu/          # 七牛云存储集成
+├── asshc/              # 核心业务库
+│   ├── assh.go         # 服务器数据管理（增删改查、加密存储）
+│   ├── config.go       # 配置管理（初始化、密码、密钥）
+│   ├── server.go       # SSH 连接和会话管理
+│   ├── sftp.go         # SFTP 文件传输
+│   ├── proxy.go        # 代理和端口转发
+│   ├── utils.go        # 工具函数
+│   ├── keygen/         # SSH 密钥生成
+│   └── localproxy.go   # 本地代理
+├── log/                # 日志模块
+├── build/              # 构建相关
+└── build.sh            # 构建脚本
+```
+
 ## 开发命令
 
-- **编译构建**: `sh build.sh`（内部会执行 `go mod tidy`）
-- **单平台构建**: `sh build.sh <os> <arch> <alias>`
-- **运行**: `go run . <命令>`
+- **编译构建**: `sh assh/build.sh`（内部会执行 `go mod tidy`）
+- **单平台构建**: `sh assh/build.sh <os> <arch> <alias>`
+- **运行**: `cd assh && go run . <命令>`
 
 ## 测试
 
-- 运行测试: `go test ./...`
-- 单独测试: `go test asshc/keygen -v`
-
-## 项目结构
-
-```
-main.go            # 程序入口
-cmd/              # CLI 命令定义 (urfave/cli)
-├── command.go     # 主命令定义和核心逻辑
-├── server.go     # 服务器管理命令实现
-├── zip.go       # 压缩功能
-├── upgrade.go   # 升级功能
-└── qiniu/     # 七牛云存储集成
-
-asshc/            # 核心业务库
-├── assh.go       # 服务器数据管理（增删改查、加密存储）
-├── config.go     # 配置管理（初始化、密码、密钥）
-├── server.go     # SSH 连接和会话管理
-├── sftp.go      # SFTP 文件传输
-├── proxy.go     # 代理和端口转发
-├── utils.go     # 工具函数
-├── keygen/      # SSH 密钥生成
-└── localporxy.go  # 本地代理
-
-log/              # 日志模块
-```
+- 运行测试: `cd assh && go test ./...`
+- 单独测试: `cd assh && go test asshc/keygen -v`
 
 ## 核心模块分析
 
@@ -109,20 +112,20 @@ log/              # 日志模块
 
 - Go 版本: 1.22.0
 - 平台: 不支持 Windows 编译
-- 测试文件: `asshc/keygen/keygen_test.go`, `log/log_test.go`
+- 测试文件: `assh/asshc/keygen/keygen_test.go`, `assh/log/log_test.go`
 
 ## 数据流程
 
 ```
-用户输入 → cmd/command.go 解析
-         ↓
-     asshc/config.go 初始化（检查密码、加载配置）
-         ↓
-     asshc/assh.go 加载服务器数据（解��）
-         ↓
-     asshc/server.go 建立 SSH 连接
-         ↓
-     终端会话 / SFTP 传输 / 远程命令执行
+用户输入 → assh/cmd/command.go 解析
+          ↓
+      assh/asshc/config.go 初始化（检查密码、加载配置）
+          ↓
+      assh/asshc/assh.go 加载服务器数据（解密）
+          ↓
+      assh/asshc/server.go 建立 SSH 连接
+          ↓
+      终端会话 / SFTP 传输 / 远程命令执行
 ```
 
 ## 存储位置
