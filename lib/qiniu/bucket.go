@@ -38,15 +38,10 @@ var zone = map[string]storage.Region{
 }
 
 func getCfg() storage.Config {
-	return storage.Config{}
-
-	cfg := storage.Config{
-		// 是否使用https域名
-		UseHTTPS: false,
-		// 上传是否使用CDN上传加速
+	return storage.Config{
+		UseHTTPS:      false,
 		UseCdnDomains: false,
 	}
-	return cfg
 }
 
 func GetBucketManager(q *Qiniu) *BucketManager {
