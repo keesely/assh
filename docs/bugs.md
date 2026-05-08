@@ -1,54 +1,49 @@
-# Bugs & Known Issues
+# Bug 追踪
 
-> 记录开发过程中发现的 Bug、已知问题及修复方案。
+> 记录开发过程中发现的 Bug、已知问题及修复方案
 
-## 已修复
+## 统计
 
-| ID | 描述 | 影响范围 | 修复版本 | 修复日期 |
-|----|------|----------|----------|----------|
-| | | | | |
+| 状态 | 数量 |
+|------|------|
+| fixed | 3 |
+| known | 0 |
+| in-progress | 0 |
 
-## 已知问题
+## 列表
 
-| ID | 描述 | 影响范围 | 状态 | 备注 |
-|----|------|----------|------|------|
-| | | | | |
+| ID | 标题 | 状态 | 日期 |
+|----|------|------|------|
+| BUG-001 | log模块Fatal/Panic测试导致进程退出 | fixed | 2026-05-08 |
+| BUG-002 | lib/qiniu getCfg不可达代码 | fixed | 2026-05-08 |
+| BUG-003 | log级别过滤测试期望值颠倒 | fixed | 2026-05-08 |
 
-## 修复记录
+## 新增 Bug
 
-### BUG-001: log 模块 Fatal/Panic 测试导致进程退出
+格式：`docs/bugs/XXX-简短描述.md`
 
-**发现日期**: 2026-05-08
+内容模板：
 
-**问题描述**:
-`log/output()` 函数直接调用 `logger.Fatal().Msg()` 和 `logger.Panic().Msg()`，
-zerolog 的 Fatal 会调用 `os.Exit(1)`、Panic 会 `panic()`，导致测试进程被杀死。
+```markdown
+# BUG-XXX: 标题
 
-**修复方案**:
-- `output()` 不再直接调用 Fatal/Panic，改由 `exit()` 函数统一管理
-- Fatal/Panic 在输出日志后由调用方处理进程退出/panic
-- 测试仅验证 `output()` 的日志输出行为，不触发实际退出
+## Status
+fixed/known/in-progress
 
-**涉及文件**: `log/log.go`, `log/log_test.go`
+## Date
+YYYY-MM-DD
 
-### BUG-002: lib/qiniu getCfg 函数存在不可达代码
+## Description
+问题描述...
 
-**问题描述**:
-`getCfg()` 函数中 `return storage.Config{}` 在配置初始化之前执行，
-导致后续配置代码不可达。go vet 报 `unreachable code`。
+## Solution
+修复方案...
 
-**修复方案**:
-合并为单次 return，移除死代码。
+## Affected Files
+- file1.go
+- file2.go
+```
 
-**涉及文件**: `lib/qiniu/bucket.go`
+## 相关链接
 
-### BUG-003: log_test.go 级别过滤测试期望值颠倒
-
-**问题描述**:
-`TestOutput_LevelFiltering` 测试用例中 "below/above threshold" 的
-`expectLog` 值与实际行为相反，3 个用例中 2 个失败。
-
-**修复方案**:
-修正测试名称和期望值，使其匹配 `level <= LogLevel` 的实际过滤逻辑。
-
-**涉及文件**: `log/log_test.go`
+- [ADR 总览](adrs.md) - 架构决策记录
