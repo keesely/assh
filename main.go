@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-var Version = "v2.0.0-dev"
+var Version = "v2.0.1-dev"
 var Build string
 
 func main() {
