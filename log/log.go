@@ -20,10 +20,12 @@ const (
 )
 
 var (
-	LogPath  string
-	LogLevel = OFF
+	LogPath      string
+	ErrorLogPath string
+	LogLevel     = OFF
 
-	logger zerolog.Logger
+	logger       zerolog.Logger
+	errorLogger zerolog.Logger
 )
 
 func init() {
@@ -31,12 +33,22 @@ func init() {
 }
 
 func SetInit() {
+	logger = createLogger(LogPath)
+	errorLogger = createLogger(ErrorLogPath)
+
+	if ErrorLogPath == "" {
+		ErrorLogPath = "/tmp/assh-error.log"
+		errorLogger = createLogger(ErrorLogPath)
+	}
+}
+
+func createLogger(logPath string) zerolog.Logger {
 	var output interface{ Write([]byte) (int, error) }
 
-	if LogLevel > 0 && LogPath != "" {
-		absPath, err := filepath.Abs(LogPath)
+	if logPath != "" {
+		absPath, err := filepath.Abs(logPath)
 		if err != nil {
-			absPath = LogPath
+			absPath = logPath
 		}
 
 		dir := filepath.Dir(absPath)
@@ -55,7 +67,7 @@ func SetInit() {
 		output = os.Stderr
 	}
 
-	logger = zerolog.New(output).With().Timestamp().Logger()
+	return zerolog.New(output).With().Timestamp().Logger()
 }
 
 func GetLogLevel(lv string) int {
@@ -111,19 +123,21 @@ func levelToZerolog(lv int) zerolog.Level {
 
 func output(level int, msg string) string {
 	if level > 0 && level <= LogLevel {
-		lvl := levelToZerolog(level)
-		switch lvl {
-		case zerolog.FatalLevel:
+		switch level {
+		case FATAL:
 			logger.Error().Str("level", "FATAL").Msg(msg)
-		case zerolog.PanicLevel:
+			errorLogger.Error().Str("level", "FATAL").Msg(msg)
+		case PANIC:
 			logger.Error().Str("level", "PANIC").Msg(msg)
-		case zerolog.ErrorLevel:
+			errorLogger.Error().Str("level", "PANIC").Msg(msg)
+		case ERROR:
 			logger.Error().Msg(msg)
-		case zerolog.WarnLevel:
+			errorLogger.Error().Msg(msg)
+		case WARN:
 			logger.Warn().Msg(msg)
-		case zerolog.InfoLevel:
+		case INFO:
 			logger.Info().Msg(msg)
-		case zerolog.DebugLevel:
+		case DEBUG:
 			logger.Debug().Msg(msg)
 		}
 	}

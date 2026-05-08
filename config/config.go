@@ -1,8 +1,6 @@
 package config
 
-// 全局配置变量
 var (
-	LogPath        string
 	DbPath         string
 	LogLevel       string
 	QiniuAccessKey string
@@ -16,6 +14,9 @@ func SetLogPath(path string) {
 }
 
 func GetLogPath() string {
+	if LogPath != "" {
+		return LogPath
+	}
 	return LogPath
 }
 
@@ -24,7 +25,10 @@ func SetDbPath(path string) {
 }
 
 func GetDbPath() string {
-	return DbPath
+	if DbPath != "" {
+		return DbPath
+	}
+	return DbFile
 }
 
 func SetLogLevel(level string) {

@@ -7,12 +7,15 @@ import (
 )
 
 var (
-	ConfigPath     = "~/.assh"
-	DataPath       = "~/.assh/data"
-	PrivateKeyPath = "~/.assh/.rsa"
-	PublicKeyPath  = "~/.assh/.rsa.pub"
-	PasswordFile   = "~/.assh/.account"
-	ConfigFile     = "~/.assh/assh.yml"
+	ConfigPath     = "~/.assh/v2"
+	DataPath       = "~/.assh/v2/data"
+	PrivateKeyPath = "~/.assh/v2/.rsa"
+	PublicKeyPath  = "~/.assh/v2/.rsa.pub"
+	PasswordFile   = "~/.assh/v2/.account"
+	ConfigFile     = "~/.assh/v2/assh.yml"
+	DbFile         = "~/.assh/v2/asshv2.db"
+	LogPath        = "/tmp/assh.log"
+	ErrorLogPath   = "/tmp/assh-error.log"
 )
 
 func ExpandPath(path string) (string, error) {

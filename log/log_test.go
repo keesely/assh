@@ -433,13 +433,23 @@ func TestErrorf(t *testing.T) {
 
 func TestOutput_FatalLevel(t *testing.T) {
 	originalLevel := LogLevel
+	originalErrorLogPath := ErrorLogPath
 	LogLevel = FATAL
-	defer func() { LogLevel = originalLevel }()
+	ErrorLogPath = ""
+	defer func() {
+		LogLevel = originalLevel
+		ErrorLogPath = originalErrorLogPath
+	}()
 
 	var buf bytes.Buffer
 	originalLogger := logger
 	logger = zerolog.New(&buf).With().Timestamp().Logger()
 	defer func() { logger = originalLogger }()
+
+	var errBuf bytes.Buffer
+	originalErrorLogger := errorLogger
+	errorLogger = zerolog.New(&errBuf).With().Timestamp().Logger()
+	defer func() { errorLogger = originalErrorLogger }()
 
 	output(FATAL, "fatal message")
 	if !strings.Contains(buf.String(), "fatal message") {
@@ -449,13 +459,23 @@ func TestOutput_FatalLevel(t *testing.T) {
 
 func TestOutput_PanicLevel(t *testing.T) {
 	originalLevel := LogLevel
+	originalErrorLogPath := ErrorLogPath
 	LogLevel = PANIC
-	defer func() { LogLevel = originalLevel }()
+	ErrorLogPath = ""
+	defer func() {
+		LogLevel = originalLevel
+		ErrorLogPath = originalErrorLogPath
+	}()
 
 	var buf bytes.Buffer
 	originalLogger := logger
 	logger = zerolog.New(&buf).With().Timestamp().Logger()
 	defer func() { logger = originalLogger }()
+
+	var errBuf bytes.Buffer
+	originalErrorLogger := errorLogger
+	errorLogger = zerolog.New(&errBuf).With().Timestamp().Logger()
+	defer func() { errorLogger = originalErrorLogger }()
 
 	output(PANIC, "panic message")
 	if !strings.Contains(buf.String(), "panic message") {
