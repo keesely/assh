@@ -20,7 +20,7 @@
 | **Go 版本** | 1.22.0 | 保持现有版本 |
 | **日志库** | zerolog v1.32.0 | 高性能结构化日志 |
 | **CLI 框架** | urfave/cli v1.22.2 | 保持现有 |
-| **配置格式** | YAML | 保持现有 |
+| **数据库** | SQLite (modernc.org/sqlite) | 纯 Go，无 CGO，跨平台编译无阻 |
 | **加密方案** | RSA + AES | 保持现有 |
 | **依赖管理** | go mod tidy | 现代 Go 模块管理 |
 
@@ -64,8 +64,10 @@ asshv2/
 │   │   ├── proxy.go           # 代理
 │   │   └── sync.go            # 同步
 │   └── infra/                 # 接口实现
-│       ├── store/             # 加密文件存储
-│       │   └── filestore.go
+│       ├── store/             # SQLite 数据存储
+│       │   ├── db.go          # 连接管理 + 迁移
+│       │   ├── key.go         # AES 静态密钥管理
+│       │   └── server.go      # 服务器 CRUD
 │       ├── crypto/            # 加解密实现
 │       │   ├── rsa.go
 │       │   ├── aes.go
@@ -229,7 +231,7 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 |-------|------|------|------------|
 | 0 | 项目骨架 | 无 | 4 |
 | 1 | log + config + crypto | 无 | 8 |
-| 2 | domain + repository + service | config, log | 6 |
+| 2 | domain + repository + SQLite store + service | config, log, sqlite | 6 |
 | 3 | ssh connector | config, log | 4 |
 | 4 | cmd 组装 | 所有以上 | 5 |
 | 5 | sftp | ssh | 4 |
@@ -242,16 +244,16 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 
 ## 存储位置
 
-运行时数据存储位置（与 v1.x 兼容）：
+运行时数据存储位置（v2 路径隔离在 `~/.assh/v2/` 下）：
 
 | 路径 | 说明 |
 |------|------|
-| ~/.assh | 配置目录 |
-| ~/.assh/.rsa | RSA 私钥 |
-| ~/.assh/.rsa.pub | RSA 公钥 |
-| ~/.assh/.account | 加密密码 |
-| ~/.assh/assh.yml | 加密配置 |
-| ~/.assh/data/servers.db | 加密服务器数据 |
+| ~/.assh/v2 | 配置目录 |
+| ~/.assh/v2/.rsa | RSA 私钥 |
+| ~/.assh/v2/.rsa.pub | RSA 公钥 |
+| ~/.assh/v2/.account | RSA 加密密码（Phase 6） |
+| ~/.assh/v2/assh.yml | RSA 加密配置 |
+| ~/.assh/v2/asshv2.db | SQLite 数据库（服务器数据 + AES 静态密钥） |
 
 ---
 

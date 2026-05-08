@@ -8,6 +8,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
+- **数据库**: SQLite (modernc.org/sqlite, 纯 Go 无 CGO)
 - **日志库**: zerolog v1.32.0
 - **Cli 框架**: urfave/cli v1.22.2
 
@@ -57,11 +58,11 @@ asshv2/
 |-------|------|------|
 | 0 | 项目骨架搭建 | ✅ 完成 |
 | 1 | 基础设施移植 (log/config/crypto) | ✅ 完成 |
-| 2 | 数据持久化层 | 📝 当前 |
+| 2 | 数据持久化层 (SQLite + AES-GCM) | 📝 当前 |
 | 3 | SSH 连接层 | ⏳ |
 | 4 | CLI 命令组装 | ⏳ |
 | 5 | SFTP 文件传输 | ⏳ |
-| 6 | 云同步 (Qiniu) | ⏳ |
+| 6 | 云同步 (Qiniu) + AuthService | ⏳ |
 | 7 | 代理 & 隧道 | ⏳ |
 
 ### 分支命名规范

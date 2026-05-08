@@ -45,7 +45,7 @@ asshv2/
 │   ├── port/            # 接口定义
 │   ├── service/         # 用例编排
 │   └── infra/           # 接口实现
-│       ├── store/       #   加密文件存储
+│       ├── store/       #   SQLite 数据存储（db/key/server）
 │       ├── crypto/      #   加解密
 │       ├── ssh/         #   SSH 协议
 │       ├── sftp/        #   SFTP 协议

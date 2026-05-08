@@ -32,21 +32,147 @@
 | P1.7 Cryptor 接口 | `asshc/port/cryptor.go` | 新写 | ✅ |
 | **验证**: `go test ./log/... -v` (28 tests) | | | ✅ |
 
-### 📝 Phase 2: 数据持久化层
+### 📝 Phase 2: 数据持久化层（当前阶段）
 
-目标：实现加密的服务器数据存储
+目标：实现基于 SQLite 的服务器数据存储，密码使用 AES-GCM 静态密钥加密
 
-依赖：Phase 1 (config, crypto)
+架构变更（vs v1）：
+- ❌ 废弃：加密 JSON 文件 + 用户主密码（每次操作需验证）
+- ✅ 改用：SQLite 数据库 + AES-256-GCM 静态密钥（首次自动生成，密钥存入 config 表，可云同步共享）
+- ✅ 账号密码（account）延后至 Phase 6 云同步时实现
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P2.1 领域实体 | `asshc/domain/server.go` | Server 类型定义（Group, Name, Host, Port, User, Auth, Remark） |
-| P2.2 领域错误 | `asshc/domain/errors.go` | 哨兵错误（ErrNotFound, ErrExists, ErrInvalidName 等） |
-| P2.3 Repository 接口 | `asshc/port/repository.go` | ServerRepository 接口（List/Get/Set/Delete/Move） |
-| P2.4 加密文件存储 | `asshc/infra/store/filestore.go` | 实现 ServerRepository，AES 加密存储 |
-| P2.5 服务器服务 | `asshc/service/server.go` | ServerService 用例编排 |
-| P2.6 认证服务 | `asshc/service/auth.go` | AuthService 密码设置/验证 |
-| **验证**: `go test ./asshc/... -v` | |
+依赖：Phase 1 (config, crypto) + **新增** `modernc.org/sqlite`（纯 Go，无 CGO）
+
+---
+
+#### P2.1 领域层 — `asshc/domain/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|
+| P2.1-a 领域错误 | `asshc/domain/errors.go` | 哨兵错误：`ErrNotFound`, `ErrExists`, `ErrInvalidName`, `ErrInvalidPort` | 📝 |
+| P2.1-b 领域实体 | `asshc/domain/server.go` | `Server`, `Auth` 结构体；`parseName`/`JoinName`/`Validate` | 📝 |
+| **验证** | `go vet ./asshc/domain/...` | | |
+
+**设计说明：**
+```go
+type Auth struct {
+    Password string `json:"password,omitempty"` // 明文密码（持久化时加密）
+    KeyFile  string `json:"keyfile,omitempty"`  // SSH 私钥路径
+}
+
+type Server struct {
+    Name    string                 `json:"name"`
+    Group   string                 `json:"group"`
+    Host    string                 `json:"host"`
+    Port    int                    `json:"port"`
+    User    string                 `json:"user"`
+    Auth    *Auth                  `json:"auth,omitempty"`
+    Remark  string                 `json:"remark,omitempty"`
+    Options map[string]interface{} `json:"options,omitempty"`
+}
+```
+- 名称解析：`parseName("prod.web-01")` → `("prod", "web-01")`，按首点号分割
+- Server 默认值：`User="root"`, `Port=22`
+
+---
+
+#### P2.2 接口层 — `asshc/port/repository.go`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|
+| P2.2 Repository 接口 | `asshc/port/repository.go` | `ServerRepository` 接口定义 | 📝 |
+| **验证** | `go vet ./asshc/port/...` | | |
+
+```go
+type ServerRepository interface {
+    List() (map[string]map[string]*domain.Server, error)
+    Get(name string) (*domain.Server, error)
+    Set(name string, server *domain.Server) error
+    Delete(name string) error
+    Move(from, to string) error
+    Search(keyword string) (map[string]map[string]*domain.Server, error)
+    GetGroup(group string) (map[string]*domain.Server, error)
+    Close() error
+}
+```
+
+---
+
+#### P2.3 基础设施层 — `asshc/infra/store/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|
+| P2.3-a SQLite 连接与迁移 | `asshc/infra/store/db.go` | `Store` 结构体、`NewStore(dbPath)`、自动建表迁移 | 📝 |
+| P2.3-b 静态密钥管理 | `asshc/infra/store/key.go` | AES-256 密钥自动生成/存储/加载；密码加解密 | 📝 |
+| P2.3-c CRUD 实现 | `asshc/infra/store/server.go` | SQLite CRUD（List/Get/Set/Delete/Move/Search/GetGroup） | 📝 |
+| **验证** | `go test ./asshc/infra/store/... -v -count=1` | | |
+
+**P2.3-a 数据库设计 (`db.go`):**
+```sql
+CREATE TABLE IF NOT EXISTS servers (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT NOT NULL,
+    group_name        TEXT NOT NULL DEFAULT '',
+    host              TEXT NOT NULL,
+    port              INTEGER NOT NULL DEFAULT 22,
+    user_name         TEXT NOT NULL DEFAULT 'root',
+    password_encrypted BLOB,
+    key_file          TEXT DEFAULT '',
+    remark            TEXT DEFAULT '',
+    options           TEXT DEFAULT '{}',
+    created_at        TEXT DEFAULT (datetime('now')),
+    updated_at        TEXT DEFAULT (datetime('now')),
+    UNIQUE(group_name, name)
+);
+
+CREATE TABLE IF NOT EXISTS config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+```
+
+**P2.3-b 密钥管理 (`key.go`):**
+- 首次运行：自动生成 32 字节 AES-256 密钥 → base64 编码 → 存入 `config` 表
+- 后续运行：从 `config` 表读取密钥
+- 密码加解密：使用 AES-256-GCM 模式
+
+**P2.3-c CRUD 实现 (`server.go`):**
+- 写入时：自动用静态密钥 AES-GCM 加密 `Password` → 存入 `password_encrypted` 列
+- 读取时：自动解密 `password_encrypted` → 填充 `Server.Auth.Password`
+- 其他字段（Host/Port/User/KeyFile/Remark/Options）明文存储
+
+---
+
+#### P2.4 服务层 — `asshc/service/server.go`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|
+| P2.4 ServerService | `asshc/service/server.go` | `ServerService{repo}` CRUD 用例编排 + 业务规则 | 📝 |
+| **验证** | `go test ./asshc/service/... -v -count=1` | | |
+
+**业务规则：**
+- `AddServer(name, server)`: 名称不重复（`ErrExists`），设置默认值
+- `UpdateServer(name, server)`: 需存在（`ErrNotFound`）
+- `RemoveServer(name)`: 需存在（`ErrNotFound`）
+- `MoveServer(from, to)`: 来源存在 + 目标不冲突
+
+---
+
+#### Phase 2 总体验证
+
+```bash
+cd asshv2 && CGO_ENABLED=0 go build ./...   # 编译（确认无 CGO 依赖）
+cd asshv2 && go vet ./...                    # 静态检查
+cd asshv2 && go test ./... -v -count=1       # 全量测试
+```
+
+#### go.mod 变更
+
+```
+新增: modernc.org/sqlite    # 纯 Go SQLite 驱动（无 CGO 依赖）
+待确认: 是否移除 github.com/keesely/kiris 和 gopkg.in/yaml.v2
+```
 
 ### 📝 Phase 3: SSH 连接层
 

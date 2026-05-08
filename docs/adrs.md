@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 7 |
+| accepted | 10 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -22,6 +22,9 @@
 | ADR-005 | 日志 Fatal/Panic 处理方式（exit 函数分离） | accepted | 2026-05-08 |
 | ADR-006 | 日志系统简化：移除双日志输出和级别限制 | accepted | 2026-05-08 |
 | ADR-007 | CLI 日志参数简化：移除日志级别参数 | accepted | 2026-05-08 |
+| **ADR-008** | **废弃加密 JSON 文件，改用 SQLite 数据库** | **accepted** | **2026-05-09** |
+| **ADR-009** | **服务器密码采用 AES-256-GCM 静态密钥加密** | **accepted** | **2026-05-09** |
+| **ADR-010** | **AuthService 延后至 Phase 6** | **accepted** | **2026-05-09** |
 
 ## 新增 ADR
 
@@ -53,3 +56,15 @@ YYYY-MM-DD
 - [ADR 管理工具](../.opencode/skills/adr-manager/README.md)
 - [ADR 模板](../.opencode/skills/adr-manager/references/adr-template.md)
 - [ADR 状态说明](../.opencode/skills/adr-manager/references/adr-statuses.md)
+
+## Phase 2 ADR 变更摘要
+
+本次 Phase 2 调整为项目引入了三个关键架构变更：
+
+| ADR | 变更 | 影响 |
+|-----|------|------|
+| ADR-008 | 文件存储 → SQLite | 存储引擎、依赖、数据结构 |
+| ADR-009 | AES-CBC+密码 → AES-GCM+静态密钥 | 安全模型、密钥管理 |
+| ADR-010 | Phase 2 AuthService → Phase 6 | 职责划分、发布计划 |
+
+详细内容见对应 ADR 文件。
