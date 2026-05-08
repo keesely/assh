@@ -23,6 +23,7 @@
 | 任务 | 文件 | 来源 | 状态 |
 |------|------|------|------|
 | P1.1 日志模块 | `log/log.go` + `log_test.go` | `assh/log/` | ✅ |
+| P1.1.1 日志简化 | 移除 dual log，移除级别过滤 | 2026-05-09 | ✅ |
 | P1.2 配置管理 | `config/config.go` + `path.go` | `assh/config/` | ✅ |
 | P1.3 RSA 加解密 | `asshc/infra/crypto/rsa.go` | `assh/config/keygen/` | ✅ |
 | P1.4 AES 加解密 | `asshc/infra/crypto/aes.go` | `assh/config/keygen/` | ✅ |

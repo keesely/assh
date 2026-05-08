@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 5 |
+| accepted | 7 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -20,6 +20,8 @@
 | ADR-003 | 依赖注入策略（构造器注入，组合根在 main.go） | accepted | 2026-05-08 |
 | ADR-004 | crypto 模块从 config 移至 asshc/infra/crypto | accepted | 2026-05-08 |
 | ADR-005 | 日志 Fatal/Panic 处理方式（exit 函数分离） | accepted | 2026-05-08 |
+| ADR-006 | 日志系统简化：移除双日志输出和级别限制 | accepted | 2026-05-08 |
+| ADR-007 | CLI 日志参数简化：移除日志级别参数 | accepted | 2026-05-08 |
 
 ## 新增 ADR
 
