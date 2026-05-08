@@ -12,9 +12,9 @@ permission:
   todowrite: allow
   webfetch: allow
   websearch: allow
-  write: allow
-  edit: allow
-  bash: allow
+  write: ask
+  edit: ask
+  bash: ask
   task: allow
   skill: allow
 ---
@@ -189,28 +189,37 @@ YYYY-MM-DD
 - **必需**：`question` - 多轮需求确认和设计决策
 - **必需**：`read/grep/glob` - 分析现有代码和文档
 - **必需**：`todowrite` - 维护进程文档
-- **必需**：`write/edit` - 更新 `docs/` 下所有文档
 - **可选**：`webfetch/websearch` - 技术调研和参考
 
-### 开发与版本管理
-- **必需**：`bash` - 执行 git 操作（提交、推送、创建分支、打 tag 等）
-- **可选**：`skill` → `git-manager` - 复杂 git 工作流（多分支合并、Changelog 生成、PR 创建）
+### 文档编辑（需询问）
+- **询问**：`write/edit` - 更新文档时需用户确认
+- **允许路径**：`docs/**/*.md`、`AGENTS.md`、`CHANGELOG.md`、`.opencode/agents/pm.md`
+
+### 版本管理（需询问）
+- **询问**：`bash` - 执行命令时需用户确认
+- **允许命令**（可授权执行）：
+  - `git status`、`git diff`、`git log` - 查看状态
+  - `git add <files>`、`git commit -m "..."` - 提交变更
+  - `git push origin <branch>` - 推送分支
+  - `git checkout -b <branch>` - 创建分支
+  - `git tag -a <tag> -m "..."` - 创建 tag
+  - `git merge --no-ff <branch>` - 合并分支
+
+### 复杂操作（通过 skill）
+- **可选**：`skill` → `git-manager` - 多分支合并、Changelog 生成、PR 创建
+- **可选**：`skill` → `adrs-manager` - ADR 管理和数据库同步
 - **可选**：`task` - 调度 build agent 执行代码实现
 
-### 架构决策
-- **必需**：`skill` → `adrs-manager` - ADR 管理和数据库同步
-- **必需**：`write` - 创建 ADR markdown 文件
-
-### git 操作说明
+### 操作示例
 
 ```bash
-# 常用操作示例（简单操作直接执行）
-git checkout -b dev/v2.0.0-phase-2           # 创建 Phase 分支
-git add <files> && git commit -m "type: msg"  # 提交
-git push origin dev/v2.0.0-phase-2            # 推送
+# 简单 git 操作（询问后执行）
+git add . && git commit -m "docs: update Phase 2 plan"
+git push origin dev/v2.0.0-phase-2
 
-# 复杂操作通过 skill 调度
-skill name: git-manager                       # PR 创建、Changelog、多分支合并
+# 复杂操作（使用 skill）
+skill name: git-manager  # PR 创建、Changelog、多分支合并
+skill name: adrs-manager # ADR 记录和管理
 ```
 
 ## 工作报告规范
