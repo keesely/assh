@@ -2,6 +2,17 @@
 
 ## v2.0.0-dev (2026-05-09)
 
+### Phase 2: 数据持久化层
+
+- `asshc/domain/` — 领域实体（Server/Auth）和错误定义（ErrNotFound/ErrExists/ErrInvalidName/ErrInvalidPort）
+- `asshc/port/repository.go` — ServerRepository 接口（8 个方法：List/Get/Set/Delete/Move/Search/GetGroup/Close）
+- `asshc/infra/store/` — SQLite 持久化层
+  - `db.go` — Store 结构体 + 自动建表（servers + config 表）
+  - `key.go` — AES-256-GCM 密钥自动生成/存储/加载；密码加解密
+  - `server.go` — 完整 CRUD 实现（List/Get/Set/Delete/Move/Search/GetGroup）
+- `asshc/service/server.go` — ServerService 用例编排（Add/Update/Remove/Move/Search/List/Get/GetGroup）
+- 验证: 17 个测试全部通过，sqlite3 数据库创建和写入确认
+
 ### 日志系统简化
 
 - 移除 dual log 输出（errorLogger），改为单一日志输出
