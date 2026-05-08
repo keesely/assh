@@ -64,6 +64,14 @@ asshv2/
 | 6 | 云同步 (Qiniu) | ⏳ |
 | 7 | 代理 & 隧道 | ⏳ |
 
+### 分支命名规范
+
+```
+dev/v2.0.0-phase-X  # 阶段开发分支 (如 dev/v2.0.0-phase-2)
+feat/<feature>      # 特性分支 (如 feat/config, feat/ssh)
+bugfix/<issue>     # Bug 修复分支
+```
+
 详细任务见 [docs/TODO.md](docs/TODO.md)。
 
 ### 已完成模块
