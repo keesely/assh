@@ -4,7 +4,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 2 开发中 2026/05/09)
+- **Version**: v2.0.0 (Phase 3 开发中 2026/05/09)
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
@@ -58,8 +58,8 @@ asshv2/
 |-------|------|------|
 | 0 | 项目骨架搭建 | ✅ 完成 |
 | 1 | 基础设施移植 (log/config/crypto) | ✅ 完成 |
-| 2 | 数据持久化层 (SQLite + AES-GCM) | 📝 当前 |
-| 3 | SSH 连接层 | ⏳ |
+| 2 | 数据持久化层 (SQLite + AES-GCM) | ✅ 完成 |
+| 3 | SSH 连接层 | 📝 当前 |
 | 4 | CLI 命令组装 | ⏳ |
 | 5 | SFTP 文件传输 | ⏳ |
 | 6 | 云同步 (Qiniu) + AuthService | ⏳ |
@@ -82,6 +82,10 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/infra/crypto/` — 加解密实现（RSA/AES/Ed25519/ECDSA）
 - [x] `asshc/port/cryptor.go` — Cryptor 接口
 - [x] `cmd/app.go` — CLI 框架
+- [x] `asshc/domain/` — 领域实体（Server/Auth）和错误定义
+- [x] `asshc/port/repository.go` — ServerRepository 接口
+- [x] `asshc/infra/store/` — SQLite 持久化（建表/CRUD/AES-GCM 加密）
+- [x] `asshc/service/server.go` — ServerService 用例编排
 
 ## 开发命令
 

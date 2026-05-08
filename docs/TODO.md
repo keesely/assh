@@ -32,7 +32,7 @@
 | P1.7 Cryptor 接口 | `asshc/port/cryptor.go` | 新写 | ✅ |
 | **验证**: `go test ./log/... -v` (28 tests) | | | ✅ |
 
-### 📝 Phase 2: 数据持久化层（当前阶段）
+### ✅ Phase 2: 数据持久化层（已完成）
 
 目标：实现基于 SQLite 的服务器数据存储，密码使用 AES-GCM 静态密钥加密
 
@@ -49,8 +49,8 @@
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|
-| P2.1-a 领域错误 | `asshc/domain/errors.go` | 哨兵错误：`ErrNotFound`, `ErrExists`, `ErrInvalidName`, `ErrInvalidPort` | 📝 |
-| P2.1-b 领域实体 | `asshc/domain/server.go` | `Server`, `Auth` 结构体；`parseName`/`JoinName`/`Validate` | 📝 |
+| P2.1-a 领域错误 | `asshc/domain/errors.go` | 哨兵错误：`ErrNotFound`, `ErrExists`, `ErrInvalidName`, `ErrInvalidPort` | ✅ |
+| P2.1-b 领域实体 | `asshc/domain/server.go` | `Server`, `Auth` 结构体；`parseName`/`JoinName`/`Validate` | ✅ |
 | **验证** | `go vet ./asshc/domain/...` | | |
 
 **设计说明：**
@@ -80,7 +80,7 @@ type Server struct {
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|
-| P2.2 Repository 接口 | `asshc/port/repository.go` | `ServerRepository` 接口定义 | 📝 |
+| P2.2 Repository 接口 | `asshc/port/repository.go` | `ServerRepository` 接口定义 | ✅ |
 | **验证** | `go vet ./asshc/port/...` | | |
 
 ```go
@@ -102,9 +102,9 @@ type ServerRepository interface {
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|
-| P2.3-a SQLite 连接与迁移 | `asshc/infra/store/db.go` | `Store` 结构体、`NewStore(dbPath)`、自动建表迁移 | 📝 |
-| P2.3-b 静态密钥管理 | `asshc/infra/store/key.go` | AES-256 密钥自动生成/存储/加载；密码加解密 | 📝 |
-| P2.3-c CRUD 实现 | `asshc/infra/store/server.go` | SQLite CRUD（List/Get/Set/Delete/Move/Search/GetGroup） | 📝 |
+| P2.3-a SQLite 连接与迁移 | `asshc/infra/store/db.go` | `Store` 结构体、`NewStore(dbPath)`、自动建表迁移 | ✅ |
+| P2.3-b 静态密钥管理 | `asshc/infra/store/key.go` | AES-256 密钥自动生成/存储/加载；密码加解密 | ✅ |
+| P2.3-c CRUD 实现 | `asshc/infra/store/server.go` | SQLite CRUD（List/Get/Set/Delete/Move/Search/GetGroup） | ✅ |
 | **验证** | `go test ./asshc/infra/store/... -v -count=1` | | |
 
 **P2.3-a 数据库设计 (`db.go`):**
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS config (
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|
-| P2.4 ServerService | `asshc/service/server.go` | `ServerService{repo}` CRUD 用例编排 + 业务规则 | 📝 |
+| P2.4 ServerService | `asshc/service/server.go` | `ServerService{repo}` CRUD 用例编排 + 业务规则 | ✅ |
 | **验证** | `go test ./asshc/service/... -v -count=1` | | |
 
 **业务规则：**
@@ -174,7 +174,7 @@ cd asshv2 && go test ./... -v -count=1       # 全量测试
 待确认: 是否移除 github.com/keesely/kiris 和 gopkg.in/yaml.v2
 ```
 
-### 📝 Phase 3: SSH 连接层
+### 📝 Phase 3: SSH 连接层（当前阶段）
 
 目标：实现 SSH 登录和远程命令执行
 
