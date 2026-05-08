@@ -1,7 +1,9 @@
 # Storage
 
-- 配置目录：`~/.assh`
-- 数据文件：`~/.assh/data/servers.db`（AES 加密）
-- 密码文件：`~/.assh/.account`（RSA 加密）
-- 密钥文件：`~/.assh/.rsa`, `~/.assh/.rsa.pub`
-- 配置文件：`~/.assh/assh.yml`（RSA 加密）
+- 存储根目录：`~/.assh/v2`
+- 日志文件：`/tmp/assh.log`（默认，未配置时）
+- 错误日志：`/tmp/assh-error.log`（默认，未配置时）
+- 数据库文件：`~/.assh/v2/asshv2.db`
+- 配置文件：`~/.assh/v2/assh.yml`
+- 密钥文件：`~/.assh/v2/.rsa`, `~/.assh/v2/.rsa.pub`
+- 密码文件：`~/.assh/v2/.account`
