@@ -1,10 +1,11 @@
 # An SSH Client
 
-ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快速使用。当前版本：`v2.0.0-dev`
+ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快速使用。当前版本：`v2.0.1-dev`
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0-dev (重构中 2026/05/08)
+- **Version**: v2.0.1-dev (Phase 2 开发中 2026/05/09)
+- **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
 - **日志库**: zerolog v1.32.0
