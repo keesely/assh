@@ -71,31 +71,7 @@ func TestGetLogLevel(t *testing.T) {
 	}
 }
 
-func TestFormatLogLevel(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    int
-		expected string
-	}{
-		{"FATAL", FATAL, "[FATAL] "},
-		{"PANIC", PANIC, "[PANIC] "},
-		{"ERROR", ERROR, "[ERROR] "},
-		{"WARN", WARN, "[WARN]  "},
-		{"INFO", INFO, "[INFO]  "},
-		{"DEBUG", DEBUG, "[DEBUG] "},
-		{"Invalid level", 999, ""},
-		{"Zero", 0, ""},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := formatLogLevel(tt.input)
-			if result != tt.expected {
-				t.Errorf("formatLogLevel(%d) = %q, expected %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
 
 func TestLevelToZerolog(t *testing.T) {
 	tests := []struct {
@@ -191,66 +167,7 @@ func TestSetInit_CreateDir(t *testing.T) {
 	}
 }
 
-func TestLogLevelFiltering(t *testing.T) {
-	tests := []struct {
-		name      string
-		level     int
-		testFunc  func()
-		shouldLog bool
-	}{
-		{
-			name:      "DEBUG when level OFF",
-			level:     OFF,
-			testFunc:  func() { output(DEBUG, "debug message") },
-			shouldLog: false,
-		},
-		{
-			name:      "DEBUG when level ERROR",
-			level:     ERROR,
-			testFunc:  func() { output(DEBUG, "debug message") },
-			shouldLog: false,
-		},
-		{
-			name:      "ERROR when level DEBUG",
-			level:     DEBUG,
-			testFunc:  func() { output(ERROR, "error message") },
-			shouldLog: true,
-		},
-		{
-			name:      "INFO when level WARN",
-			level:     WARN,
-			testFunc:  func() { output(INFO, "info message") },
-			shouldLog: false,
-		},
-		{
-			name:      "WARN when level INFO",
-			level:     INFO,
-			testFunc:  func() { output(WARN, "warn message") },
-			shouldLog: true,
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			originalLevel := LogLevel
-			LogLevel = tt.level
-			defer func() { LogLevel = originalLevel }()
-
-			var buf bytes.Buffer
-			oldLogger := logger
-			logger = zerolog.New(&buf).With().Timestamp().Logger()
-
-			tt.testFunc()
-
-			logger = oldLogger
-
-			logged := buf.Len() > 0
-			if logged != tt.shouldLog {
-				t.Errorf("expected logged=%v, got %v", tt.shouldLog, logged)
-			}
-		})
-	}
-}
 
 func TestPrint(t *testing.T) {
 	var buf bytes.Buffer
@@ -433,23 +350,15 @@ func TestErrorf(t *testing.T) {
 
 func TestOutput_FatalLevel(t *testing.T) {
 	originalLevel := LogLevel
-	originalErrorLogPath := ErrorLogPath
 	LogLevel = FATAL
-	ErrorLogPath = ""
 	defer func() {
 		LogLevel = originalLevel
-		ErrorLogPath = originalErrorLogPath
 	}()
 
 	var buf bytes.Buffer
 	originalLogger := logger
 	logger = zerolog.New(&buf).With().Timestamp().Logger()
 	defer func() { logger = originalLogger }()
-
-	var errBuf bytes.Buffer
-	originalErrorLogger := errorLogger
-	errorLogger = zerolog.New(&errBuf).With().Timestamp().Logger()
-	defer func() { errorLogger = originalErrorLogger }()
 
 	output(FATAL, "fatal message")
 	if !strings.Contains(buf.String(), "fatal message") {
@@ -459,23 +368,15 @@ func TestOutput_FatalLevel(t *testing.T) {
 
 func TestOutput_PanicLevel(t *testing.T) {
 	originalLevel := LogLevel
-	originalErrorLogPath := ErrorLogPath
 	LogLevel = PANIC
-	ErrorLogPath = ""
 	defer func() {
 		LogLevel = originalLevel
-		ErrorLogPath = originalErrorLogPath
 	}()
 
 	var buf bytes.Buffer
 	originalLogger := logger
 	logger = zerolog.New(&buf).With().Timestamp().Logger()
 	defer func() { logger = originalLogger }()
-
-	var errBuf bytes.Buffer
-	originalErrorLogger := errorLogger
-	errorLogger = zerolog.New(&errBuf).With().Timestamp().Logger()
-	defer func() { errorLogger = originalErrorLogger }()
 
 	output(PANIC, "panic message")
 	if !strings.Contains(buf.String(), "panic message") {
@@ -537,35 +438,4 @@ func TestOutput_ReturnsMessage(t *testing.T) {
 	}
 }
 
-func TestOutput_LevelFiltering(t *testing.T) {
-	originalLevel := LogLevel
 
-	tests := []struct {
-		name        string
-		logLevel    int
-		outputLevel int
-		expectLog   bool
-	}{
-		{"warn below debug level logs", DEBUG, WARN, true},
-		{"debug equals threshold logs", DEBUG, DEBUG, true},
-		{"debug above warn level filtered", WARN, DEBUG, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			LogLevel = tt.logLevel
-			defer func() { LogLevel = originalLevel }()
-
-			var buf bytes.Buffer
-			originalLogger := logger
-			logger = zerolog.New(&buf).With().Timestamp().Logger()
-			defer func() { logger = originalLogger }()
-
-			output(tt.outputLevel, "test message")
-			logged := buf.Len() > 0
-			if logged != tt.expectLog {
-				t.Errorf("expected logged=%v, got %v", tt.expectLog, logged)
-			}
-		})
-	}
-}

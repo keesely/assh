@@ -41,7 +41,6 @@ func (a *App) Run(args []string) {
 func (a *App) setupGlobalFlags() {
 	a.cli.Flags = []cli.Flag{
 		cli.StringFlag{Name: "log", Usage: "log file path"},
-		cli.StringFlag{Name: "llv", Usage: "log level (OFF/DEBUG/INFO/WARN/ERROR/FATAL)"},
 	}
 }
 
@@ -58,11 +57,6 @@ func (a *App) registerCommands() {
 func beforeAction(c *cli.Context) error {
 	if logPath := c.String("log"); logPath != "" {
 		log.LogPath = logPath
-		log.SetInit()
-	}
-
-	if logLevel := c.String("llv"); logLevel != "" {
-		log.LogLevel = log.GetLogLevel(logLevel)
 		log.SetInit()
 	}
 

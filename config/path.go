@@ -15,7 +15,6 @@ var (
 	ConfigFile     = "~/.assh/v2/assh.yml"
 	DbFile         = "~/.assh/v2/asshv2.db"
 	LogPath        = "/tmp/assh.log"
-	ErrorLogPath   = "/tmp/assh-error.log"
 )
 
 func ExpandPath(path string) (string, error) {

@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.0.0-dev (2026-05-09)
+
+### 日志系统简化
+
+- 移除 dual log 输出（errorLogger），改为单一日志输出
+- 移除日志级别过滤，所有级别（DEBUG/INFO/WARN/ERROR/PANIC/FATAL）均输出
+- 移除 config/path.go 中的 ErrorLogPath 常量
+- 清理 dead code：移除 formatLogLevel 函数及其测试
+
+### CLI 参数优化
+
+- 移除 -llv（日志级别）参数
+- 保留 --log 参数用于指定日志路径
+- 日志路径优先级：CLI --log > config.GetLogPath() > /tmp/assh.log
+
 ## v2.0.0-dev (2026-05-08)
 
 ### Phase 1: 基础设施移植

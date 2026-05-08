@@ -17,7 +17,7 @@ func GetLogPath() string {
 	if LogPath != "" {
 		return LogPath
 	}
-	return LogPath
+	return "/tmp/assh.log"
 }
 
 func SetDbPath(path string) {
