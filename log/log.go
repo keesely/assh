@@ -1,14 +1,12 @@
-// log.go kee > 2019/11/26
-
 package log
 
 import (
 	"fmt"
-	"github.com/keesely/kiris"
-	"log"
 	"os"
+	"path/filepath"
 	"strings"
-	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -22,10 +20,10 @@ const (
 )
 
 var (
-	LogPath       = ""
-	LogLevel      = OFF
-	LogLevelPrint = WARN
-	logger        *log.Logger
+	LogPath  string
+	LogLevel = OFF
+
+	logger zerolog.Logger
 )
 
 func init() {
@@ -33,27 +31,35 @@ func init() {
 }
 
 func SetInit() {
-	if LogLevel > 0 && LogPath != "" {
-		var (
-			fl  *os.File
-			err error
-		)
-		LogPath = kiris.RealPath(LogPath)
-		if _, err := os.Stat(LogPath); err != nil {
-			fl, err = os.Create(LogPath)
-		} else {
-			fl, err = os.OpenFile(LogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		}
+	logger = createLogger(LogPath)
+}
 
+func createLogger(logPath string) zerolog.Logger {
+	var output interface{ Write([]byte) (int, error) }
+
+	if logPath != "" {
+		absPath, err := filepath.Abs(logPath)
 		if err != nil {
-			log.Fatal(err)
+			absPath = logPath
 		}
 
-		logger = log.New(fl, "", log.LstdFlags)
-		//logger.SetFlags(log.Lshortfile | log.Lmicroseconds)
+		dir := filepath.Dir(absPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
+		}
+
+		file, err := os.OpenFile(absPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
+			output = os.Stderr
+		} else {
+			output = file
+		}
 	} else {
-		logger = log.New(os.Stderr, "", log.LstdFlags)
+		output = os.Stderr
 	}
+
+	return zerolog.New(output).With().Timestamp().Logger()
 }
 
 func GetLogLevel(lv string) int {
@@ -61,6 +67,7 @@ func GetLogLevel(lv string) int {
 	lvMaps := map[string]int{
 		"OFF":   OFF,
 		"FATAL": FATAL,
+		"PANIC": PANIC,
 		"ERROR": ERROR,
 		"WARN":  WARN,
 		"INFO":  INFO,
@@ -72,116 +79,127 @@ func GetLogLevel(lv string) int {
 	return OFF
 }
 
-func formatLogLevel(lv int) string {
-	lvMaps := map[int]string{
-		FATAL: ("\033[0;31m[FATAL] \033[0m"),
-		ERROR: ("\033[0;35m[ERROR] \033[0m"),
-		WARN:  ("\033[0;33m[WARN]  \033[0m"),
-		INFO:  ("\033[0;36m[INFO]  \033[0m"),
-		DEBUG: ("\033[0;37m[DEBUG] \033[0m"),
-		PANIC: ("\033[5;35m[Panic] \033[0m"),
+func levelToZerolog(lv int) zerolog.Level {
+	switch lv {
+	case FATAL:
+		return zerolog.FatalLevel
+	case PANIC:
+		return zerolog.PanicLevel
+	case ERROR:
+		return zerolog.ErrorLevel
+	case WARN:
+		return zerolog.WarnLevel
+	case INFO:
+		return zerolog.InfoLevel
+	case DEBUG:
+		return zerolog.DebugLevel
+	default:
+		return zerolog.NoLevel
 	}
-	if Output, ok := lvMaps[lv]; ok {
-		return Output
+}
+
+func output(level int, msg string) string {
+	switch level {
+	case FATAL:
+		logger.Error().Str("level", "FATAL").Msg(msg)
+	case PANIC:
+		logger.Error().Str("level", "PANIC").Msg(msg)
+	case ERROR:
+		logger.Error().Msg(msg)
+	case WARN:
+		logger.Warn().Msg(msg)
+	case INFO:
+		logger.Info().Msg(msg)
+	case DEBUG:
+		logger.Debug().Msg(msg)
 	}
-	return ""
+	return msg
+}
+
+func exit(level int, msg string) {
+	output(level, msg)
+	switch level {
+	case FATAL:
+		os.Exit(1)
+	case PANIC:
+		panic(msg)
+	}
 }
 
 func Print(args ...interface{}) {
-	logger.Print(args...)
+	logger.Info().Msg(fmt.Sprint(args...))
 }
 
 func Printf(format string, args ...interface{}) {
-	logger.Printf(format, args...)
+	logger.Info().Msgf(format, args...)
 }
 
 func Println(args ...interface{}) {
-	logger.Println(args...)
+	logger.Info().Msg(fmt.Sprint(args...))
 }
 
 func Fatal(args ...interface{}) {
-	echo(FATAL, args)
+	msg := fmt.Sprint(args...)
+	exit(FATAL, msg)
 }
 
 func Fatalln(args ...interface{}) {
-	echo(FATAL, args)
+	exit(FATAL, fmt.Sprint(args...))
 }
 
 func Fatalf(format string, args ...interface{}) {
-	echof(FATAL, format, args)
+	exit(FATAL, fmt.Sprintf(format, args...))
 }
 
 func Panic(args ...interface{}) {
-	echo(PANIC, args)
+	msg := fmt.Sprint(args...)
+	exit(PANIC, msg)
 }
 
 func Panicln(args ...interface{}) {
-	echo(PANIC, args)
+	exit(PANIC, fmt.Sprint(args...))
 }
 
 func Panicf(format string, args ...interface{}) {
-	echof(PANIC, format, args)
+	exit(PANIC, fmt.Sprintf(format, args...))
 }
 
 func Debug(args ...interface{}) {
-	echo(DEBUG, args)
+	msg := fmt.Sprint(args...)
+	output(DEBUG, msg)
 }
 
 func Info(args ...interface{}) {
-	echo(INFO, args)
+	msg := fmt.Sprint(args...)
+	output(INFO, msg)
 }
 
 func Warn(args ...interface{}) {
-	echo(WARN, args)
+	msg := fmt.Sprint(args...)
+	output(WARN, msg)
 }
 
 func Error(args ...interface{}) {
-	echo(ERROR, args)
+	msg := fmt.Sprint(args...)
+	output(ERROR, msg)
 }
 
 func Debugf(format string, args ...interface{}) {
-	echof(DEBUG, format, args)
+	msg := fmt.Sprintf(format, args...)
+	output(DEBUG, msg)
 }
 
 func Infof(format string, args ...interface{}) {
-	echof(INFO, format, args)
+	msg := fmt.Sprintf(format, args...)
+	output(INFO, msg)
 }
 
 func Warnf(format string, args ...interface{}) {
-	echof(WARN, format, args)
+	msg := fmt.Sprintf(format, args...)
+	output(WARN, msg)
 }
 
 func Errorf(format string, args ...interface{}) {
-	echof(ERROR, format, args)
-}
-
-func output(level int, s string) string {
-	//logger.SetPrefix("\033[0m")
-	if level > 0 && level <= LogLevel {
-		//Lvf := formatLogLevel(level)
-		//logger.SetPrefix(Lvf)
-		logger.Output(2, s)
-
-		if level <= LogLevelPrint {
-			//fmt.Println(Lvf, time.Now().Format("2006/01/02 15:04:05"), s)
-			fmt.Println(time.Now().Format("2006/01/02 15:04:05"), s)
-		}
-
-		if PANIC == level {
-			panic(s)
-		} else if FATAL == level {
-			os.Exit(1)
-		}
-	}
-	return s
-}
-
-func echo(level int, args []interface{}) {
-	lv := formatLogLevel(level)
-	output(level, fmt.Sprint(lv, fmt.Sprint(args...)))
-}
-
-func echof(level int, format string, args []interface{}) {
-	lv := formatLogLevel(level)
-	output(level, fmt.Sprint(lv, fmt.Sprintf(format, args...)))
+	msg := fmt.Sprintf(format, args...)
+	output(ERROR, msg)
 }
