@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"assh/asshc/service"
 	"assh/config"
 	"assh/log"
 
@@ -11,12 +12,13 @@ import (
 )
 
 type App struct {
-	cli     *cli.App
-	version string
-	build   string
+	cli         *cli.App
+	version     string
+	build       string
+	connectSvc  *service.ConnectService
 }
 
-func NewApp(version, build string) *App {
+func NewApp(version, build string, connectSvc *service.ConnectService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
 	app.Usage = "An SSH Client"
@@ -25,9 +27,10 @@ func NewApp(version, build string) *App {
 	app.Before = beforeAction
 
 	a := &App{
-		cli:     app,
-		version: version,
-		build:   build,
+		cli:         app,
+		version:     version,
+		build:       build,
+		connectSvc:  connectSvc,
 	}
 	a.setupGlobalFlags()
 	a.registerCommands()
