@@ -19,7 +19,7 @@ func (s *ServerService) ListServers() (map[string]map[string]*domain.Server, err
 
 func (s *ServerService) GetServer(name string) (*domain.Server, error) {
 	if name == "" {
-		return nil, domain.ErrNotFound
+		return nil, domain.ErrInvalidName
 	}
 	return s.repo.Get(name)
 }
@@ -82,6 +82,44 @@ func (s *ServerService) UpdateServer(name string, server *domain.Server) error {
 	return s.repo.Set(name, server)
 }
 
+// SetServer performs an upsert: creates if not exists, updates if exists.
+// For creation, host is required; for update, only specified fields are changed
+// (caller is responsible for merging from existing server).
+// Validation ensures basic field integrity.
+func (s *ServerService) SetServer(name string, server *domain.Server) error {
+	if name == "" {
+		return domain.ErrInvalidName
+	}
+
+	existing, err := s.repo.Get(name)
+	isNew := err != nil
+
+	if !isNew && existing != nil {
+		// Update: preserve version from existing
+		server.Version = existing.Version
+	} else {
+		// Create: require host
+		if server.Host == "" {
+			return domain.ErrEmptyField
+		}
+		if server.Port <= 0 || server.Port > 65535 {
+			return domain.ErrInvalidPort
+		}
+		if server.User == "" {
+			server.User = "root"
+		}
+		if server.Port == 0 {
+			server.Port = 22
+		}
+	}
+
+	group, serverName := domain.ParseName(name)
+	server.Group = group
+	server.Name = serverName
+
+	return s.repo.Set(name, server)
+}
+
 func (s *ServerService) RemoveServer(name string) error {
 	if name == "" {
 		return domain.ErrInvalidName
@@ -117,4 +155,27 @@ func (s *ServerService) SearchServers(keyword string) (map[string]map[string]*do
 
 func (s *ServerService) GetGroup(group string) (map[string]*domain.Server, error) {
 	return s.repo.GetGroup(group)
+}
+
+// RollbackServer rolls back a server to the specified version.
+func (s *ServerService) RollbackServer(name string, version int) error {
+	if name == "" {
+		return domain.ErrInvalidName
+	}
+	if version < 1 {
+		return domain.ErrInvalidVersion
+	}
+	_, err := s.repo.Get(name)
+	if err != nil {
+		return err
+	}
+	return s.repo.RollbackTo(name, version)
+}
+
+// GetServerChangelog returns the change history for a server.
+func (s *ServerService) GetServerChangelog(name string) ([]domain.ChangelogEntry, error) {
+	if name == "" {
+		return nil, domain.ErrInvalidName
+	}
+	return s.repo.GetChangelog(name)
 }

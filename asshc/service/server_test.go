@@ -77,6 +77,14 @@ func (m *mockRepo) GetGroup(group string) (map[string]*domain.Server, error) {
 	return m.servers[group], nil
 }
 
+func (m *mockRepo) GetChangelog(name string) ([]domain.ChangelogEntry, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockRepo) RollbackTo(name string, version int) error {
+	return domain.ErrNotFound
+}
+
 func (m *mockRepo) Close() error { return nil }
 
 func contains(substr, str string) bool {

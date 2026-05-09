@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -55,6 +56,7 @@ func (s *Store) migrate() error {
 			key_file TEXT DEFAULT '',
 			remark TEXT DEFAULT '',
 			options TEXT DEFAULT '{}',
+			version INTEGER NOT NULL DEFAULT 1,
 			created_at TEXT DEFAULT (datetime('now')),
 			updated_at TEXT DEFAULT (datetime('now')),
 			UNIQUE(group_name, name)
@@ -65,9 +67,56 @@ func (s *Store) migrate() error {
 			value TEXT NOT NULL,
 			updated_at TEXT DEFAULT (datetime('now'))
 		);
+
+		CREATE TABLE IF NOT EXISTS server_changelog (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			server_name TEXT NOT NULL,
+			group_name TEXT NOT NULL DEFAULT '',
+			version INTEGER NOT NULL,
+			change_type TEXT NOT NULL,
+			snapshot TEXT NOT NULL,
+			created_at TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_changelog_lookup ON server_changelog(server_name, group_name);
+		CREATE INDEX IF NOT EXISTS idx_changelog_version ON server_changelog(server_name, group_name, version);
 	`)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migration: add version column for databases created before v2.0.0-phase-4+
+	if colExists, _ := s.columnExists("servers", "version"); !colExists {
+		if _, err := s.db.Exec(`ALTER TABLE servers ADD COLUMN version INTEGER NOT NULL DEFAULT 1`); err != nil {
+			return fmt.Errorf("add version column: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Store) columnExists(table, column string) (bool, error) {
+	rows, err := s.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull int
+		var dflt sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func (s *Store) Close() error {

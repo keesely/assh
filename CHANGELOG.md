@@ -4,18 +4,23 @@
 
 ### Phase 4: CLI 命令组装
 
-- `cmd/server.go` (252行) — 服务器管理命令
-  - `server add` — 添加服务器（`-H/-p/-u/-l/-P/-i/-k/-o/--remark/--group`，ssh 参数对齐）
+- `cmd/server.go` — 服务器管理命令
+  - `server add` — 添加服务器（`-H/-p/-u/-l/-P/-i/-k/-o/--remark/--group`）
+  - `server set` — 创建/更新服务器参数(upsert)，支持参数验证（`-H/-p/-u/-l/-P/-i/-k/-o/--remark/--clear-password/--clear-key`）
   - `server ls` — 列表服务器（`--group`/`--search` 筛选）
-  - `server info` — 查看服务器详情
+  - `server info` — 查看服务器详情（含 Version）
   - `server rm` — 删除服务器
   - `server mv` — 重命名/移动服务器
+  - `server rollback` — 回滚服务器配置（`<name> <version>` 按版本回滚，`--list` 查看变更历史）
 - `cmd/connect.go` (301行) — 连接管理命令
   - `login` — SSH 登录（自动识别：`user@host` / `-H host` / 纯 name）
   - `run` — 远程执行命令
   - `bc` — 批量执行（三通道：实时日志 + stdout 标头 + JSON 汇总，goroutine 并发）
 - `cmd/app.go` — 全局参数 `-v/--verbose`，`-q/--quiet`，`-F/--config`；`HideVersion` 解决 `-v` 冲突
 - `main.go` — 完整 DI 注入（Store + SSH + ServerService + ConnectService）
+- `asshc/domain/` — 新增 `ChangelogEntry` 类型，`Version` 字段加入 `Server` 结构体
+- `asshc/port/repository.go` — 新增 `GetChangelog` / `RollbackTo` 接口方法
+- `asshc/infra/store/` — 数据库迁移: `version` 列 + `server_changelog` 表；`Set` 自动版本化+快照记录；`RollbackTo` 快照回滚
 - ADR-012: CLI 参数对齐与命令架构（参数映射表、bc 三通道、自动识别规则）
 - 验证: 编译 ✅ vet ✅ 测试 ✅（7 包全部通过） help ✅ version ✅
 

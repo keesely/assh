@@ -8,6 +8,8 @@ import (
 	"assh/asshc/domain"
 )
 
+const selectCols = "name, group_name, host, port, user_name, password_encrypted, key_file, remark, options, version"
+
 func (s *Store) List() (map[string]map[string]*domain.Server, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -15,7 +17,7 @@ func (s *Store) List() (map[string]map[string]*domain.Server, error) {
 	result := make(map[string]map[string]*domain.Server)
 
 	rows, err := s.db.Query(`
-		SELECT name, group_name, host, port, user_name, password_encrypted, key_file, remark, options
+		SELECT ` + selectCols + `
 		FROM servers
 	`)
 	if err != nil {
@@ -46,7 +48,7 @@ func (s *Store) Get(name string) (*domain.Server, error) {
 	group, serverName := domain.ParseName(rowName(name))
 
 	row := s.db.QueryRow(`
-		SELECT name, group_name, host, port, user_name, password_encrypted, key_file, remark, options
+		SELECT `+selectCols+`
 		FROM servers
 		WHERE group_name = ? AND name = ?
 	`, group, serverName)
@@ -65,6 +67,16 @@ func (s *Store) Set(name string, server *domain.Server) error {
 	group, serverName := domain.ParseName(rowName(name))
 	server.Group = group
 	server.Name = serverName
+
+	// Determine change type and bump version
+	changeType := domain.ChangeTypeCreate
+	newVersion := 1
+	existingVersion, err := s.getVersionLocked(group, serverName)
+	if err == nil && existingVersion > 0 {
+		changeType = domain.ChangeTypeUpdate
+		newVersion = existingVersion + 1
+	}
+	server.Version = newVersion
 
 	passwordEncrypted := []byte{}
 	if server.Auth != nil && server.Auth.Password != "" {
@@ -87,12 +99,39 @@ func (s *Store) Set(name string, server *domain.Server) error {
 		}
 	}
 
-	_, err := s.db.Exec(`
-		INSERT OR REPLACE INTO servers (name, group_name, host, port, user_name, password_encrypted, key_file, remark, options, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-	`, serverName, group, server.Host, server.Port, server.User, passwordEncrypted, keyFile, server.Remark, optionsJSON)
+	// Snapshot: serialize full server (password in plaintext for restore)
+	snapshotJSON, err := json.Marshal(server)
+	if err != nil {
+		return err
+	}
 
-	return err
+	// Transaction: save server + log changelog atomically
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`
+		INSERT OR REPLACE INTO servers
+			(name, group_name, host, port, user_name, password_encrypted, key_file, remark, options, version, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+	`, serverName, group, server.Host, server.Port, server.User,
+		passwordEncrypted, keyFile, server.Remark, optionsJSON, newVersion)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`
+		INSERT INTO server_changelog
+			(server_name, group_name, version, change_type, snapshot, created_at)
+		VALUES (?, ?, ?, ?, ?, datetime('now'))
+	`, serverName, group, newVersion, changeType, string(snapshotJSON))
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (s *Store) Delete(name string) error {
@@ -141,7 +180,8 @@ func (s *Store) Move(from, to string) error {
 		return checkErr
 	}
 
-	_, err = s.db.Exec("UPDATE servers SET group_name = ?, name = ?, updated_at = datetime('now') WHERE group_name = ? AND name = ?", toGroup, toName, fromGroup, fromName)
+	_, err = s.db.Exec("UPDATE servers SET group_name = ?, name = ?, updated_at = datetime('now') WHERE group_name = ? AND name = ?",
+		toGroup, toName, fromGroup, fromName)
 	return err
 }
 
@@ -154,7 +194,7 @@ func (s *Store) Search(keyword string) (map[string]map[string]*domain.Server, er
 	result := make(map[string]map[string]*domain.Server)
 
 	rows, err := s.db.Query(`
-		SELECT name, group_name, host, port, user_name, password_encrypted, key_file, remark, options
+		SELECT `+selectCols+`
 		FROM servers
 		WHERE name LIKE ? OR host LIKE ? OR remark LIKE ?
 	`, keyword, keyword, keyword)
@@ -186,7 +226,7 @@ func (s *Store) GetGroup(group string) (map[string]*domain.Server, error) {
 	result := make(map[string]*domain.Server)
 
 	rows, err := s.db.Query(`
-		SELECT name, group_name, host, port, user_name, password_encrypted, key_file, remark, options
+		SELECT `+selectCols+`
 		FROM servers
 		WHERE group_name = ?
 	`, group)
@@ -206,13 +246,169 @@ func (s *Store) GetGroup(group string) (map[string]*domain.Server, error) {
 	return result, rows.Err()
 }
 
+// --- Changelog & Rollback ---
+
+func (s *Store) GetChangelog(name string) ([]domain.ChangelogEntry, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	group, serverName := domain.ParseName(rowName(name))
+
+	rows, err := s.db.Query(`
+		SELECT id, server_name, group_name, version, change_type, snapshot, created_at
+		FROM server_changelog
+		WHERE server_name = ? AND group_name = ?
+		ORDER BY version ASC
+	`, serverName, group)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []domain.ChangelogEntry
+	for rows.Next() {
+		var e domain.ChangelogEntry
+		var snapshotStr string
+		err := rows.Scan(&e.ID, &e.ServerName, &e.GroupName, &e.Version,
+			&e.ChangeType, &snapshotStr, &e.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		// Deserialize snapshot
+		var server domain.Server
+		if err := json.Unmarshal([]byte(snapshotStr), &server); err == nil {
+			e.Snapshot = &server
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(entries) == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return entries, nil
+}
+
+func (s *Store) RollbackTo(name string, version int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	group, serverName := domain.ParseName(rowName(name))
+
+	if version < 1 {
+		return domain.ErrInvalidVersion
+	}
+
+	// Read snapshot at target version
+	var snapshotStr string
+	err := s.db.QueryRow(`
+		SELECT snapshot FROM server_changelog
+		WHERE server_name = ? AND group_name = ? AND version = ?
+	`, serverName, group, version).Scan(&snapshotStr)
+	if err == sql.ErrNoRows {
+		return domain.ErrVersionNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	// Deserialize snapshot
+	var restored domain.Server
+	if err := json.Unmarshal([]byte(snapshotStr), &restored); err != nil {
+		return err
+	}
+	restored.Group = group
+	restored.Name = serverName
+
+	// Bump version
+	currentVersion, err := s.getVersionLocked(group, serverName)
+	if err != nil {
+		// If server was deleted, currentVersion stays 0, start from snapshot version
+		currentVersion = version
+	}
+	newVersion := currentVersion + 1
+	restored.Version = newVersion
+
+	// Re-encrypt password if present
+	passwordEncrypted := []byte{}
+	if restored.Auth != nil && restored.Auth.Password != "" {
+		encrypted, err := s.encryptPassword(restored.Auth.Password)
+		if err != nil {
+			return err
+		}
+		passwordEncrypted = encrypted
+	}
+
+	var keyFile string
+	if restored.Auth != nil {
+		keyFile = restored.Auth.KeyFile
+	}
+
+	optionsJSON := "{}"
+	if restored.Options != nil {
+		if jsonBytes, err := json.Marshal(restored.Options); err == nil {
+			optionsJSON = string(jsonBytes)
+		}
+	}
+
+	// Snapshot for rollback entry
+	snapshotJSON, err := json.Marshal(restored)
+	if err != nil {
+		return err
+	}
+
+	// Transaction: update server + log rollback
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`
+		INSERT OR REPLACE INTO servers
+			(name, group_name, host, port, user_name, password_encrypted, key_file, remark, options, version, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+	`, serverName, group, restored.Host, restored.Port, restored.User,
+		passwordEncrypted, keyFile, restored.Remark, optionsJSON, newVersion)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`
+		INSERT INTO server_changelog
+			(server_name, group_name, version, change_type, snapshot, created_at)
+		VALUES (?, ?, ?, ?, ?, datetime('now'))
+	`, serverName, group, newVersion, domain.ChangeTypeRollback, string(snapshotJSON))
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// getVersionLocked returns the current version of a server (caller must hold s.mu).
+func (s *Store) getVersionLocked(group, serverName string) (int, error) {
+	var version int
+	err := s.db.QueryRow(`
+		SELECT version FROM servers WHERE group_name = ? AND name = ?
+	`, group, serverName).Scan(&version)
+	if err == sql.ErrNoRows {
+		return 0, domain.ErrNotFound
+	}
+	return version, err
+}
+
+// --- helpers ---
+
 func (s *Store) scanServer(scanner interface{ Scan(dest ...interface{}) error }) (*domain.Server, error) {
 	var name, group, host, user, keyFile, remark string
-	var port int
+	var port, version int
 	var passwordEncrypted []byte
 	var optionsJSON string
 
-	err := scanner.Scan(&name, &group, &host, &port, &user, &passwordEncrypted, &keyFile, &remark, &optionsJSON)
+	err := scanner.Scan(&name, &group, &host, &port, &user, &passwordEncrypted, &keyFile, &remark, &optionsJSON, &version)
 	if err != nil {
 		return nil, err
 	}
@@ -225,6 +421,7 @@ func (s *Store) scanServer(scanner interface{ Scan(dest ...interface{}) error })
 		User:    user,
 		Remark:  remark,
 		Options: make(map[string]interface{}),
+		Version: version,
 	}
 
 	if passwordEncrypted != nil && len(passwordEncrypted) > 0 {

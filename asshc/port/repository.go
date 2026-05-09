@@ -10,5 +10,7 @@ type ServerRepository interface {
 	Move(from, to string) error
 	Search(keyword string) (map[string]map[string]*domain.Server, error)
 	GetGroup(group string) (map[string]*domain.Server, error)
+	GetChangelog(name string) ([]domain.ChangelogEntry, error)
+	RollbackTo(name string, version int) error
 	Close() error
 }

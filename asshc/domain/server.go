@@ -19,6 +19,7 @@ type Server struct {
 	Auth    *Auth                  `json:"auth,omitempty"`
 	Remark  string                 `json:"remark,omitempty"`
 	Options map[string]interface{} `json:"options,omitempty"`
+	Version int                    `json:"version"`
 }
 
 func ParseName(name string) (group, serverName string) {
