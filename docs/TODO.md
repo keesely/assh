@@ -174,7 +174,7 @@ cd asshv2 && go test ./... -v -count=1       # 全量测试
 待确认: 是否移除 github.com/keesely/kiris 和 gopkg.in/yaml.v2
 ```
 
-### 📝 Phase 3: SSH 连接层（当前阶段 — 设计定稿）
+### ✅ Phase 3: SSH 连接层（已完成）
 
 目标：实现 SSH 登录、远程命令执行、交互式终端
 
@@ -186,10 +186,10 @@ cd asshv2 && go test ./... -v -count=1       # 全量测试
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|
-| P3.1-a Connector 接口 | `asshc/port/connector.go` | `SSHConnector` 接口：`Connect(server)` / `Close(client)` | ⏳ |
-| P3.1-b Session 接口 | `asshc/port/session.go` | `SSHSession` 接口：`Shell(client)` / `Run(client, cmd)` / `RunWithOutput(client, cmd)` | ⏳ |
-| P3.1-c HostKey 接口 (预留) | `asshc/port/hostkey.go` | `HostKeyChecker` 接口定义，`HostKeyCallback` 类型别名 | ⏳ |
-| **验证** | `go vet ./asshc/port/...` | | |
+| P3.1-a Connector 接口 | `asshc/port/connector.go` | `SSHConnector` 接口：`Connect(server)` / `Close(client)` | ✅ |
+| P3.1-b Session 接口 | `asshc/port/session.go` | `SSHSession` 接口：`Shell(client)` / `Run(client, cmd)` / `RunWithOutput(client, cmd)` | ✅ |
+| P3.1-c HostKey 接口 (预留) | `asshc/port/hostkey.go` | `HostKeyChecker` 接口定义，`HostKeyCallback` 类型别名 | ✅ |
+| **验证** | `go vet ./asshc/port/...` | | ✅ |
 
 **设计说明：**
 ```go
@@ -219,13 +219,13 @@ type HostKeyChecker interface {
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|
-| P3.2-a SSH 客户端 | `asshc/infra/ssh/client.go` | 实现 `SSHConnector`：认证链(Agent→私钥→密码)、HostKey策略、Keepalive | ⏳ |
-| P3.2-b 会话管理 | `asshc/infra/ssh/session.go` | 实现 `SSHSession`：交互终端(pty+SIGWINCH)、命令执行 | ⏳ |
-| P3.2-c HostKey 验证 | `asshc/infra/ssh/hostkey.go` | KnownHosts + Insecure 两种策略实现 | ⏳ |
-| P3.2-d 单元测试 | `asshc/infra/ssh/client_test.go` | mock SSH server 测试连接/认证/HostKey | ⏳ |
-| P3.2-e 单元测试 | `asshc/infra/ssh/session_test.go` | 会话 mock 测试 | ⏳ |
-| P3.2-f 单元测试 | `asshc/infra/ssh/hostkey_test.go` | HostKey 检查测试 | ⏳ |
-| **验证** | `go test ./asshc/infra/ssh/... -v -count=1` | | |
+| P3.2-a SSH 客户端 | `asshc/infra/ssh/client.go` | 实现 `SSHConnector`：认证链(Agent→私钥→密码)、HostKey策略、Keepalive | ✅ |
+| P3.2-b 会话管理 | `asshc/infra/ssh/session.go` | 实现 `SSHSession`：交互终端(pty+SIGWINCH)、命令执行 | ✅ |
+| P3.2-c HostKey 验证 | `asshc/infra/ssh/hostkey.go` | KnownHosts + Insecure 两种策略实现 | ✅ |
+| P3.2-d 单元测试 | `asshc/infra/ssh/client_test.go` | mock SSH server 测试连接/认证/HostKey | ✅ |
+| P3.2-e 单元测试 | `asshc/infra/ssh/session_test.go` | 会话 mock 测试 | ✅ |
+| P3.2-f 单元测试 | `asshc/infra/ssh/hostkey_test.go` | HostKey 检查测试 | ✅ |
+| **验证** | `go test ./asshc/infra/ssh/... -v -count=1` | | ✅ |
 
 **认证流程：**
 ```
@@ -243,9 +243,9 @@ Connect(server)
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|
-| P3.3-a 连接服务 | `asshc/service/connect.go` | `ConnectService{connector, session, repo}` | ⏳ |
-| P3.3-b 单元测试 | `asshc/service/connect_test.go` | mock connector+session，测试所有方法 | ⏳ |
-| **验证** | `go test ./asshc/service/... -v -count=1` | | |
+| P3.3-a 连接服务 | `asshc/service/connect.go` | `ConnectService{connector, session, repo}` | ✅ |
+| P3.3-b 单元测试 | `asshc/service/connect_test.go` | mock connector+session，测试所有方法 | ✅ |
+| **验证** | `go test ./asshc/service/... -v -count=1` | | ✅ |
 
 **ConnectService 方法：**
 | 方法 | 入口 | 用途 |
@@ -262,23 +262,23 @@ Connect(server)
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|
-| P3.4-a DI 注入 | `main.go` | 注入 SSHConnector/SSHSession/ConnectService | ⏳ |
+| P3.4-a DI 注入 | `main.go` | 注入 SSHConnector/SSHSession/ConnectService | ✅ |
 
 ---
 
 #### Phase 3 总体验证
 
 ```bash
-cd asshv2 && go build ./...      # 编译
-cd asshv2 && go vet ./...        # 静态检查
-cd asshv2 && go test ./... -v -count=1   # 全量测试
+cd asshv2 && go build ./...      # 编译 ✅
+cd asshv2 && go vet ./...        # 静态检查 ✅
+cd asshv2 && go test ./... -v -count=1   # 全量测试 ✅ (6 包全部通过)
 ```
 
-### 📝 Phase 4: CLI 命令组装
+### 📝 Phase 4: CLI 命令组装（当前阶段）
 
 目标：组装完整 CLI，实现 MVP
 
-依赖：Phase 2 + Phase 3
+依赖：Phase 2 + Phase 3 + Phase 4 起从 repo 获取完整依赖
 
 | 任务 | 文件 | 说明 |
 |------|------|------|

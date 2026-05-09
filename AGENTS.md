@@ -4,7 +4,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 3 设计中 2026/05/09)
+- **Version**: v2.0.0 (Phase 3 完成, Phase 4 待开始 2026/05/09)
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
@@ -59,7 +59,7 @@ asshv2/
 | 0 | 项目骨架搭建 | ✅ 完成 |
 | 1 | 基础设施移植 (log/config/crypto) | ✅ 完成 |
 | 2 | 数据持久化层 (SQLite + AES-GCM) | ✅ 完成 |
-| 3 | SSH 连接层 | 📝 设计完成，待实现 |
+| 3 | SSH 连接层 | ✅ 完成 |
 | 4 | CLI 命令组装 | ⏳ |
 | 5 | SFTP 文件传输 | ⏳ |
 | 6 | 云同步 (Qiniu) + AuthService | ⏳ |
@@ -86,10 +86,19 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/port/repository.go` — ServerRepository 接口
 - [x] `asshc/infra/store/` — SQLite 持久化（建表/CRUD/AES-GCM 加密）
 - [x] `asshc/service/server.go` — ServerService 用例编排
-- [ ] `asshc/port/connector.go` — SSHConnector 接口（Phase 3 设计完成）
-- [ ] `asshc/port/session.go` — SSHSession 接口（Phase 3 设计完成）
-- [ ] `asshc/infra/ssh/` — SSH 连接实现（Phase 3 设计完成）
-- [ ] `asshc/service/connect.go` — ConnectService（Phase 3 设计完成）
+- [x] `asshc/port/connector.go` — SSHConnector 接口
+- [x] `asshc/port/session.go` — SSHSession 接口
+- [x] `asshc/port/hostkey.go` — HostKeyChecker 接口（预留）
+- [x] `asshc/infra/ssh/` — SSH 连接实现（认证链/HostKey/Keepalive/Shell/Run）
+- [x] `asshc/service/connect.go` — ConnectService（连接/会话编排）
+- [ ] `asshc/service/connect_test.go` 中 mock 覆盖 16 个测试用例
+
+### 当前阶段：Phase 4 — CLI 命令组装
+
+- [ ] `cmd/server.go` — 服务器管理命令（add/ls/info/rm/mv）
+- [ ] `cmd/connect.go` — 连接命令（login/bc）
+- [ ] `cmd/app.go` — 补全命令注册（完整 CLI 入口）
+- [ ] `main.go` — 完整 DI 注入（含 repo）
 
 ## 开发命令
 
