@@ -274,19 +274,115 @@ cd asshv2 && go vet ./...        # 静态检查 ✅
 cd asshv2 && go test ./... -v -count=1   # 全量测试 ✅ (6 包全部通过)
 ```
 
-### 📝 Phase 4: CLI 命令组装（当前阶段）
+### ✅ Phase 4: CLI 命令组装（已完成）
 
 目标：组装完整 CLI，实现 MVP
 
-依赖：Phase 2 + Phase 3 + Phase 4 起从 repo 获取完整依赖
+依赖：Phase 2 + Phase 3 + 全局参数对齐 ssh（ADR-012）
+设计文档：[Phase4-Design.md](Phase4-Design.md)
+架构决策：ADR-012（CLI 参数对齐与命令架构）
 
-| 任务 | 文件 | 说明 |
+---
+
+#### P4.1 `cmd/server.go` — 服务器管理命令（新建）
+
+| 任务 | 说明 | 验证场景 | 状态 |
+|------|------|----------|------|
+| P4.1-a add 子命令 | `assh server add <name> -H <host> [-pPuik]` → `serverSvc.AddServer()` | 添加成功、重复、参数缺失 | ✅ |
+| P4.1-b ls 子命令 | `assh server ls [--group] [--search]` → `serverSvc.List/Search/GetGroup` | 全部列表、分组筛选、关键词搜索 | ✅ |
+| P4.1-c info 子命令 | `assh server info <name>` → `serverSvc.GetServer()` | 存在、不存在 | ✅ |
+| P4.1-d rm 子命令 | `assh server rm <name>` → `serverSvc.RemoveServer()` | 存在、不存在 | ✅ |
+| P4.1-e mv 子命令 | `assh server mv <from> <to>` → `serverSvc.MoveServer()` | 成功、冲突、不存在 | ✅ |
+| P4.1-f 注册 | `registerServerCommands()` 关联到 App | help 显示 server 子命令 | ✅ |
+
+参数规格（对齐 ADR-012）：
+```
+-H/--host    必填，主机地址
+-p/--port    端口（默认22）
+-u/-l/--user/--login    用户名（默认root）
+-P/--password    密码（明文/交互）
+-i/--identity-file   密钥文件
+-k/--key    密钥文件（同 -i）
+-o/--option    Options，可多次
+--remark    备注
+--group    分组
+```
+
+---
+
+#### P4.2 `cmd/connect.go` — 连接管理命令（新建）
+
+| 任务 | 说明 | 验证场景 | 状态 |
+|------|------|----------|------|
+| P4.2-a login 命令 | 自动识别：按名 / user@host / 分离参数 → `Connect` → `Shell` | 三种登录方式、参数缺失 | ✅ |
+| P4.2-b run 命令 | `assh run <name> <command>` → 连接 → 执行 → 关闭 | 正常执行、空命令、server 不存在 | ✅ |
+| P4.2-c bc 命令 | 批量执行 + 三通道输出（goroutine 并发） | 多服务器、空结果、全部失败 | ✅ |
+| P4.2-d 注册 | `registerConnectCommands()` 关联到 App | help 显示 login/run/bc | ✅ |
+
+参数规格（对齐 ADR-012）：
+```
+login 自动识别：
+  - 含 "@" → user@host 直连
+  - 含 "-H/--host" → 分离参数直连
+  - 纯 name → 数据库查找
+
+bc 三通道输出：
+  通道1: 实时日志 /tmp/assh/bclogs/{server}.log
+  通道2: stdout 标头 [server] 实时输出
+  通道3: JSON 汇总（全部完成后）
+  --log /path/file.json    自定义输出路径（默认 ./bc-result-{ts}.json）
+  --servers s1,s2    指定服务器列表
+  --group name    按分组执行
+```
+
+---
+
+#### P4.3 `cmd/app.go` — 命令注册调整（修改）
+
+| 任务 | 说明 | 状态 |
 |------|------|------|
-| P4.1 服务器命令 | `cmd/server.go` | add/ls/info/rm/mv |
-| P4.2 连接命令 | `cmd/connect.go` | login/bc |
-| P4.3 全局入口 | `cmd/app.go` | 补全命令注册 |
-| P4.4 DI 注入 | `main.go` | 完整依赖注入 |
-| **验证**: `go run . help` | 全命令可见 |
+| P4.3-a `NewApp` 签名变更 | 接收 `*service.ServerService` 参数 | ✅ |
+| P4.3-b 全局参数注册 | `-v/--verbose`, `-q/--quiet`, `-F/--config` | ✅ |
+| P4.3-c 子命令注册 | 调用 `registerServerCommands()` + `registerConnectCommands()` | ✅ |
+| P4.3-d `beforeAction` 完善 | 数据库路径初始化、日志初始化 | ✅ |
+
+---
+
+#### P4.4 `main.go` — DI 注入（修改）
+
+| 任务 | 说明 | 状态 |
+|------|------|------|
+| P4.4-a Store 初始化 | `store.NewStore(dbPath)`，添加错误处理 | ✅ |
+| P4.4-b ServerService 注入 | `service.NewServerService(repo)` | ✅ |
+| P4.4-c ConnectService repo 补全 | 将 `nil` 替换为真实 repo | ✅ |
+| P4.4-d App 构建 | 传递 `serverSvc` 给 `cmd.NewApp()` | ✅ |
+
+---
+
+#### 验证结果
+
+```bash
+cd asshv2 && go build ./...         # 编译 ✅
+cd asshv2 && go vet ./...           # 静态检查 ✅
+cd asshv2 && go test ./... -count=1 # 全量测试 ✅（7 包全部通过）
+cd asshv2 && go run . help          # CLI 可用 ✅
+cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
+```
+
+#### 验收清单
+
+| # | 场景 | 操作 | 预期 | 结果 |
+|---|------|------|------|------|
+| F1 | 添加服务器 | `assh server add t -H 127.0.0.1 -P test` | 成功 | ✅ |
+| F2 | 列表 | `assh server ls` | 显示分组 | ✅ |
+| F3 | 详情 | `assh server info t` | 显示完整信息 | ✅ |
+| F4 | 删除 | `assh server rm t` | 成功 | ✅ |
+| F5 | 移动 | `assh server mv t t2` | 成功 | ✅ |
+| F6 | 按名登录 | `assh login t` | 连接 mock | ✅ |
+| F7 | user@host | `assh login root@127.0.0.1` | 自动解析 | ✅ |
+| F8 | 远程执行 | `assh run t "echo ok"` | 输出 ok | ✅ |
+| F9 | 批量执行 | `assh bc "echo ok" --servers s1,s2` | 标头 + 结果 | ✅ |
+| F10 | 帮助 | `assh help` | 完整命令列表 | ✅ |
 
 ### 📝 Phase 5: SFTP 文件传输
 

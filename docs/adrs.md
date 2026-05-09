@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 11 |
+| accepted | 12 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -26,6 +26,7 @@
 | **ADR-009** | **服务器密码采用 AES-256-GCM 静态密钥加密** | **accepted** | **2026-05-09** |
 | **ADR-010** | **AuthService 延后至 Phase 6** | **accepted** | **2026-05-09** |
 | **ADR-011** | **SSH 连接层架构设计：接口分离 + 可配置 HostKey + Keepalive** | **accepted** | **2026-05-09** |
+| **ADR-012** | **CLI 参数对齐与命令架构：与 ssh 兼容 + 自动识别 + bc 三通道** | **accepted** | **2026-05-09** |
 
 ## 新增 ADR
 
@@ -77,5 +78,15 @@ YYYY-MM-DD
 | ADR | 变更 | 影响 |
 |-----|------|------|
 | ADR-011 | SSH 接口分离（Connector/Session）+ 可配置 HostKey + Keepalive | 新增 7 个文件，接口职责清晰，策略灵活 |
+
+详细内容见对应 ADR 文件。
+
+## Phase 4 ADR 变更摘要
+
+本次 Phase 4 引入的关键架构决策：
+
+| ADR | 变更 | 影响 |
+|-----|------|------|
+| ADR-012 | CLI 参数与 ssh 对齐 + 自动识别直连 + bc 三通道输出 | 参数命名规范、命令层级、login 自动识别策略、bc 输出架构 |
 
 详细内容见对应 ADR 文件。

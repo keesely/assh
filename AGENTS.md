@@ -4,7 +4,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 3 完成, Phase 4 待开始 2026/05/09)
+- **Version**: v2.0.0 (Phase 4 完成, Phase 5 待开始 2026/05/09)
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
@@ -60,7 +60,7 @@ asshv2/
 | 1 | 基础设施移植 (log/config/crypto) | ✅ 完成 |
 | 2 | 数据持久化层 (SQLite + AES-GCM) | ✅ 完成 |
 | 3 | SSH 连接层 | ✅ 完成 |
-| 4 | CLI 命令组装 | ⏳ |
+| 4 | CLI 命令组装 | ✅ 完成 |
 | 5 | SFTP 文件传输 | ⏳ |
 | 6 | 云同步 (Qiniu) + AuthService | ⏳ |
 | 7 | 代理 & 隧道 | ⏳ |
@@ -91,14 +91,11 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/port/hostkey.go` — HostKeyChecker 接口（预留）
 - [x] `asshc/infra/ssh/` — SSH 连接实现（认证链/HostKey/Keepalive/Shell/Run）
 - [x] `asshc/service/connect.go` — ConnectService（连接/会话编排）
-- [ ] `asshc/service/connect_test.go` 中 mock 覆盖 16 个测试用例
-
-### 当前阶段：Phase 4 — CLI 命令组装
-
-- [ ] `cmd/server.go` — 服务器管理命令（add/ls/info/rm/mv）
-- [ ] `cmd/connect.go` — 连接命令（login/bc）
-- [ ] `cmd/app.go` — 补全命令注册（完整 CLI 入口）
-- [ ] `main.go` — 完整 DI 注入（含 repo）
+- [x] `asshc/service/connect_test.go` — 16 个测试用例覆盖 mock 测试
+- [x] `cmd/server.go` — 服务器管理命令（add/ls/info/rm/mv）
+- [x] `cmd/connect.go` — 连接命令（login/run/bc）含 bc 三通道输出
+- [x] `main.go` — 完整 DI 注入（Store + SSH + Service）
+- [x] `cmd/app.go` — 全局参数 `-v/-q/-F` 注册 + 子命令注册
 
 ## 开发命令
 
