@@ -2,6 +2,21 @@
 
 ## v2.0.0-dev (2026-05-09)
 
+### Phase 3: SSH 连接层
+
+- `asshc/port/connector.go` — SSHConnector 接口定义（Connect/Close）
+- `asshc/port/session.go` — SSHSession 接口定义（Shell/Run/RunWithOutput）
+- `asshc/port/hostkey.go` — HostKeyChecker 接口定义（预留）
+- `asshc/infra/ssh/` — SSH 连接实现层
+  - `client.go` — SSH 客户端（认证链 Agent→私钥→密码、HostKey 策略、Keepalive 心跳）
+  - `session.go` — 会话管理（pty+SIGWINCH 交互终端、远程命令执行）
+  - `hostkey.go` — HostKey 验证策略（KnownHosts / Insecure）
+  - `client_test.go` (7 tests)、`session_test.go` (1 test)、`hostkey_test.go` (2 tests)
+- `asshc/service/connect.go` — ConnectService 编排层（ConnectByName/ConnectDirect/Shell/Run/RunWithOutput/Close）
+- `asshc/service/connect_test.go` — 16 个测试（mock connector+session，覆盖正常/边界/错误场景）
+- 验证: 编译 ✅ vet ✅ 测试 ✅（6 包全部通过）
+- Bug 修复: Keepalive 实现 — 将心跳 goroutine 与连接超时分离，修复 Timeout 被覆盖的问题
+
 ### Phase 2: 数据持久化层
 
 - `asshc/domain/` — 领域实体（Server/Auth）和错误定义（ErrNotFound/ErrExists/ErrInvalidName/ErrInvalidPort）
