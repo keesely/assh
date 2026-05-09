@@ -2,6 +2,23 @@
 
 ## v2.0.0-dev (2026-05-09)
 
+### Phase 4: CLI 命令组装
+
+- `cmd/server.go` (252行) — 服务器管理命令
+  - `server add` — 添加服务器（`-H/-p/-u/-l/-P/-i/-k/-o/--remark/--group`，ssh 参数对齐）
+  - `server ls` — 列表服务器（`--group`/`--search` 筛选）
+  - `server info` — 查看服务器详情
+  - `server rm` — 删除服务器
+  - `server mv` — 重命名/移动服务器
+- `cmd/connect.go` (301行) — 连接管理命令
+  - `login` — SSH 登录（自动识别：`user@host` / `-H host` / 纯 name）
+  - `run` — 远程执行命令
+  - `bc` — 批量执行（三通道：实时日志 + stdout 标头 + JSON 汇总，goroutine 并发）
+- `cmd/app.go` — 全局参数 `-v/--verbose`，`-q/--quiet`，`-F/--config`；`HideVersion` 解决 `-v` 冲突
+- `main.go` — 完整 DI 注入（Store + SSH + ServerService + ConnectService）
+- ADR-012: CLI 参数对齐与命令架构（参数映射表、bc 三通道、自动识别规则）
+- 验证: 编译 ✅ vet ✅ 测试 ✅（7 包全部通过） help ✅ version ✅
+
 ### Phase 3: SSH 连接层
 
 - `asshc/port/connector.go` — SSHConnector 接口定义（Connect/Close）
