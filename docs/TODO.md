@@ -277,10 +277,11 @@ cd asshv2 && go test ./... -v -count=1   # 全量测试 ✅ (6 包全部通过)
 ### ✅ Phase 4: CLI 命令组装（已完成）
 
 目标：组装完整 CLI，实现 MVP
+补充（2026-05-09）：set(upsert) + rollback + 版本管理/changelog
 
 依赖：Phase 2 + Phase 3 + 全局参数对齐 ssh（ADR-012）
 设计文档：[Phase4-Design.md](Phase4-Design.md)
-架构决策：ADR-012（CLI 参数对齐与命令架构）
+架构决策：ADR-012（CLI 参数对齐与命令架构）, ADR-013（配置版本管理与回滚）
 
 ---
 
@@ -294,20 +295,36 @@ cd asshv2 && go test ./... -v -count=1   # 全量测试 ✅ (6 包全部通过)
 | P4.1-d rm 子命令 | `assh server rm <name>` → `serverSvc.RemoveServer()` | 存在、不存在 | ✅ |
 | P4.1-e mv 子命令 | `assh server mv <from> <to>` → `serverSvc.MoveServer()` | 成功、冲突、不存在 | ✅ |
 | P4.1-f 注册 | `registerServerCommands()` 关联到 App | help 显示 server 子命令 | ✅ |
+| P4.1-g set 子命令 (原 edit) | `assh server set <name> [flags]` → upsert (`SetServer`) | 创建新服务器、更新已存在、参数验证(port范围) | ✅ |
+| P4.1-h rollback 子命令 | `assh server rollback <name> <version>` → `RollbackServer()` | 版本回滚、--list 查看历史、版本不存在 | ✅ |
+| P4.1-i 版本管理 | `asshc/infra/store/` Set 自动版本递增+快照+changelog | 创建v1→更新v2→回滚v3(rollback) | ✅ |
+| P4.1-j 参数验证 | set 命令执行 port 范围校验 (1-65535)、新建 host 必填检查 | 非法端口拒绝、无 host 拒绝 | ✅ |
 
-参数规格（对齐 ADR-012）：
+参数规格：
 ```
--H/--host    必填，主机地址
--p/--port    端口（默认22）
--u/-l/--user/--login    用户名（默认root）
--P/--password    密码（明文/交互）
--i/--identity-file   密钥文件
--k/--key    密钥文件（同 -i）
--o/--option    Options，可多次
---remark    备注
---group    分组
-```
+set (upsert, 替代原来的 edit):
+  -H/--host    地址（新建必填）
+  -p/--port    端口（1-65535 校验）
+  -u/-l/--user/--login  用户名
+  -P/--password    密码
+  -i/--identity-file   密钥文件
+  -k/--key    密钥文件（同 -i）
+  -o/--option    添加/替换 Options
+  --remark    备注
+  --clear-password    清除密码
+  --clear-key    清除密钥文件
 
+rollback:
+  <name> <version>    按版本号回滚
+  <name> --list       查看变更历史
+
+行为：
+  - 服务器不存在 → 用提供的参数创建新服务器
+  - 服务器已存在 → 仅修改显式指定的字段（深拷贝 Options，c.IsSet 检测）
+  - 每次修改自动记录快照到 server_changelog 表
+  - Version 显示在 info/ls 输出中
+  - rollback 创建新的版本条目（类型=rollback），不覆盖历史
+```
 ---
 
 #### P4.2 `cmd/connect.go` — 连接管理命令（新建）
@@ -369,6 +386,15 @@ cd asshv2 && go run . help          # CLI 可用 ✅
 cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 ```
 
+#### 2026-05-09 新增功能验收
+
+```bash
+# set (upsert) — 21 场景全通过
+# 版本管理 — 版本自动递增验证通过
+# rollback — 回滚到 v1 验证配置正确性通过
+# 详情见 docs/worklogs/2026-05-09-Phase4-Set-Rollback-Acceptance.md
+```
+
 #### 验收清单
 
 | # | 场景 | 操作 | 预期 | 结果 |
@@ -383,6 +409,15 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 | F8 | 远程执行 | `assh run t "echo ok"` | 输出 ok | ✅ |
 | F9 | 批量执行 | `assh bc "echo ok" --servers s1,s2` | 标头 + 结果 | ✅ |
 | F10 | 帮助 | `assh help` | 完整命令列表 | ✅ |
+| F11 | set 创建新服务器 | `assh server set t -H 1.2.3.4 -P pass` | 创建成功 v1 | ✅ |
+| F12 | set 更新已存在 | `assh server set t --remark "new"` | 版本递增 | ✅ |
+| F13 | set 无标志 | `assh server set t` | 显示详情+提示 | ✅ |
+| F14 | set 无 host 新建 | `assh server set newbox` | 报错提示 | ✅ |
+| F15 | set 清理密码 | `assh server set t --clear-password` | 密码清除 | ✅ |
+| F16 | rollback --list | `assh server rollback t --list` | 显示 changelog | ✅ |
+| F17 | rollback 版本号 | `assh server rollback t 1` | 回滚到 v1 | ✅ |
+| F18 | ls 显示版本 | `assh server ls` | 有 Version 列 | ✅ |
+| F19 | info 显示版本 | `assh server info t` | 有 Version 行 | ✅ |
 
 ### 📝 Phase 5: SFTP 文件传输
 

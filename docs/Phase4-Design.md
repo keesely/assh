@@ -1,8 +1,8 @@
 # Phase 4: CLI 命令组装设计方案
 
 > 日期: 2026-05-09
-> 状态: 定稿
-> ADR: ADR-012 (CLI 参数对齐与命令架构)
+> 状态: 已更新 (2026-05-09 新增 set/rollback/changelog)
+> ADR: ADR-012 (CLI 参数对齐与命令架构), ADR-013 (配置版本管理与回滚)
 
 ---
 
@@ -35,10 +35,12 @@ global flags:
 commands:
   server               服务器管理（子命令集）
     add                添加服务器
+    set                创建/更新服务器（upsert, 含参数验证）
     ls                 列出服务器
     info               查看服务器详情
     rm                 删除服务器
     mv                 重命名/移动服务器
+    rollback           回滚服务器配置（--list 查看历史, <version> 回滚）
 
   login [flags]         SSH 登录（自动识别按名/直连）
   run [flags] <name> <command>   远程执行命令
@@ -89,10 +91,10 @@ Flags:
   assh server ls --search web
 
 输出格式:
-  Group     Name         Host         Port  User  Auth
-  prod      web-01       10.0.0.1     22    root  key
-  prod      web-02       10.0.0.2     22    root  password
-  dev       db-01        10.0.1.1     22    dev   key
+  Group     Name         Host         Port  User   Ver   Auth
+  prod      web-01       10.0.0.1     22    root   3     key
+  prod      web-02       10.0.0.2     22    root   2     password
+  dev       db-01        10.0.1.1     22    dev    5     key
 ```
 
 #### server info — 查看服务器详情
@@ -114,6 +116,7 @@ assh server info <name>
   Auth:     key (/home/user/.ssh/id_rsa)
   Remark:   Production web server
   Options:  keepalive=30
+  Version:  3
 ```
 
 #### server rm — 删除服务器
@@ -217,7 +220,7 @@ Flags:
   assh bc "systemctl status nginx" --servers web-01,web-02,db-01 --log ./nginx-status.json
 ```
 
----
+
 
 ## 3. bc 三通道输出架构
 
@@ -338,6 +341,9 @@ type App struct {
 | P4.1-d rm 子命令 | 删除 → `serverSvc.RemoveServer()` | 存在、不存在 |
 | P4.1-e mv 子命令 | 重命名 → `serverSvc.MoveServer()` | 成功、冲突、不存在 |
 | P4.1-f 注册到 app | `registerServerCommands()` 关联到 `app.Commands` | help 显示 |
+| P4.1-g set 子命令 | `assh server set <name> [flags]` → upsert (`SetServer`) | 创建新服务器、更新已存在、参数验证 |
+| P4.1-h rollback 子命令 | `assh server rollback <name> <version>` → `RollbackServer()` | 版本回滚、--list 查看历史 |
+| P4.1-i 版本管理 | `asshc/infra/store/` Set 自动版本递增 + 快照 + changelog | 版本连续递增、rollback 正确记录 |
 
 ### P4.2 `cmd/connect.go` — 连接管理命令（新建）
 
@@ -421,3 +427,94 @@ type App struct {
 | `main.go` 是唯一 DI 组合根 | ✅ | 所有依赖注入在 main 中完成 |
 | 参数与 ssh 对齐 | ✅ | 参见 ADR-012 参数映射表 |
 | urfave/cli 框架 | ✅ | 保持现有框架不变 |
+
+---
+
+## 8. set/rollback 命令（Phase4 新增）
+
+### 8.1 set — 创建/更新服务器（upsert）
+
+```
+assh server set <name> [flags]
+
+行为（upsert）:
+  - 服务器不存在 → 使用提供的参数创建新服务器
+  - 服务器已存在 → 仅修改显式指定的字段
+  - 每次修改自动记录快照到 server_changelog 表，版本递增
+
+位置参数:
+  name                  服务器名
+
+Flags:
+  -H, --host string     主机地址（新建必填）
+  -p, --port int        端口（校验范围 1-65535）
+  -u, --user string     用户名
+  -l, --login string    用户名（同 --user）
+  -P, --password string 密码
+  -i, --identity-file string  密钥文件路径
+  -k, --key string      密钥文件路径（同 --identity-file）
+  -o, --option strings  添加/替换 Options
+  --remark string       备注信息
+  --clear-password      清除密码
+  --clear-key           清除密钥文件
+
+示例:
+  assh server set prod.web-01 -H 10.0.0.1 -u admin -P secret  # 新建
+  assh server set prod.web-01 -p 2222 --remark "updated"       # 更新
+  assh server set prod.web-01 --clear-password                 # 清除密码
+```
+
+### 8.2 rollback — 回滚服务器配置
+
+```
+assh server rollback <name> <version>
+assh server rollback <name> --list
+
+行为:
+  - 从 server_changelog 中读取指定版本的快照（JSON）
+  - 恢复服务器配置到该版本状态
+  - 生成新的 rollback 类型 changelog 条目（不覆盖历史）
+
+位置参数:
+  name          服务器名
+  version       目标版本号（与 --list 配合使用）
+
+Flags:
+  --list        显示该服务器的所有变更版本
+
+示例:
+  assh server rollback prod.web-01 --list    # 查看历史
+  assh server rollback prod.web-01 2         # 回滚到 v2
+
+Changelog 输出:
+  Version  Type         Date
+  -------- ------------ -------------------
+  1        create       2026-05-09 08:11:29
+  2        update       2026-05-09 08:11:30
+  3        update       2026-05-09 08:11:30
+  4        rollback     2026-05-09 08:11:43
+```
+
+### 8.3 数据存储
+
+新增 `server_changelog` 表记录完整配置快照：
+
+```sql
+CREATE TABLE server_changelog (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    server_name TEXT NOT NULL,
+    group_name  TEXT NOT NULL DEFAULT '',
+    version     INTEGER NOT NULL,
+    change_type TEXT NOT NULL,         -- 'create', 'update', 'rollback'
+    snapshot    TEXT NOT NULL,         -- JSON 快照
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+```
+
+`servers` 表新增 `version` 列：
+
+```sql
+ALTER TABLE servers ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+```
+
+详细架构决策见 [ADR-013](docs/adrs/013-配置版本管理与回滚.md)。

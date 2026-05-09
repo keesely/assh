@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 12 |
+| accepted | 13 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -27,6 +27,7 @@
 | **ADR-010** | **AuthService 延后至 Phase 6** | **accepted** | **2026-05-09** |
 | **ADR-011** | **SSH 连接层架构设计：接口分离 + 可配置 HostKey + Keepalive** | **accepted** | **2026-05-09** |
 | **ADR-012** | **CLI 参数对齐与命令架构：与 ssh 兼容 + 自动识别 + bc 三通道** | **accepted** | **2026-05-09** |
+| **ADR-013** | **配置版本管理与回滚机制：快照式 changelog + rollback** | **accepted** | **2026-05-09** |
 
 ## 新增 ADR
 
@@ -88,5 +89,6 @@ YYYY-MM-DD
 | ADR | 变更 | 影响 |
 |-----|------|------|
 | ADR-012 | CLI 参数与 ssh 对齐 + 自动识别直连 + bc 三通道输出 | 参数命名规范、命令层级、login 自动识别策略、bc 输出架构 |
+| ADR-013 | 配置版本管理与回滚机制：快照式 changelog + rollback | store.Set() 版本递增 + 快照、store.RollbackTo()、service.SetServer() upsert |
 
 详细内容见对应 ADR 文件。

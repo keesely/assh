@@ -92,10 +92,12 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/infra/ssh/` — SSH 连接实现（认证链/HostKey/Keepalive/Shell/Run）
 - [x] `asshc/service/connect.go` — ConnectService（连接/会话编排）
 - [x] `asshc/service/connect_test.go` — 16 个测试用例覆盖 mock 测试
-- [x] `cmd/server.go` — 服务器管理命令（add/ls/info/rm/mv）
+- [x] `cmd/server.go` — 服务器管理命令（add/set/ls/info/rm/mv/rollback）
 - [x] `cmd/connect.go` — 连接命令（login/run/bc）含 bc 三通道输出
 - [x] `main.go` — 完整 DI 注入（Store + SSH + Service）
 - [x] `cmd/app.go` — 全局参数 `-v/-q/-F` 注册 + 子命令注册
+- [x] `asshc/domain/changelog.go` — ChangelogEntry 类型、变更类型常量
+- [x] `asshc/infra/store/` — 版本管理 + server_changelog 表 + 快照回滚
 
 ## 开发命令
 
