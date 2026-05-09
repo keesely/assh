@@ -4,7 +4,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 3 开发中 2026/05/09)
+- **Version**: v2.0.0 (Phase 3 设计中 2026/05/09)
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
@@ -59,7 +59,7 @@ asshv2/
 | 0 | 项目骨架搭建 | ✅ 完成 |
 | 1 | 基础设施移植 (log/config/crypto) | ✅ 完成 |
 | 2 | 数据持久化层 (SQLite + AES-GCM) | ✅ 完成 |
-| 3 | SSH 连接层 | 📝 当前 |
+| 3 | SSH 连接层 | 📝 设计完成，待实现 |
 | 4 | CLI 命令组装 | ⏳ |
 | 5 | SFTP 文件传输 | ⏳ |
 | 6 | 云同步 (Qiniu) + AuthService | ⏳ |
@@ -86,6 +86,10 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/port/repository.go` — ServerRepository 接口
 - [x] `asshc/infra/store/` — SQLite 持久化（建表/CRUD/AES-GCM 加密）
 - [x] `asshc/service/server.go` — ServerService 用例编排
+- [ ] `asshc/port/connector.go` — SSHConnector 接口（Phase 3 设计完成）
+- [ ] `asshc/port/session.go` — SSHSession 接口（Phase 3 设计完成）
+- [ ] `asshc/infra/ssh/` — SSH 连接实现（Phase 3 设计完成）
+- [ ] `asshc/service/connect.go` — ConnectService（Phase 3 设计完成）
 
 ## 开发命令
 

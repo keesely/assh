@@ -174,19 +174,105 @@ cd asshv2 && go test ./... -v -count=1       # 全量测试
 待确认: 是否移除 github.com/keesely/kiris 和 gopkg.in/yaml.v2
 ```
 
-### 📝 Phase 3: SSH 连接层（当前阶段）
+### 📝 Phase 3: SSH 连接层（当前阶段 — 设计定稿）
 
-目标：实现 SSH 登录和远程命令执行
+目标：实现 SSH 登录、远程命令执行、交互式终端
 
 依赖：Phase 2 (domain/repository)
+设计文档：[Phase3-Design.md](Phase3-Design.md)
+架构决策：ADR-011（接口分离 + 可配置 HostKey + Keepalive）
 
-| 任务 | 文件 | 说明 |
+#### P3.1 接口层 — `asshc/port/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|
+| P3.1-a Connector 接口 | `asshc/port/connector.go` | `SSHConnector` 接口：`Connect(server)` / `Close(client)` | ⏳ |
+| P3.1-b Session 接口 | `asshc/port/session.go` | `SSHSession` 接口：`Shell(client)` / `Run(client, cmd)` / `RunWithOutput(client, cmd)` | ⏳ |
+| P3.1-c HostKey 接口 (预留) | `asshc/port/hostkey.go` | `HostKeyChecker` 接口定义，`HostKeyCallback` 类型别名 | ⏳ |
+| **验证** | `go vet ./asshc/port/...` | | |
+
+**设计说明：**
+```go
+// SSHConnector — 连接管理
+type SSHConnector interface {
+    Connect(server *domain.Server) (*ssh.Client, error)
+    Close(client *ssh.Client) error
+}
+
+// SSHSession — 会话操作  
+type SSHSession interface {
+    Shell(client *ssh.Client) error
+    Run(client *ssh.Client, cmd string) error
+    RunWithOutput(client *ssh.Client, cmd string) (string, error)
+}
+
+// HostKeyChecker (预留)
+type HostKeyCallback func(hostname string, remote net.Addr, key ssh.PublicKey) error
+type HostKeyChecker interface {
+    Check(hostname string, remote net.Addr, key ssh.PublicKey) error
+}
+```
+
+---
+
+#### P3.2 基础设施层 — `asshc/infra/ssh/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|
+| P3.2-a SSH 客户端 | `asshc/infra/ssh/client.go` | 实现 `SSHConnector`：认证链(Agent→私钥→密码)、HostKey策略、Keepalive | ⏳ |
+| P3.2-b 会话管理 | `asshc/infra/ssh/session.go` | 实现 `SSHSession`：交互终端(pty+SIGWINCH)、命令执行 | ⏳ |
+| P3.2-c HostKey 验证 | `asshc/infra/ssh/hostkey.go` | KnownHosts + Insecure 两种策略实现 | ⏳ |
+| P3.2-d 单元测试 | `asshc/infra/ssh/client_test.go` | mock SSH server 测试连接/认证/HostKey | ⏳ |
+| P3.2-e 单元测试 | `asshc/infra/ssh/session_test.go` | 会话 mock 测试 | ⏳ |
+| P3.2-f 单元测试 | `asshc/infra/ssh/hostkey_test.go` | HostKey 检查测试 | ⏳ |
+| **验证** | `go test ./asshc/infra/ssh/... -v -count=1` | | |
+
+**认证流程：**
+```
+Connect(server)
+  ├── 检测 SSH_AUTH_SOCK → Agent 认证（优先）
+  ├── 检测 Auth.KeyFile  → 私钥认证
+  ├── 检测 Auth.Password → 密码认证
+  ├── HostKey 策略: Options["insecure_skip_hostkey"] ? InsecureIgnoreHostKey : known_hosts
+  └── Keepalive: Options["keepalive"] → 心跳间隔
+```
+
+---
+
+#### P3.3 服务层 — `asshc/service/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|
+| P3.3-a 连接服务 | `asshc/service/connect.go` | `ConnectService{connector, session, repo}` | ⏳ |
+| P3.3-b 单元测试 | `asshc/service/connect_test.go` | mock connector+session，测试所有方法 | ⏳ |
+| **验证** | `go test ./asshc/service/... -v -count=1` | | |
+
+**ConnectService 方法：**
+| 方法 | 入口 | 用途 |
 |------|------|------|
-| P3.1 Connector 接口 | `asshc/port/connector.go` | SSHConnector 接口 |
-| P3.2 SSH 客户端 | `asshc/infra/ssh/client.go` | golang.org/x/crypto/ssh 封装 |
-| P3.3 会话管理 | `asshc/infra/ssh/session.go` | 交互终端、keepalive |
-| P3.4 连接服务 | `asshc/service/connect.go` | ConnectService 登录/命令 |
-| **验证**: `go test ./asshc/... -v` | |
+| `ConnectByName(name)` | 按服务器名 | 从 repo 获取 Server → 连接 |
+| `ConnectDirect(host, port, user, password, keyFile)` | 直连参数 | 构建 Server 对象 → 连接 |
+| `Shell(client)` | 已连接 | 交互式终端 |
+| `Run(client, cmd)` | 已连接 | 执行命令（输出到 stdout） |
+| `RunWithOutput(client, cmd)` | 已连接 | 执行命令（返回字符串） |
+
+---
+
+#### P3.4 DI 注入
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|
+| P3.4-a DI 注入 | `main.go` | 注入 SSHConnector/SSHSession/ConnectService | ⏳ |
+
+---
+
+#### Phase 3 总体验证
+
+```bash
+cd asshv2 && go build ./...      # 编译
+cd asshv2 && go vet ./...        # 静态检查
+cd asshv2 && go test ./... -v -count=1   # 全量测试
+```
 
 ### 📝 Phase 4: CLI 命令组装
 

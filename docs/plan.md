@@ -232,7 +232,7 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 | 0 | 项目骨架 | 无 | 4 |
 | 1 | log + config + crypto | 无 | 8 |
 | 2 | domain + repository + SQLite store + service | config, log, sqlite | 6 |
-| 3 | ssh connector | config, log | 4 |
+| 3 | ssh connector + session + hostkey | Phase 2 (domain/repository), config, log | 7 (+ tests) |
 | 4 | cmd 组装 | 所有以上 | 5 |
 | 5 | sftp | ssh | 4 |
 | 6 | sync/qiniu | 无 | 6 |

@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 10 |
+| accepted | 11 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -25,6 +25,7 @@
 | **ADR-008** | **废弃加密 JSON 文件，改用 SQLite 数据库** | **accepted** | **2026-05-09** |
 | **ADR-009** | **服务器密码采用 AES-256-GCM 静态密钥加密** | **accepted** | **2026-05-09** |
 | **ADR-010** | **AuthService 延后至 Phase 6** | **accepted** | **2026-05-09** |
+| **ADR-011** | **SSH 连接层架构设计：接口分离 + 可配置 HostKey + Keepalive** | **accepted** | **2026-05-09** |
 
 ## 新增 ADR
 
@@ -66,5 +67,15 @@ YYYY-MM-DD
 | ADR-008 | 文件存储 → SQLite | 存储引擎、依赖、数据结构 |
 | ADR-009 | AES-CBC+密码 → AES-GCM+静态密钥 | 安全模型、密钥管理 |
 | ADR-010 | Phase 2 AuthService → Phase 6 | 职责划分、发布计划 |
+
+详细内容见对应 ADR 文件。
+
+## Phase 3 ADR 变更摘要
+
+本次 Phase 3 引入的关键架构决策：
+
+| ADR | 变更 | 影响 |
+|-----|------|------|
+| ADR-011 | SSH 接口分离（Connector/Session）+ 可配置 HostKey + Keepalive | 新增 7 个文件，接口职责清晰，策略灵活 |
 
 详细内容见对应 ADR 文件。

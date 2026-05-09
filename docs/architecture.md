@@ -20,8 +20,12 @@
 main.go
   ├── NewCryptor()          → asshc/infra/crypto
   ├── NewServerRepository() → asshc/infra/store
-  ├── NewServerService()    → asshc/service (receives port interfaces)
-  ├── NewConnectService()   → asshc/service
+  ├── NewServerService()    → asshc/service (receives port.ServerRepository)
+  │
+  ├── NewSSHConnector()     → asshc/infra/ssh (implements port.SSHConnector)
+  ├── NewSSHSession()       → asshc/infra/ssh (implements port.SSHSession)
+  ├── NewConnectService()   → asshc/service (receives port.SSHConnector + port.SSHSession + port.ServerRepository)
+  │
   └── cmd.NewApp()          → cmd/ (receives service interfaces)
 ```
 
