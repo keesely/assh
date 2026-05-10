@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -71,13 +72,16 @@ func (a *App) registerConnectCommands() {
 //   - 已保存的服务器名称（从数据库中读取配置）
 //   - user@host 格式（直接指定）
 //   - -H host 参数（直接指定）
+//
+// 注意：当通过默认 Action（assh <target> -p 9999）触发时，urfave/cli
+// 不会解析位置参数后的全局 flags，需要手动回落查找短参数（v1 兼容）。
 func (a *App) loginCore(c *cli.Context) (*ssh.Client, error) {
 	target := c.Args().Get(0)
-	host := c.String("host")
-	port := c.Int("port")
-	user := firstNonEmpty(c.String("user"), c.String("login"))
-	password := c.String("password")
-	keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
+	host := resolveFlag(c, "host", "H")
+	port := resolveIntFlag(c, "port", "p")
+	user := firstNonEmpty(resolveFlag(c, "user", "u"), resolveFlag(c, "login", "l"))
+	password := resolveFlag(c, "password", "P")
+	keyFile := firstNonEmpty(resolveFlag(c, "identity-file", "i"), resolveFlag(c, "key", "k"))
 
 	if target == "" && host == "" {
 		return nil, fmt.Errorf("no target specified: use <name>, <user@host>, or -H <host>")
@@ -313,4 +317,52 @@ func writeLogFile(filePath, content string) {
 	}
 	defer f.Close()
 	f.WriteString(content + "\n")
+}
+
+// resolveFlag 从 cli 上下文中获取字符串参数值。
+// 优先使用 cli 正常解析的值（c.IsSet 为 true），
+// 如果未解析则从 c.Args() 中手动查找短参数（v1 兼容）。
+func resolveFlag(c *cli.Context, longName, shortName string) string {
+	if c.IsSet(longName) {
+		return c.String(longName)
+	}
+	if v, ok := lookupShortFlag(c, shortName); ok {
+		return v
+	}
+	return ""
+}
+
+// resolveIntFlag 从 cli 上下文中获取整数参数值。
+// 优先使用 cli 正常解析的值，否则手动查找短参数。
+func resolveIntFlag(c *cli.Context, longName, shortName string) int {
+	if c.IsSet(longName) {
+		return c.Int(longName)
+	}
+	if v, ok := lookupShortFlag(c, shortName); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+// lookupShortFlag 从 c.Args() 中手动查找短参数（v1 兼容）。
+// urfave/cli 在默认 Action 中不会解析位置参数后的全局 flags，
+// 需要手动从剩余参数中查找 -p、-P 等短参数。
+// 支持 -p 9999（空格分隔）和 -p9999（紧凑）两种格式。
+func lookupShortFlag(c *cli.Context, shortName string) (string, bool) {
+	prefix := "-" + shortName
+	args := c.Args()
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		// 紧凑格式：-p9999
+		if strings.HasPrefix(arg, prefix) && len(arg) > len(prefix) {
+			return arg[len(prefix):], true
+		}
+		// 空格分隔：-p 9999
+		if arg == prefix && i+1 < len(args) {
+			return args[i+1], true
+		}
+	}
+	return "", false
 }

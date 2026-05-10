@@ -57,6 +57,10 @@ func (a *App) Run(args []string) error {
 //   - -q/--quiet：关闭日志输出
 //   - -F/--config：指定配置文件路径
 //   - -V/--version：打印版本号
+//   - -c/--command：执行远程命令（默认 Action 中使用）
+//   - -p/--port、-u/--user、-l/--login：连接参数（v1 兼容，默认 Action 中使用）
+//   - -P/--password、-i/--identity-file、-k/--key：认证参数（v1 兼容）
+//   - -H/--host：直连主机地址（v1 兼容）
 func (a *App) setupGlobalFlags() {
 	a.cli.Flags = []cli.Flag{
 		cli.BoolFlag{Name: "v, verbose", Usage: "verbose output"},
@@ -64,6 +68,13 @@ func (a *App) setupGlobalFlags() {
 		cli.StringFlag{Name: "F, config", Usage: "config file path (default: ~/.assh/v2/assh.yml)"},
 		cli.BoolFlag{Name: "V, version", Usage: "print version information"},
 		cli.StringFlag{Name: "c, command", Usage: "run command on remote server"},
+		cli.IntFlag{Name: "p, port", Value: 0, Usage: "port"},
+		cli.StringFlag{Name: "u, user", Usage: "username"},
+		cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
+		cli.StringFlag{Name: "P, password", Usage: "password"},
+		cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
+		cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+		cli.StringFlag{Name: "H, host", Usage: "host address"},
 	}
 }
 
