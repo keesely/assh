@@ -419,6 +419,27 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 | F17 | rollback 版本号 | `assh server rollback t 1` | 回滚到 v1 | ✅ |
 | F18 | ls 显示版本 | `assh server ls` | 有 Version 列 | ✅ |
 | F19 | info 显示版本 | `assh server info t` | 有 Version 行 | ✅ |
+| F20 | info 模糊建议 | `assh info case.bbp` → 建议 `case.bbp2` | 智能提示 | ✅ |
+| F21 | 默认 Action 建议 | `assh case.bbp` → 建议 `case.bbp2` | 智能提示 | ✅ |
+| F22 | ls 自适应列宽 | `assh ls` → 紧凑表格，Group 右对齐 | 美观紧凑 | ✅ |
+
+---
+#### Phase 4 细化与体验优化（2026-05-10）
+
+在本轮对 Phase 4 已完成的命令做了用户体验和输出格式的精细化调整：
+
+| 任务 | 说明 | 状态 |
+|------|------|------|
+| P4.4-a info 格式重构 | 居中标题+对齐加号、Auth Type 区分、标签首字母大写+Server前缀 | ✅ |
+| P4.4-b info 模糊建议 | 服务器不存在时前缀匹配+Levenshtein 给出建议名称 | ✅ |
+| P4.4-c ls 自适应列宽 | Group/Name/Host 按最长内容自适应，Group 右对齐 | ✅ |
+| P4.4-d 默认 Action 模糊建议 | `assh \<target\>` 找不到服务器时也给出近似提示 | ✅ |
+| P4.4-e 自动编译检查 | 每次代码变更后自动 `go build ./...` 验证 | ✅ |
+
+**相关文件**: `cmd/server.go`, `cmd/app.go`, `asshc/service/server.go`
+**验证**: `go build ./... && go test ./... -count=1` ✅ (7 包通过)
+
+---
 
 ### 📝 Phase 5: SFTP 文件传输
 
