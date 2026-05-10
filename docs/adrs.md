@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 15 |
+| accepted | 16 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -30,6 +30,7 @@
 | **ADR-013** | **配置版本管理与回滚机制：快照式 changelog + rollback** | **accepted** | **2026-05-09** |
 | **ADR-014** | **server 命令组扁平化上移顶层** | **accepted** | **2026-05-10** |
 | **ADR-015** | **ls 命令输出格式优化（Remark列/合并Host列/颜色样式）** | **accepted** | **2026-05-10** |
+| **ADR-016** | **顶层默认登录行为（v1 兼容）：assh \<target\> 直连** | **accepted** | **2026-05-10** |
 
 ## 新增 ADR
 
