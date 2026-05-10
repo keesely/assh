@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -477,16 +478,13 @@ func (a *App) serverListAction(c *cli.Context) error {
 		return nil
 	}
 
-	var groupColors = []int{32, 34, 33, 35, 36}
-
-	fmt.Printf("%-16s %-20s %-28s %-4s %-14s %s\n", "Group", "Name", "Host", "Ver", "Auth", "Remark")
-	fmt.Println(strings.Repeat("-", 88))
-
-	colorIdx := 0
+	// 1) collect all rows
+	type row struct {
+		group, name, host, auth, remark string
+		version                         int
+	}
+	var rows []row
 	for g, servers := range result {
-		baseColor := groupColors[colorIdx%len(groupColors)]
-		colorIdx++
-		row := 0
 		for _, s := range servers {
 			hostStr := fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
 
@@ -502,23 +500,88 @@ func (a *App) serverListAction(c *cli.Context) error {
 				}
 			}
 
-			var bold int
-			if row%2 == 0 {
-				bold = 1
-			} else {
-				bold = 0
-			}
-
-			fmt.Printf("\033[%d;%dm%-16s %-20s %-28s %-4d %-14s %s\033[0m\n",
-				bold, baseColor, g, s.Name, hostStr, s.Version, auth, s.Remark)
-			row++
+			rows = append(rows, row{
+				group:   g,
+				name:    s.Name,
+				host:    hostStr,
+				version: s.Version,
+				auth:    auth,
+				remark:  s.Remark,
+			})
 		}
+	}
+
+	// 2) calculate adaptive column widths
+	maxGroup, maxName, maxHost := len("Group"), len("Name"), len("Host")
+	for _, r := range rows {
+		if l := len(r.group); l > maxGroup {
+			maxGroup = l
+		}
+		if l := len(r.name); l > maxName {
+			maxName = l
+		}
+		if l := len(r.host); l > maxHost {
+			maxHost = l
+		}
+	}
+
+	// 3) print header + separator
+	authWidth := 14
+	headerFmt := fmt.Sprintf("%%%ds %%-%ds %%-%ds %%-4s %%-%ds %%s",
+		maxGroup, maxName, maxHost, authWidth)
+	fmt.Printf(headerFmt+"\n", "Group", "Name", "Host", "Ver", "Auth", "Remark")
+
+	// fixed-width area: Group + 1sp + Name + 1sp + Host + 1sp + Ver(4) + 1sp + Auth + 1sp
+	sepLen := maxGroup + maxName + maxHost + authWidth + 10
+	if sepLen < 60 {
+		sepLen = 60
+	}
+	fmt.Println(strings.Repeat("-", sepLen))
+
+	// 4) print data rows (with color per group, bold alternation within group)
+	var groupColors = []int{32, 34, 33, 35, 36}
+	groupOrder := make([]string, 0, len(result))
+	groupSeen := make(map[string]bool)
+	groupRow := make(map[string]int) // group → row counter for bold alternation
+	for _, r := range rows {
+		if !groupSeen[r.group] {
+			groupSeen[r.group] = true
+			groupOrder = append(groupOrder, r.group)
+		}
+	}
+
+	for _, r := range rows {
+		groupIdx := 0
+		for i, g := range groupOrder {
+			if g == r.group {
+				groupIdx = i
+				break
+			}
+		}
+		baseColor := groupColors[groupIdx%len(groupColors)]
+
+		rowN := groupRow[r.group]
+		var bold int
+		if rowN%2 == 0 {
+			bold = 1
+		} else {
+			bold = 0
+		}
+		groupRow[r.group] = rowN + 1
+
+		fmt.Printf("\033[%d;%dm%*s %-*s %-*s %-4d %-*s %s\033[0m\n",
+			bold, baseColor,
+			maxGroup, r.group,
+			maxName, r.name,
+			maxHost, r.host,
+			r.version, authWidth, r.auth, r.remark)
 	}
 
 	return nil
 }
 
 // serverInfoAction 处理 server info 命令，显示服务器的完整配置详情。
+// 如果服务器不存在，自动搜索最接近的名称并给出建议。
 func (a *App) serverInfoAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
@@ -527,6 +590,11 @@ func (a *App) serverInfoAction(c *cli.Context) error {
 
 	server, err := a.serverSvc.GetServer(name)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			if suggestion, ok := a.serverSvc.SuggestServer(name); ok {
+				return fmt.Errorf("%q not found, did you mean [%s]?", name, suggestion)
+			}
+		}
 		return err
 	}
 
