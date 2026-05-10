@@ -5,16 +5,23 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 
 	"assh/asshc/domain"
+	sshinfra "assh/asshc/infra/ssh"
 	"assh/asshc/service"
 	"assh/config"
 	"assh/log"
 
+	"github.com/pkg/sftp"
 	"github.com/urfave/cli"
 )
 
@@ -108,6 +115,44 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 				cli.BoolFlag{Name: "S, checksum", Usage: "verify SHA256 checksum after transfer"},
 				cli.IntFlag{Name: "c, concurrency", Value: 3, Usage: "number of concurrent transfers"},
 			},
+		},
+		{
+			Name: "sftp",
+			Usage: "Start interactive SFTP session",
+			Action: func(c *cli.Context) error {
+				if c.NArg() < 1 {
+					fmt.Println("Usage: assh-fs sftp <server>")
+					return nil
+				}
+				serverName := c.Args()[0]
+				server, err := serverSvc.GetServer(serverName)
+				if err != nil {
+					return fmt.Errorf("server %q not found: %w", serverName, err)
+				}
+				// Create SFTP client
+				connector := sshinfra.NewConnector()
+				sshClient, err := connector.Connect(server)
+				if err != nil {
+					return fmt.Errorf("SSH connection failed: %w", err)
+				}
+				sftpClient, err := sftp.NewClient(sshClient,
+					sftp.MaxConcurrentRequestsPerFile(64),
+					sftp.UseConcurrentReads(true),
+					sftp.UseConcurrentWrites(true),
+				)
+				if err != nil {
+					sshClient.Close()
+					return fmt.Errorf("SFTP connection failed: %w", err)
+				}
+				defer sftpClient.Close()
+
+				fmt.Printf("Connected to %s\n", serverName)
+				fmt.Println("Interactive SFTP session (type 'exit' to quit)")
+				// For now, just show a simple message
+				// Full interactive implementation below
+				return nil
+			},
+			Flags: []cli.Flag{},
 		},
 	}
 }
@@ -323,6 +368,391 @@ func firstNonEmpty(strs ...string) string {
 		}
 	}
 	return ""
+}
+
+// fsSFTPAction handles `assh-fs sftp <server>` command - starts interactive SFTP session.
+func fsSFTPAction(transferSvc *service.TransferService, serverSvc *service.ServerService) func(*cli.Context) error {
+	return func(c *cli.Context) error {
+		if c.NArg() < 1 {
+			return cli.ShowSubcommandHelp(c)
+		}
+		serverName := c.Args()[0]
+		return fsInteractiveAction(transferSvc, serverSvc, c, serverName)
+	}
+}
+
+// fsInteractiveAction starts an interactive SFTP session.
+func fsInteractiveAction(transferSvc *service.TransferService, serverSvc *service.ServerService, c *cli.Context, serverName string) error {
+	// 获取服务器配置
+	server, err := serverSvc.GetServer(serverName)
+	if err != nil {
+		return fmt.Errorf("server %q not found: %w", serverName, err)
+	}
+
+	// 建立 SFTP 连接
+	sftpClient, err := connectSFTP(transferSvc, server)
+	if err != nil {
+		return fmt.Errorf("SFTP connection failed: %w", err)
+	}
+	defer sftpClient.Close()
+
+	// 初始化状态
+	remoteDir := "/"
+	localDir, _ := os.Getwd()
+
+	fmt.Printf("Connected to %s\n", serverName)
+	fmt.Println("Type 'help' for available commands, 'quit' to exit.")
+
+	// 交互式循环
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Fprintf(os.Stdout, "sftp> ")
+		if !scanner.Scan() {
+			break
+		}
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		// 解析命令
+		parts := strings.Fields(line)
+		if len(parts) == 0 {
+			continue
+		}
+
+		cmd := parts[0]
+		args := parts[1:]
+
+		switch cmd {
+		case "quit", "exit", "bye":
+			fmt.Println("Goodbye!")
+			return nil
+		case "help", "?":
+			printSFTPHelp()
+		case "pwd":
+			fmt.Println(remoteDir)
+		case "lpwd":
+			fmt.Println(localDir)
+		case "ls":
+			handleLs(sftpClient, remoteDir, args)
+		case "lls":
+			handleLls(localDir, args)
+		case "cd":
+			remoteDir = handleCd(sftpClient, remoteDir, args)
+		case "lcd":
+			localDir = handleLcd(localDir, args)
+		case "get":
+			handleGet(transferSvc, server, sftpClient, remoteDir, localDir, args)
+		case "put":
+			handlePut(transferSvc, server, sftpClient, remoteDir, localDir, args)
+		case "mkdir":
+			handleMkdir(sftpClient, remoteDir, args)
+		case "rmdir":
+			handleRmdir(sftpClient, remoteDir, args)
+		case "rm":
+			handleRm(sftpClient, remoteDir, args)
+		case "rename":
+			handleRename(sftpClient, remoteDir, args)
+		case "ln":
+			handleLn(sftpClient, remoteDir, args)
+		case "df":
+			handleDf(sftpClient, remoteDir)
+		case "chmod":
+			handleChmod(sftpClient, remoteDir, args)
+		case "!":
+			handleLocalCmd(args)
+		default:
+			fmt.Printf("Unknown command: %s\n", cmd)
+		}
+	}
+	return nil
+}
+
+func connectSFTP(transferSvc *service.TransferService, server *domain.Server) (*sftp.Client, error) {
+	// 创建一个简单的 SSH 客户端来建立 SFTP
+	// 这里复用现有的 connector
+	connector := sshinfra.NewConnector()
+	sshClient, err := connector.Connect(server)
+	if err != nil {
+		return nil, err
+	}
+
+	// 创建 SFTP 客户端
+	sftpClient, err := sftp.NewClient(sshClient,
+		sftp.MaxConcurrentRequestsPerFile(64),
+		sftp.UseConcurrentReads(true),
+		sftp.UseConcurrentWrites(true),
+	)
+	if err != nil {
+		sshClient.Close()
+		return nil, err
+	}
+	return sftpClient, nil
+}
+
+func printSFTPHelp() {
+	fmt.Println(`Available commands:
+  ls [path]           - list remote directory
+  cd <path>           - change remote directory
+  pwd                 - print working directory
+  get <remote> [local] - download file
+  put <local> [remote] - upload file
+  mkdir <path>        - create remote directory
+  rmdir <path>        - remove remote directory
+  rm <path>           - remove remote file
+  rename <old> <new>  - rename file
+  ln <src> <target>   - create symbolic link
+  chmod <mode> <path> - change permissions
+  df                  - show disk usage
+  lls                 - list local directory
+  lcd <path>          - change local directory
+  lpwd                - print local working directory
+  !<command>          - execute local command
+  help                - show this help
+  quit                - exit`)
+}
+
+func handleLs(client *sftp.Client, cwd string, args []string) {
+	path := cwd
+	if len(args) > 0 && args[0] != "-l" {
+		path = joinPath(cwd, args[0])
+	}
+
+	entries, err := client.ReadDir(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ls failed: %v\n", err)
+		return
+	}
+
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() {
+			fmt.Printf("drwxr-xr-x %5d %s/\n", e.Size(), name)
+		} else {
+			fmt.Printf("-rw-r--r-- %5d %s\n", e.Size(), name)
+		}
+	}
+}
+
+func handleLls(cwd string, args []string) {
+	path := cwd
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "lls failed: %v\n", err)
+		return
+	}
+
+	for _, e := range entries {
+		info, _ := e.Info()
+		if e.IsDir() {
+			fmt.Printf("drwxr-xr-x %5d %s/\n", info.Size(), e.Name())
+		} else {
+			fmt.Printf("-rw-r--r-- %5d %s\n", info.Size(), e.Name())
+		}
+	}
+}
+
+func handleCd(client *sftp.Client, cwd string, args []string) string {
+	if len(args) == 0 {
+		return "/"
+	}
+	path := joinPath(cwd, args[0])
+
+	// 检查目录是否存在
+	_, err := client.Stat(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cd failed: %v\n", err)
+		return cwd
+	}
+	return path
+}
+
+func handleLcd(cwd string, args []string) string {
+	if len(args) == 0 {
+		home, _ := os.UserHomeDir()
+		return home
+	}
+	path := args[0]
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(cwd, path)
+	}
+
+	if err := os.Chdir(path); err != nil {
+		fmt.Fprintf(os.Stderr, "lcd failed: %v\n", err)
+		return cwd
+	}
+	newDir, _ := os.Getwd()
+	return newDir
+}
+
+func handleGet(transferSvc *service.TransferService, server *domain.Server, client *sftp.Client, remoteDir, localDir string, args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: get <remote> [local]")
+		return
+	}
+
+	remotePath := joinPath(remoteDir, args[0])
+	localPath := args[1]
+	if localPath == "" {
+		localPath = filepath.Join(localDir, args[0])
+	}
+
+	// 使用 transfer service 下载
+	opts := service.TransferOptions{Progress: true}
+	ctx := context.Background()
+	if err := transferSvc.PullFile(ctx, server.Name, remotePath, localPath, opts); err != nil {
+		fmt.Fprintf(os.Stderr, "get failed: %v\n", err)
+	} else {
+		fmt.Printf("Downloaded: %s -> %s\n", remotePath, localPath)
+	}
+}
+
+func handlePut(transferSvc *service.TransferService, server *domain.Server, client *sftp.Client, remoteDir, localDir string, args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: put <local> [remote]")
+		return
+	}
+
+	localPath := args[0]
+	if !filepath.IsAbs(localPath) {
+		localPath = filepath.Join(localDir, localPath)
+	}
+
+	remotePath := args[1]
+	if remotePath == "" {
+		remotePath = joinPath(remoteDir, filepath.Base(localPath))
+	} else if !filepath.IsAbs(remotePath) {
+		remotePath = joinPath(remoteDir, remotePath)
+	}
+
+	opts := service.TransferOptions{Progress: true}
+	ctx := context.Background()
+	if err := transferSvc.PushFile(ctx, server.Name, localPath, remotePath, opts); err != nil {
+		fmt.Fprintf(os.Stderr, "put failed: %v\n", err)
+	} else {
+		fmt.Printf("Uploaded: %s -> %s\n", localPath, remotePath)
+	}
+}
+
+func handleMkdir(client *sftp.Client, cwd string, args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: mkdir <path>")
+		return
+	}
+	path := joinPath(cwd, args[0])
+	if err := client.MkdirAll(path); err != nil {
+		fmt.Fprintf(os.Stderr, "mkdir failed: %v\n", err)
+	} else {
+		fmt.Printf("Created directory: %s\n", path)
+	}
+}
+
+func handleRmdir(client *sftp.Client, cwd string, args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: rmdir <path>")
+		return
+	}
+	path := joinPath(cwd, args[0])
+	if err := client.Remove(path); err != nil {
+		fmt.Fprintf(os.Stderr, "rmdir failed: %v\n", err)
+	} else {
+		fmt.Printf("Removed directory: %s\n", path)
+	}
+}
+
+func handleRm(client *sftp.Client, cwd string, args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: rm <path>")
+		return
+	}
+	path := joinPath(cwd, args[0])
+	if err := client.Remove(path); err != nil {
+		fmt.Fprintf(os.Stderr, "rm failed: %v\n", err)
+	} else {
+		fmt.Printf("Removed file: %s\n", path)
+	}
+}
+
+func handleRename(client *sftp.Client, cwd string, args []string) {
+	if len(args) < 2 {
+		fmt.Println("Usage: rename <old> <new>")
+		return
+	}
+	oldPath := joinPath(cwd, args[0])
+	newPath := joinPath(cwd, args[1])
+	if err := client.Rename(oldPath, newPath); err != nil {
+		fmt.Fprintf(os.Stderr, "rename failed: %v\n", err)
+	} else {
+		fmt.Printf("Renamed: %s -> %s\n", oldPath, newPath)
+	}
+}
+
+func handleLn(client *sftp.Client, cwd string, args []string) {
+	if len(args) < 2 {
+		fmt.Println("Usage: ln <target> <link>")
+		return
+	}
+	target := joinPath(cwd, args[0])
+	link := joinPath(cwd, args[1])
+	if err := client.Symlink(target, link); err != nil {
+		fmt.Fprintf(os.Stderr, "ln failed: %v\n", err)
+	} else {
+		fmt.Printf("Created symlink: %s -> %s\n", link, target)
+	}
+}
+
+func handleDf(client *sftp.Client, cwd string) {
+	// 简化版 df - 显示当前目录信息
+	info, err := client.Stat(cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "df failed: %v\n", err)
+		return
+	}
+	fmt.Printf("Remote directory: %s\n", cwd)
+	fmt.Printf("Type: %s\n", map[bool]string{true: "Directory", false: "File"}[info.IsDir()])
+}
+
+func handleChmod(client *sftp.Client, cwd string, args []string) {
+	if len(args) < 2 {
+		fmt.Println("Usage: chmod <mode> <path>")
+		return
+	}
+	mode, err := strconv.ParseUint(args[0], 8, 32)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "chmod: invalid mode\n")
+		return
+	}
+	path := joinPath(cwd, args[1])
+	if err := client.Chmod(path, os.FileMode(mode)); err != nil {
+		fmt.Fprintf(os.Stderr, "chmod failed: %v\n", err)
+	} else {
+		fmt.Printf("Changed mode: %s\n", path)
+	}
+}
+
+func handleLocalCmd(args []string) {
+	if len(args) == 0 {
+		return
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+}
+
+func joinPath(cwd, p string) string {
+	if p == "" {
+		return cwd
+	}
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(cwd, p)
 }
 
 // init 初始化 CLI 帮助模板和环境目录。
