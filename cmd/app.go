@@ -46,7 +46,47 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 	a.setupGlobalFlags()
 	app.Action = a.defaultAction
 	a.registerCommands()
+
+	// 为需要服务器名补全的命令注册 BashComplete
+	a.registerCompletionHints()
+
 	return a
+}
+
+// registerCompletionHints 为各命令注册 shell 补全函数。
+// 为 info/rm/mv/rollback/login/run/bc 提供服务器名补全。
+func (a *App) registerCompletionHints() {
+	serverNameCommands := []string{"info", "rm", "mv", "rollback", "login", "run", "bc"}
+
+	for i := range a.cli.Commands {
+		cmd := &a.cli.Commands[i]
+		for _, name := range serverNameCommands {
+			if cmd.Name == name {
+				cmd.BashComplete = a.serverNameCompletion
+			}
+		}
+	}
+}
+
+// serverNameCompletion 提供服务器名补全。
+// 当用户在命令后按 Tab 时，自动补全已保存的服务器名称。
+func (a *App) serverNameCompletion(c *cli.Context) {
+	if a.serverSvc == nil {
+		return
+	}
+
+	// 获取所有服务器
+	servers, err := a.serverSvc.ListServers()
+	if err != nil {
+		return
+	}
+
+	// 输出所有服务器名（bash 会自动根据已输入内容过滤）
+	for group, groupServers := range servers {
+		for name := range groupServers {
+			fmt.Println(domain.JoinName(group, name))
+		}
+	}
 }
 
 // Run 启动 CLI 应用，解析参数并执行对应命令。
