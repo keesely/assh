@@ -55,7 +55,7 @@ Get(name):
 1. **优点**：
    - **无感体验**：用户无需输入密码即可使用 assh
    - **自动管理**：密钥首次自动生成，后续完全无感
-   - **可同步**：密钥随 SQLite 一起同步（Phase 6），多机器共享
+   - **可同步**：密钥随 SQLite 一起同步（Phase 8），多机器共享
    - **安全**：AES-GCM 提供认证加密（integrity + confidentiality）
 
 2. **缺点**：
@@ -65,7 +65,7 @@ Get(name):
 3. **风险缓解**：
    - SQLite 文件存储在 `~/.assh/v2/`（默认 0700 权限）
    - 服务器密码本身是 SSH 凭据，安全性等价于 SSH 私钥文件保护
-   - Phase 6 的 account 密码可额外加密数据库
+   - Phase 8 的 account 密码可额外加密数据库
 
 ## Related
 

@@ -5,7 +5,7 @@
 - 数据库文件：`~/.assh/v2/asshv2.db`（SQLite，含 servers 表 + config 表）
 - 配置文件：`~/.assh/v2/assh.yml`（RSA 加密，Phase 1 已实现）
 - 密钥文件：`~/.assh/v2/.rsa`, `~/.assh/v2/.rsa.pub`（RSA 密钥对）
-- 密码文件：`~/.assh/v2/.account`（Phase 7 云同步时实现）
+- 密码文件：`~/.assh/v2/.account`（Phase 8 云同步时实现）
 
 ## 数据库结构
 
@@ -18,7 +18,7 @@
 | `server_changelog` | 服务器配置变更记录 | 每条记录一个版本快照（JSON），支持回滚 |
 
 > 静态密钥（AES-256）首次运行时自动生成，base64 编码存入 `config` 表。
-> 密钥随数据库一起同步（Phase 7 云同步），支持多机器共享。
+> 密钥随数据库一起同步（Phase 8 云同步），支持多机器共享。
 
 ### servers 表
 

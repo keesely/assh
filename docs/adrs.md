@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 16 |
+| accepted | 19 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -24,13 +24,16 @@
 | ADR-007 | CLI 日志参数简化：移除日志级别参数 | accepted | 2026-05-08 |
 | ADR-008 | 废弃加密 JSON 文件，改用 SQLite 数据库 | accepted | 2026-05-09 |
 | ADR-009 | 服务器密码采用 AES-256-GCM 静态密钥加密 | accepted | 2026-05-09 |
-| ADR-010 | AuthService 延后至 Phase 6 | accepted | 2026-05-09 |
+| ADR-010 | AuthService 延后至 Phase 8 | accepted | 2026-05-09 |
 | ADR-011 | SSH 连接层架构设计：接口分离 + 可配置 HostKey + Keepalive | accepted | 2026-05-09 |
 | ADR-012 | CLI 参数对齐与命令架构：与 ssh 兼容 + 自动识别 + bc 三通道 | accepted | 2026-05-09 |
 | ADR-013 | 配置版本管理与回滚机制：快照式 changelog + rollback | accepted | 2026-05-09 |
 | ADR-014 | server 命令组扁平化上移顶层 | accepted | 2026-05-10 |
 | ADR-015 | ls 命令输出格式优化（Remark列/合并Host列/颜色样式） | accepted | 2026-05-10 |
 | ADR-016 | 顶层默认登录行为（v1 兼容）：assh \<target\> 直连 | accepted | 2026-05-10 |
+| ADR-017 | SFTP 文件传输架构设计：基于 pkg/sftp 实现文件传输 | accepted | 2026-05-10 |
+| ADR-018 | known-servers 隐性表：未具名服务器直连记录 | accepted | 2026-05-10 |
+| ADR-019 | 传输文件 Hash Header：断点续传安全验证 | accepted | 2026-05-10 |
 
 ## 新增 ADR
 
@@ -71,7 +74,7 @@ YYYY-MM-DD
 |-----|------|------|
 | ADR-008 | 文件存储 → SQLite | 存储引擎、依赖、数据结构 |
 | ADR-009 | AES-CBC+密码 → AES-GCM+静态密钥 | 安全模型、密钥管理 |
-| ADR-010 | Phase 2 AuthService → Phase 6 | 职责划分、发布计划 |
+| ADR-010 | Phase 2 AuthService → Phase 8 | 职责划分、发布计划 |
 
 详细内容见对应 ADR 文件。
 
@@ -98,5 +101,21 @@ YYYY-MM-DD
 | ADR-016 | 顶层默认登录行为（v1 兼容） | `assh \<target\>` 直连，不再需要显式 `login` 命令 |
 
 **Phase 4 细化（2026-05-10）**：info 格式重构（居中标题 + Auth Type + 首字母大写标签）、ls 自适应列宽、info/默认 Action 模糊建议（前缀匹配 + Levenshtein）。以上为 UX 增强，未涉及架构变更，无需新增 ADR。
+
+## Phase 5 ADR 变更摘要
+
+本次 Phase 5 引入的关键架构决策：
+
+| ADR | 变更 | 影响 |
+|-----|------|------|
+| ADR-017 | 引入 pkg/sftp 实现 SFTP 文件传输 + **二进制拆分（assh vs assh-fs）** | 新增依赖、`cmd/fs/main.go` 独立入口、`cmd/bootstrap.go` 共享初始化、`cmd/sftp_cmd.go` 共享命令定义、`infra/sftp/` 下 6 文件、双二进制构建脚本改造 |
+| ADR-019 | **Hash Header 断点续传安全验证** | 新增 `infra/sftp/header.go`（256B 固定头部）、修改 upload/download 流程加入 hash 验证、传输完成后剥离头部 |
+
+**二进制拆分要点**：
+- `assh`：SSH 客户端主二进制（shell/run/bc/server 管理）
+- `assh-fs`：文件系统工具独立二进制（push/pull/sftp 交互）
+- 共享核心：`asshc/` 下所有 domain/port/service/infra 模块
+- 共享初始化：`cmd/bootstrap.go` 提供 `NewAppComponents()` 
+- 短期承载 SFTP 文件传输，未来可扩展挂载功能（Phase 11）
 
 详细内容见对应 ADR 文件。

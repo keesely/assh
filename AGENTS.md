@@ -4,8 +4,9 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 4 完成, Phase 5 待开始 2026/05/09)
+- **Version**: v2.0.0 (Phase 4 完成, Phase 5 SFTP 开发中 2026/05/10)
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
+- **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
 - **数据库**: SQLite (modernc.org/sqlite, 纯 Go 无 CGO)
@@ -22,37 +23,52 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ### 架构分层
 
-采用 **port / service / infra** 三层架构：
+采用 **port / service / infra** 三层架构，构建为两个独立二进制共享同一核心：
 
 ```
-cmd/ (CLI 命令)
-  └── service/ (用例编排, 依赖 port 接口)
-        ├── port/ (接口定义, 依赖倒置)
-        └── infra/ (接口实现, 依赖具体库)
+assh (main.go)              assh-fs (cmd/fs/main.go)
+  SSH 连接/管理              文件系统操作（SFTP + 挂载）
+  ├── login/run/bc          ├── push/pull
+  ├── server add/set/...    └── <server> (交互式 FS)
+  │                                    │
+  └────────── 共用核心层 ──────────────┘
+        ┌──────────────────┐
+        │ cmd/bootstrap.go │ → NewAppComponents() 共享初始化
+        │ asshc/           │ → 三层核心业务
+        │ config/ + log/   │ → 公共模块
+        └──────────────────┘
 ```
 
 关键约束：
 - `service/` 只依赖 `port/` 接口 + `domain/` 实体，不直接依赖 `infra/`
-- 所有依赖通过构造器注入（组合根在 `main.go`）
+- 所有依赖通过构造器注入（两个组合根：`main.go` + `cmd/fs/main.go`）
+- `cmd/bootstrap.go` 提供 `NewAppComponents()` 共享 DB/SSH 初始化
 
 ### 项目结构
 
 ```
 asshv2/
-├── main.go              # 程序入口（DI 组合根）
+├── main.go              # assh 入口（DI 组合根）
 ├── cmd/                 # CLI 命令层
-├── asshc/               # 核心业务
-│   ├── domain/          #   领域实体
-│   ├── port/            #   接口定义
-│   ├── service/         #   用例编排
-│   └── infra/           #   接口实现
+│   ├── app.go           # assh App 组装
+│   ├── server.go        # 服务器管理
+│   ├── connect.go       # SSH 连接命令
+│   ├── sftp_cmd.go      # push/pull/FS 命令定义（assh-fs 共享）
+│   ├── bootstrap.go     # 公共初始化逻辑（DB/Service）
+│   └── fs/
+│       └── main.go      # assh-fs 入口（DI 组合根）
+├── asshc/               # 核心业务（assh + assh-fs 共享）
+│   ├── domain/
+│   ├── port/
+│   ├── service/
+│   └── infra/
 ├── config/              # 配置管理
 ├── log/                 # 日志模块
-├── README.md            # 用户手册
-└── CHANGELOG.md         # 更新日志
+├── README.md
+└── CHANGELOG.md
 ```
 
-### 开发阶段 (Phase 0-11 + 实验阶段)
+### 开发阶段 (Phase 0-12 + 实验阶段)
 
 | Phase | 内容 | 状态 |
 |-------|------|------|
@@ -61,13 +77,14 @@ asshv2/
 | 2 | 数据持久化层 (SQLite + AES-GCM) | ✅ 完成 |
 | 3 | SSH 连接层 | ✅ 完成 |
 | **4** | **CLI 命令组装** | **✅ 完成 (2026-05-10)** |
-| 5 | SFTP 文件传输 | ⏳ 待开始 |
-| 6 | 代理 & 隧道 (SOCKS5/端口转发/SSH隧道) | ⏳ |
-| 7 | 云同步 (Qiniu) | ⏳ |
-| 8 | 服务器健康检查 | ⏳ |
-| 9 | 跳板机/堡垒机支持 | ⏳ |
-| 10 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ |
-| 11 | 自动更新/升级 | ⏳ |
+| **5** | **SFTP 文件传输** | **⏳ 开发中 (2026-05-10)** |
+| **6** | **密钥管理 (Key Management)** | **⏳ 规划中** |
+| 7 | 代理 & 隧道 (SOCKS5/端口转发/SSH隧道) | ⏳ |
+| 8 | 云同步 (Qiniu) | ⏳ |
+| 9 | 服务器健康检查 | ⏳ |
+| 10 | 跳板机/堡垒机支持 | ⏳ |
+| 11 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ |
+| 12 | 自动更新/升级 | ⏳ |
 | X | 实验阶段：虚拟命令投放与执行 | ⏳ |
 
 ### 分支命名规范

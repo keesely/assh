@@ -66,7 +66,7 @@ CREATE TABLE config (
    - 支持 SQL 查询（搜索、分组、排序）
    - 纯 Go 无 CGO，跨平台编译无障碍
    - SQLite 本身支持事务和并发
-   - 数据文件可作为整体被云同步（Phase 6）
+   - 数据文件可作为整体被云同步（Phase 8）
 
 2. **缺点**：
    - 新增 `modernc.org/sqlite` 依赖（~5MB 二进制体积增加）

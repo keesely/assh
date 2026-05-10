@@ -30,22 +30,25 @@
 
 ```
 asshv2/
-├── main.go                    # 程序入口（组合根, DI 注入）
-├── build.sh                   # 构建脚本
+├── main.go                    # assh 入口（组合根, DI 注入）
+├── build.sh                   # 构建脚本（构建 assh + assh-fs）
 ├── go.mod / go.sum            # 模块定义
 │
 ├── cmd/                       # CLI 命令层 (urfave/cli)
-│   ├── app.go                 # App 组装、命令注册
+│   ├── app.go                 # assh App 组装、命令注册
 │   ├── server.go              # 服务器管理命令
 │   ├── connect.go             # SSH 连接命令
-│   ├── sftp.go                # 文件传输命令
+│   ├── sftp_cmd.go            # push/pull/FS 命令定义（assh-fs 共享）NEW
+│   ├── fs/
+│   │   └── main.go            # assh-fs 入口（DI 组合根）NEW
+│   ├── bootstrap.go           # 公共初始化逻辑 NEW
 │   ├── proxy.go               # 代理命令
 │   ├── sync.go                # 云同步命令
 │   ├── keygen.go              # 密钥生成命令
 │   ├── upgrade.go             # 升级命令
 │   └── qiniu/                 # 七牛子命令
 │
-├── asshc/                     # 核心业务库（私有封装）
+├── asshc/                     # 核心业务库（私有封装，assh + assh-fs 共享）
 │   ├── domain/                # 领域实体（零依赖）
 │   │   ├── server.go          # Server 实体
 │   │   └── errors.go          # 领域错误
@@ -77,7 +80,12 @@ asshv2/
 │       │   ├── client.go
 │       │   └── session.go
 │       ├── sftp/              # SFTP 协议
-│       │   └── handler.go
+│       │   ├── client.go
+│       │   ├── upload.go
+│       │   ├── download.go
+│       │   ├── ops.go
+│       │   ├── progress.go
+│       │   └── verify.go
 │       ├── tunnel/            # SSH 隧道
 │       │   └── tunnel.go
 │       ├── proxy/             # 代理协议
@@ -89,11 +97,11 @@ asshv2/
 │               ├── bucket.go
 │               └── utils.go
 │
-├── config/                    # 配置管理（公开 API）
+├── config/                    # 配置管理（公开 API，assh + assh-fs 共享）
 │   ├── config.go              # 全局配置变量
 │   └── path.go                # 路径管理
 │
-├── log/                       # 日志模块（公开 API）
+├── log/                       # 日志模块（公开 API，assh + assh-fs 共享）
 │   ├── log.go
 │   └── log_test.go
 │
@@ -236,13 +244,14 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 | 2 | domain + repository + SQLite store + service | config, log, sqlite | 6 |
 | 3 | ssh connector + session + hostkey | Phase 2 (domain/repository), config, log | 7 (+ tests) |
 | 4 | cmd 组装 | 所有以上 | 5 |
-| 5 | sftp | ssh | 4 |
-| 6 | 代理 & 隧道 (SOCKS5/端口转发/SSH隧道) | ssh | 6 |
-| 7 | 云同步 (Qiniu) | 无 | 6 |
-| 8 | 服务器健康检查 | ssh + CLI | 4 |
-| 9 | 跳板机/堡垒机 | ssh | 5 |
-| 10 | 远程挂载 (sshfs/webdav/samba) | ssh | 6 |
-| 11 | 自动更新/升级 | CLI | 4 |
+| 5 | sftp + push/pull 命令 | ssh, pkg/sftp | 8 (+ tests) |
+| 6 | 密钥管理 (Key Management) | SQLite + SSH | 4 (+ tests) |
+| 7 | 代理 & 隧道 (SOCKS5/端口转发/SSH隧道) | ssh | 6 |
+| 8 | 云同步 (Qiniu) | 无 | 6 |
+| 9 | 服务器健康检查 | ssh + CLI | 4 |
+| 10 | 跳板机/堡垒机 | ssh | 5 |
+| 11 | 远程挂载 (sshfs/webdav/samba) | ssh | 6 |
+| 12 | 自动更新/升级 | CLI | 4 |
 | X | 实验阶段: 虚拟命令 | CLI + 实验性 | 4 |
 
 详细任务清单见 [TODO.md](TODO.md)。
@@ -258,7 +267,7 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 | ~/.assh/v2 | 配置目录 |
 | ~/.assh/v2/.rsa | RSA 私钥 |
 | ~/.assh/v2/.rsa.pub | RSA 公钥 |
-| ~/.assh/v2/.account | RSA 加密密码（Phase 6） |
+| ~/.assh/v2/.account | RSA 加密密码（Phase 8） |
 | ~/.assh/v2/assh.yml | RSA 加密配置 |
 | ~/.assh/v2/asshv2.db | SQLite 数据库（服务器数据 + AES 静态密钥） |
 
