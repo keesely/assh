@@ -323,6 +323,20 @@ func (s *TransferService) ListRemote(name, remotePath string) ([]port.FileInfo, 
 	return files, nil
 }
 
+// ListRemoteDirect lists a remote directory using a pre-constructed server config (for direct connections).
+func (s *TransferService) ListRemoteDirect(server *domain.Server, remotePath string) ([]port.FileInfo, error) {
+	if remotePath == "" {
+		remotePath = "."
+	}
+
+	files, err := s.transfer.List(server, remotePath)
+	if err != nil {
+		return nil, fmt.Errorf("list failed: %w", err)
+	}
+
+	return files, nil
+}
+
 func (s *TransferService) RemoveRemote(name, remotePath string) error {
 	server, err := s.getServer(name)
 	if err != nil {

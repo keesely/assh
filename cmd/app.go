@@ -17,6 +17,7 @@ import (
 
 	"assh/asshc/domain"
 	sshinfra "assh/asshc/infra/ssh"
+	transferport "assh/asshc/port"
 	"assh/asshc/service"
 	"assh/config"
 	"assh/log"
@@ -286,12 +287,59 @@ func fsPushAction(transferSvc *service.TransferService, serverSvc *service.Serve
 			opts.Overwrite = "skip"
 		}
 
-		ctx := context.Background()
+ctx := context.Background()
+
+		// F14: Glob pattern expansion for local files
+		matches, err := filepath.Glob(localPath)
+		if err != nil {
+			return fmt.Errorf("invalid glob pattern: %w", err)
+		}
+
+		// Handle glob matches (flatten to target directory)
+		hasGlobChars := strings.ContainsAny(localPath, "*?[]")
+		if hasGlobChars && len(matches) > 0 {
+			// Glob pattern matched multiple files
+			fmt.Printf("Found %d files matching pattern, uploading...\n", len(matches))
+			for _, file := range matches {
+				// Get filename for remote path
+				fileName := filepath.Base(file)
+				destPath := remotePath
+				if !strings.HasSuffix(remotePath, "/") {
+					destPath = remotePath + "/" + fileName
+				} else {
+					destPath = remotePath + fileName
+				}
+
+				if host != "" {
+					server := &domain.Server{
+						Name: "direct-" + host,
+						Host: host,
+						Port: port,
+						User: user,
+						Auth: &domain.Auth{
+							Password: password,
+							KeyFile:   identityFile,
+						},
+					}
+					if err := transferSvc.PushFileDirect(ctx, server, file, destPath, opts); err != nil {
+						return fmt.Errorf("push %s failed: %w", file, err)
+					}
+				} else {
+					if err := transferSvc.PushFile(ctx, name, file, destPath, opts); err != nil {
+						return fmt.Errorf("push %s failed: %w", file, err)
+					}
+				}
+			}
+			fmt.Println("push completed")
+			return nil
+		} else if hasGlobChars && len(matches) == 0 {
+			return fmt.Errorf("no matching files for pattern: %s", localPath)
+		}
 
 		// Direct connection mode
 		if host != "" {
 			// Create a temporary server config for direct connection
-server := &domain.Server{
+			server := &domain.Server{
 				Name: "direct-" + host,
 				Host: host,
 				Port: port,
@@ -368,6 +416,87 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 		}
 
 		ctx := context.Background()
+
+		// F20: Remote glob pattern expansion for pull
+		hasGlobChars := strings.ContainsAny(remotePath, "*?[]")
+		if hasGlobChars {
+			listDir := filepath.Dir(remotePath)
+			pattern := filepath.Base(remotePath)
+
+			// List remote directory
+			var files []transferport.FileInfo
+			var err error
+			if host != "" {
+				server := &domain.Server{
+					Name: "direct-" + host,
+					Host: host,
+					Port: port,
+					User: user,
+					Auth: &domain.Auth{
+						Password: password,
+						KeyFile:   identityFile,
+					},
+				}
+				files, err = transferSvc.ListRemoteDirect(server, listDir)
+			} else {
+				files, err = transferSvc.ListRemote(name, listDir)
+			}
+			if err != nil {
+				return fmt.Errorf("list remote directory failed: %w", err)
+			}
+
+			// Filter matching files
+			var matchedFiles []string
+			for _, f := range files {
+				if f.IsDir {
+					continue
+				}
+				matched, err := filepath.Match(pattern, f.Name)
+				if err != nil {
+					return fmt.Errorf("invalid glob pattern: %w", err)
+				}
+				if matched {
+					matchedFiles = append(matchedFiles, f.Name)
+				}
+			}
+
+			if len(matchedFiles) == 0 {
+				return fmt.Errorf("no matching files for pattern: %s", remotePath)
+			}
+
+			fmt.Printf("Found %d files matching pattern, downloading...\n", len(matchedFiles))
+			for _, fileName := range matchedFiles {
+				fullRemotePath := listDir + "/" + fileName
+				localDest := localPath
+				if !strings.HasSuffix(localPath, "/") {
+					localDest = localPath + "/" + fileName
+				} else {
+					localDest = localPath + fileName
+				}
+
+				if host != "" {
+					server := &domain.Server{
+						Name: "direct-" + host,
+						Host: host,
+						Port: port,
+						User: user,
+						Auth: &domain.Auth{
+							Password: password,
+							KeyFile:   identityFile,
+						},
+					}
+					if err := transferSvc.PullFileDirect(ctx, server, fullRemotePath, localDest, opts); err != nil {
+						return fmt.Errorf("pull %s failed: %w", fileName, err)
+					}
+				} else {
+					if err := transferSvc.PullFile(ctx, name, fullRemotePath, localDest, opts); err != nil {
+						return fmt.Errorf("pull %s failed: %w", fileName, err)
+					}
+				}
+			}
+			fmt.Println("pull completed")
+			return nil
+		}
 
 		// Direct connection mode
 		if host != "" {
