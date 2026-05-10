@@ -389,12 +389,13 @@ func (a *App) printServerDetail(s *domain.Server) {
 	fmt.Printf("Port:    %d\n", s.Port)
 	fmt.Printf("User:    %s\n", s.User)
 	if s.Auth != nil {
-		switch {
-		case s.Auth.KeyFile != "":
-			fmt.Printf("Auth:    key (%s)\n", s.Auth.KeyFile)
-		case s.Auth.Password != "":
-			fmt.Printf("Auth:    password\n")
-		default:
+		if s.Auth.Password != "" {
+			fmt.Printf("Password:%s\n", s.Auth.Password)
+		}
+		if s.Auth.KeyFile != "" {
+			fmt.Printf("KeyFile: %s\n", s.Auth.KeyFile)
+		}
+		if s.Auth.Password == "" && s.Auth.KeyFile == "" {
 			fmt.Printf("Auth:    none\n")
 		}
 	} else {
