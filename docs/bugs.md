@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| fixed | 3 |
+| fixed | 4 |
 | known | 0 |
 | in-progress | 0 |
 
@@ -17,6 +17,7 @@
 | BUG-001 | log模块Fatal/Panic测试导致进程退出 | fixed | 2026-05-08 |
 | BUG-002 | lib/qiniu getCfg不可达代码 | fixed | 2026-05-08 |
 | BUG-003 | log级别过滤测试期望值颠倒 | fixed | 2026-05-08 |
+| BUG-004 | 顶层默认 Action 短参数（-p/-P/-u 等）未解析 | fixed | 2026-05-10 |
 
 ## 新增 Bug
 
