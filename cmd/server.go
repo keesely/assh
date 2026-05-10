@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -149,6 +150,16 @@ func (a *App) serverAddAction(c *cli.Context) error {
 		Options: options,
 	}
 
+	// 1) Preview
+	a.previewServer(server, name)
+
+	// 2) Confirm
+	if !a.askConfirmation(fmt.Sprintf("Add server %q?", name)) {
+		fmt.Println("cancelled")
+		return nil
+	}
+
+	// 3) Execute
 	if err := a.serverSvc.AddServer(name, server); err != nil {
 		return err
 	}
@@ -182,6 +193,10 @@ func (a *App) serverSetAction(c *cli.Context) error {
 	if !hasChanges && len(c.StringSlice("option")) > 0 {
 		hasChanges = true
 	}
+
+	// 构建待保存的服务器对象
+	var serverToSave *domain.Server
+	action := "update" // or "create"
 
 	if isNew {
 		// --- 创建分支 ---
@@ -226,7 +241,7 @@ func (a *App) serverSetAction(c *cli.Context) error {
 			}
 		}
 
-		server := &domain.Server{
+		serverToSave = &domain.Server{
 			Host:    host,
 			Port:    port,
 			User:    user,
@@ -234,12 +249,7 @@ func (a *App) serverSetAction(c *cli.Context) error {
 			Remark:  c.String("remark"),
 			Options: options,
 		}
-
-		if err := a.serverSvc.SetServer(name, server); err != nil {
-			return err
-		}
-
-		fmt.Printf("server %q created (v%d)\n", name, 1)
+		action = "create"
 	} else {
 		// --- 更新分支 ---
 		if !hasChanges {
@@ -316,11 +326,28 @@ func (a *App) serverSetAction(c *cli.Context) error {
 			updated.Auth = nil
 		}
 
-		if err := a.serverSvc.SetServer(name, &updated); err != nil {
-			return err
-		}
+		serverToSave = &updated
+		action = "update"
+	}
 
-		// 更新后读取最新版本号并显示
+	// 1) Preview
+	a.previewServer(serverToSave, name)
+
+	// 2) Confirm
+	confirmMsg := fmt.Sprintf("%s server %q?", action, name)
+	if !a.askConfirmation(confirmMsg) {
+		fmt.Println("cancelled")
+		return nil
+	}
+
+	// 3) Execute
+	if err := a.serverSvc.SetServer(name, serverToSave); err != nil {
+		return err
+	}
+
+	if action == "create" {
+		fmt.Printf("server %q created (v%d)\n", name, 1)
+	} else {
 		after, err := a.serverSvc.GetServer(name)
 		if err == nil {
 			fmt.Printf("server %q updated (v%d)\n", name, after.Version)
@@ -632,4 +659,56 @@ func (a *App) serverMoveAction(c *cli.Context) error {
 
 	fmt.Printf("server %q moved to %q\n", from, to)
 	return nil
+}
+
+// previewServer 预览服务器配置信息，用于 add/set 确认前的预览。
+// 显示格式简洁，便于用户确认。
+func (a *App) previewServer(s *domain.Server, name string) {
+	group, serverName := domain.ParseName(name)
+	fullName := domain.JoinName(group, serverName)
+
+	fmt.Println("=== Server Preview ===")
+	fmt.Printf("Name:    %s\n", fullName)
+	fmt.Printf("Host:    %s\n", s.Host)
+	fmt.Printf("Port:    %d\n", s.Port)
+	fmt.Printf("User:    %s\n", s.User)
+
+	if s.Auth != nil {
+		hasPwd := s.Auth.Password != ""
+		hasKey := s.Auth.KeyFile != ""
+		switch {
+		case hasPwd && hasKey:
+			fmt.Printf("Auth:    password+key\n")
+		case hasPwd:
+			fmt.Printf("Auth:    password\n")
+		case hasKey:
+			fmt.Printf("Auth:    key\n")
+		default:
+			fmt.Printf("Auth:    none\n")
+		}
+		if hasKey {
+			fmt.Printf("Key:     %s\n", s.Auth.KeyFile)
+		}
+	} else {
+		fmt.Printf("Auth:    none\n")
+	}
+
+	if s.Remark != "" {
+		fmt.Printf("Remark:  %s\n", s.Remark)
+	}
+	if len(s.Options) > 0 {
+		fmt.Printf("Options: %v\n", s.Options)
+	}
+}
+
+// askConfirmation 询问用户确认，返回 true 表示用户确认（Y/y/yes）。
+func (a *App) askConfirmation(prompt string) bool {
+	fmt.Print(prompt)
+	fmt.Print(" [Y/n]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+
+	return input == "" || input == "y" || input == "yes"
 }
