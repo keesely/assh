@@ -2,16 +2,33 @@ package port
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"assh/asshc/domain"
+)
+
+var (
+	ErrHashMismatch = errors.New("hash mismatch")
+	ErrSizeMismatch = errors.New("size mismatch")
 )
 
 // TransferProgress 定义文件传输进度回调函数类型。
 // percent: 传输进度百分比 (0-100)
 // bytes: 已传输的字节数
 // total: 总字节数
-type TransferProgress func(percent int, bytes, total int64)
+type TransferProgress func(info TransferInfo)
+
+type TransferInfo struct {
+	Index      int
+	Total      int
+	FileName   string
+	Progress   float64
+	Rate       string
+	ETA        string
+	Bytes      int64
+	TotalBytes int64
+}
 
 // FileTransfer 定义文件传输接口。
 // 支持 SFTP 协议的文件上传、下载、列表和删除操作。

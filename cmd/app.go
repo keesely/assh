@@ -5,6 +5,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -51,6 +52,135 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 	a.registerCompletionHints()
 
 	return a
+}
+
+// NewFSApp creates CLI application for file transfer (assh-fs binary).
+func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService) *App {
+	app := cli.NewApp()
+	app.Name = "ASSH-FS - SFTP File Transfer"
+	app.Usage = "SFTP File Transfer Client"
+	app.EnableBashCompletion = true
+	app.HideVersion = true
+
+	a := &App{
+		cli:       app,
+		version:   version,
+		build:     build,
+		serverSvc: serverSvc,
+	}
+	app.Before = a.beforeAction
+	a.setupGlobalFlags()
+	a.registerFSCommands(transferSvc, serverSvc)
+
+	return a
+}
+
+// registerFSCommands registers file transfer commands.
+func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc *service.ServerService) {
+	a.cli.Commands = []cli.Command{
+		{
+			Name:   "version",
+			Usage:  "Print version information",
+			Action: a.versionAction,
+		},
+		{
+			Name:   "push",
+			Usage:  "Push local file to remote server",
+			Action: fsPushAction(transferSvc, serverSvc),
+			Flags: []cli.Flag{
+				cli.BoolFlag{Name: "r, recursive", Usage: "upload directory recursively"},
+				cli.BoolFlag{Name: "e, resume", Usage: "resume interrupted transfer"},
+				cli.BoolFlag{Name: "f, force", Usage: "force overwrite"},
+				cli.BoolFlag{Name: "skip", Usage: "skip existing files"},
+				cli.BoolFlag{Name: "S, checksum", Usage: "verify SHA256 checksum after transfer"},
+				cli.IntFlag{Name: "c, concurrency", Value: 3, Usage: "number of concurrent transfers"},
+			},
+		},
+		{
+			Name:   "pull",
+			Usage:  "Pull remote file to local",
+			Action: fsPullAction(transferSvc, serverSvc),
+			Flags: []cli.Flag{
+				cli.BoolFlag{Name: "r, recursive", Usage: "download directory recursively"},
+				cli.BoolFlag{Name: "e, resume", Usage: "resume interrupted transfer"},
+				cli.BoolFlag{Name: "f, force", Usage: "force overwrite"},
+				cli.BoolFlag{Name: "skip", Usage: "skip existing files"},
+				cli.BoolFlag{Name: "S, checksum", Usage: "verify SHA256 checksum after transfer"},
+				cli.IntFlag{Name: "c, concurrency", Value: 3, Usage: "number of concurrent transfers"},
+			},
+		},
+	}
+}
+
+func fsPushAction(transferSvc *service.TransferService, serverSvc *service.ServerService) func(*cli.Context) error {
+	return func(c *cli.Context) error {
+		if c.NArg() < 3 {
+			return cli.ShowSubcommandHelp(c)
+		}
+
+		name := c.Args()[0]
+		localPath := c.Args()[1]
+		remotePath := c.Args()[2]
+
+		opts := service.TransferOptions{
+			Recursive:      c.Bool("r"),
+			Resume:         c.Bool("e") || c.Bool("resume"),
+			Concurrency:    c.Int("c"),
+			Progress:       true,
+			VerifyChecksum: c.Bool("S") || c.Bool("checksum"),
+		}
+
+		if c.Bool("f") || c.Bool("force") {
+			opts.Overwrite = "force"
+		} else if c.Bool("skip") {
+			opts.Overwrite = "skip"
+		}
+
+		ctx := context.Background()
+		if err := transferSvc.PushFile(ctx, name, localPath, remotePath, opts); err != nil {
+			return fmt.Errorf("push failed: %w", err)
+		}
+
+		fmt.Println("push completed")
+		return nil
+	}
+}
+
+func fsPullAction(transferSvc *service.TransferService, serverSvc *service.ServerService) func(*cli.Context) error {
+	return func(c *cli.Context) error {
+		if c.NArg() < 2 {
+			return cli.ShowSubcommandHelp(c)
+		}
+
+		name := c.Args()[0]
+		remotePath := c.Args()[1]
+		localPath := "."
+		if c.NArg() >= 3 {
+			localPath = c.Args()[2]
+		}
+
+		opts := service.TransferOptions{
+			Recursive:      c.Bool("r"),
+			Resume:         c.Bool("e") || c.Bool("resume"),
+			Concurrency:    c.Int("c"),
+			Progress:       true,
+			VerifyChecksum: c.Bool("S") || c.Bool("checksum"),
+		}
+
+		if c.Bool("f") || c.Bool("force") {
+			opts.Overwrite = "force"
+		} else if c.Bool("skip") {
+			opts.Overwrite = "skip"
+		}
+
+		ctx := context.Background()
+		if err := transferSvc.PullFile(ctx, name, remotePath, localPath, opts); err != nil {
+			return fmt.Errorf("pull failed: %w", err)
+		}
+
+		fmt.Println("pull completed")
+		return nil
+	}
 }
 
 // registerCompletionHints 为各命令注册 shell 补全函数。

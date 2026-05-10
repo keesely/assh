@@ -3,6 +3,7 @@ module assh
 go 1.25.0
 
 require (
+	github.com/pkg/sftp v1.13.7
 	github.com/qiniu/api.v7 v7.2.5+incompatible
 	github.com/qiniu/api.v7/v7 v7.4.0
 	github.com/rs/zerolog v1.32.0
@@ -17,6 +18,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/kr/fs v0.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
@@ -24,7 +26,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
-	github.com/stretchr/testify v1.4.0 // indirect
+	github.com/stretchr/testify v1.8.0 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	modernc.org/libc v1.72.0 // indirect
