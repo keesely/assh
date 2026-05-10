@@ -12,88 +12,88 @@ import (
 	"golang.org/x/term"
 )
 
+// registerServerCommands 注册顶层 server 命令（add/set/ls/info/rm/mv/rollback）。
 func (a *App) registerServerCommands() {
-	a.cli.Commands = append(a.cli.Commands, cli.Command{
-		Name:  "server",
-		Usage: "Server management",
-		Subcommands: []cli.Command{
-			{
-				Name:      "add",
-				Usage:     "Add a server",
-				ArgsUsage: "<name>",
-				Action:    a.serverAddAction,
-				Flags: []cli.Flag{
-					cli.StringFlag{Name: "H, host", Usage: "host address (required)"},
-					cli.IntFlag{Name: "p, port", Value: 22, Usage: "port"},
-					cli.StringFlag{Name: "u, user", Usage: "username"},
-					cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
-					cli.StringFlag{Name: "P, password", Usage: "password (omit for interactive prompt)"},
-					cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
-					cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
-					cli.StringSliceFlag{Name: "o, option", Usage: "option in key=value format"},
-					cli.StringFlag{Name: "remark", Usage: "remark"},
-					cli.StringFlag{Name: "group", Usage: "group"},
-				},
-			},
-			{
-				Name:      "set",
-				Usage:     "Create or update server parameters (upsert)",
-				ArgsUsage: "<name>",
-				Action:    a.serverSetAction,
-				Flags: []cli.Flag{
-					cli.StringFlag{Name: "H, host", Usage: "host address (required for new)"},
-					cli.IntFlag{Name: "p, port", Usage: "port"},
-					cli.StringFlag{Name: "u, user", Usage: "username"},
-					cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
-					cli.StringFlag{Name: "P, password", Usage: "password"},
-					cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
-					cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
-					cli.StringSliceFlag{Name: "o, option", Usage: "add/replace option in key=value format"},
-					cli.StringFlag{Name: "remark", Usage: "remark"},
-					cli.BoolFlag{Name: "clear-password", Usage: "clear the password"},
-					cli.BoolFlag{Name: "clear-key", Usage: "clear the key file"},
-				},
-			},
-			{
-				Name:   "ls",
-				Usage:  "List servers",
-				Action: a.serverListAction,
-				Flags: []cli.Flag{
-					cli.StringFlag{Name: "group", Usage: "filter by group"},
-					cli.StringFlag{Name: "search", Usage: "search by keyword"},
-				},
-			},
-			{
-				Name:      "info",
-				Usage:     "Show server details",
-				ArgsUsage: "<name>",
-				Action:    a.serverInfoAction,
-			},
-			{
-				Name:      "rm",
-				Usage:     "Remove a server",
-				ArgsUsage: "<name>",
-				Action:    a.serverRemoveAction,
-			},
-			{
-				Name:      "mv",
-				Usage:     "Rename/move a server",
-				ArgsUsage: "<from> <to>",
-				Action:    a.serverMoveAction,
-			},
-			{
-				Name:      "rollback",
-				Usage:     "Rollback server configuration to a previous version",
-				ArgsUsage: "<name> [version]",
-				Action:    a.serverRollbackAction,
-				Flags: []cli.Flag{
-					cli.BoolFlag{Name: "list", Usage: "show changelog versions"},
-				},
+	a.cli.Commands = append(a.cli.Commands, []cli.Command{
+		{
+			Name:      "add",
+			Usage:     "Add a server",
+			ArgsUsage: "<name>",
+			Action:    a.serverAddAction,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "H, host", Usage: "host address (required)"},
+				cli.IntFlag{Name: "p, port", Value: 22, Usage: "port"},
+				cli.StringFlag{Name: "u, user", Usage: "username"},
+				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
+				cli.StringFlag{Name: "P, password", Usage: "password (omit for interactive prompt)"},
+				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
+				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+				cli.StringSliceFlag{Name: "o, option", Usage: "option in key=value format"},
+				cli.StringFlag{Name: "remark", Usage: "remark"},
+				cli.StringFlag{Name: "group", Usage: "group"},
 			},
 		},
-	})
+		{
+			Name:      "set",
+			Usage:     "Create or update server parameters (upsert)",
+			ArgsUsage: "<name>",
+			Action:    a.serverSetAction,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "H, host", Usage: "host address (required for new)"},
+				cli.IntFlag{Name: "p, port", Usage: "port"},
+				cli.StringFlag{Name: "u, user", Usage: "username"},
+				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
+				cli.StringFlag{Name: "P, password", Usage: "password"},
+				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
+				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+				cli.StringSliceFlag{Name: "o, option", Usage: "add/replace option in key=value format"},
+				cli.StringFlag{Name: "remark", Usage: "remark"},
+				cli.BoolFlag{Name: "clear-password", Usage: "clear the password"},
+				cli.BoolFlag{Name: "clear-key", Usage: "clear the key file"},
+			},
+		},
+		{
+			Name:   "ls",
+			Usage:  "List servers",
+			Action: a.serverListAction,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "group", Usage: "filter by group"},
+				cli.StringFlag{Name: "search", Usage: "search by keyword"},
+			},
+		},
+		{
+			Name:      "info",
+			Usage:     "Show server details",
+			ArgsUsage: "<name>",
+			Action:    a.serverInfoAction,
+		},
+		{
+			Name:      "rm",
+			Usage:     "Remove a server",
+			ArgsUsage: "<name>",
+			Action:    a.serverRemoveAction,
+		},
+		{
+			Name:      "mv",
+			Usage:     "Rename/move a server",
+			ArgsUsage: "<from> <to>",
+			Action:    a.serverMoveAction,
+		},
+		{
+			Name:      "rollback",
+			Usage:     "Rollback server configuration to a previous version",
+			ArgsUsage: "<name> [version]",
+			Action:    a.serverRollbackAction,
+			Flags: []cli.Flag{
+				cli.BoolFlag{Name: "list", Usage: "show changelog versions"},
+			},
+		},
+	}...)
 }
 
+// serverAddAction 处理 server add 命令。
+// 如果未指定密码且未指定密钥文件，交互式提示用户输入密码。
+// 支持 --group 参数，在添加时自动为名称添加分组前缀。
 func (a *App) serverAddAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
@@ -156,8 +156,9 @@ func (a *App) serverAddAction(c *cli.Context) error {
 	return nil
 }
 
-// serverSetAction — upsert: create if not exists, update if exists.
-// Validation ensures host, port range, etc.
+// serverSetAction 处理 server set 命令（upsert 语义）。
+// 如果服务器不存在则创建，存在则部分更新（仅修改通过标志指定的字段）。
+// 支持 --clear-password 和 --clear-key 清除认证信息。
 func (a *App) serverSetAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
@@ -167,7 +168,7 @@ func (a *App) serverSetAction(c *cli.Context) error {
 	existing, err := a.serverSvc.GetServer(name)
 	isNew := err != nil
 
-	// Check if any modification flag was provided
+	// 检查是否有任何修改标志被设置
 	modFlags := []string{"host", "port", "user", "login", "password",
 		"identity-file", "key", "remark", "clear-password", "clear-key"}
 	hasChanges := false
@@ -182,7 +183,7 @@ func (a *App) serverSetAction(c *cli.Context) error {
 	}
 
 	if isNew {
-		// --- Create path ---
+		// --- 创建分支 ---
 		if !hasChanges {
 			return fmt.Errorf("--host/-H is required for a new server")
 		}
@@ -239,14 +240,14 @@ func (a *App) serverSetAction(c *cli.Context) error {
 
 		fmt.Printf("server %q created (v%d)\n", name, 1)
 	} else {
-		// --- Update path ---
+		// --- 更新分支 ---
 		if !hasChanges {
 			a.printServerDetail(existing)
 			fmt.Println("\nhint: use flags to modify parameters, e.g. --host, -p, -P, --remark")
 			return nil
 		}
 
-		// Deep copy existing
+		// 深拷贝现有配置，仅修改显式设置的字段
 		updated := *existing
 		if existing.Options != nil {
 			updated.Options = make(map[string]interface{})
@@ -261,7 +262,6 @@ func (a *App) serverSetAction(c *cli.Context) error {
 			updated.Auth = &authCopy
 		}
 
-		// Apply changes only for explicitly-set flags
 		if c.IsSet("host") {
 			updated.Host = c.String("host")
 		}
@@ -319,7 +319,7 @@ func (a *App) serverSetAction(c *cli.Context) error {
 			return err
 		}
 
-		// After SetServer, the store increments version; read it back
+		// 更新后读取最新版本号并显示
 		after, err := a.serverSvc.GetServer(name)
 		if err == nil {
 			fmt.Printf("server %q updated (v%d)\n", name, after.Version)
@@ -331,14 +331,15 @@ func (a *App) serverSetAction(c *cli.Context) error {
 	return nil
 }
 
-// serverRollbackAction rolls back a server to a specific version.
+// serverRollbackAction 处理 server rollback 命令。
+// 使用 --list 标志查看可回滚的版本列表，或指定回滚到目标版本。
 func (a *App) serverRollbackAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
 		return fmt.Errorf("server name is required")
 	}
 
-	// --list mode: show changelog
+	// --list 模式：显示变更历史
 	if c.Bool("list") {
 		entries, err := a.serverSvc.GetServerChangelog(name)
 		if err != nil {
@@ -357,7 +358,7 @@ func (a *App) serverRollbackAction(c *cli.Context) error {
 		return nil
 	}
 
-	// Rollback to version
+	// 回滚到指定版本
 	versionStr := c.Args().Get(1)
 	if versionStr == "" {
 		return fmt.Errorf("version number is required (use --list to see available versions)")
@@ -376,6 +377,7 @@ func (a *App) serverRollbackAction(c *cli.Context) error {
 	return nil
 }
 
+// printServerDetail 打印服务器配置的详细信息，用于 server info 命令。
 func (a *App) printServerDetail(s *domain.Server) {
 	fullName := s.Name
 	if s.Group != "" {
@@ -407,6 +409,7 @@ func (a *App) printServerDetail(s *domain.Server) {
 	fmt.Printf("Version: %d\n", s.Version)
 }
 
+// serverListAction 处理 server ls 命令，支持按分组和关键字筛选。
 func (a *App) serverListAction(c *cli.Context) error {
 	group := c.String("group")
 	search := c.String("search")
@@ -459,6 +462,7 @@ func (a *App) serverListAction(c *cli.Context) error {
 	return nil
 }
 
+// serverInfoAction 处理 server info 命令，显示服务器的完整配置详情。
 func (a *App) serverInfoAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
@@ -474,6 +478,7 @@ func (a *App) serverInfoAction(c *cli.Context) error {
 	return nil
 }
 
+// serverRemoveAction 处理 server rm 命令，删除指定服务器配置。
 func (a *App) serverRemoveAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
@@ -488,6 +493,7 @@ func (a *App) serverRemoveAction(c *cli.Context) error {
 	return nil
 }
 
+// serverMoveAction 处理 server mv 命令，重命名或跨分组移动服务器。
 func (a *App) serverMoveAction(c *cli.Context) error {
 	from := c.Args().Get(0)
 	to := c.Args().Get(1)
