@@ -158,9 +158,11 @@ main.go (DI 组合根)
 | 功能 | 说明 |
 |------|------|
 | SFTP 传输 | push/pull、断点续传、进度显示 |
-| SSH 隧道 | 本地端口转发、远程端口转发 |
-| SOCKS5 代理 | 动态代理功能 |
+| 代理 & 隧道 | SOCKS5 代理、本地/远程端口转发、SSH 隧道 |
 | 云同步 | 七牛云存储备份 |
+| 健康检查 | 批量/单一服务器健康检查 |
+| 跳板机支持 | 多跳连接、JumpHost 配置 |
+| 远程挂载 | sshfs/WebDAV/SMB 挂载到本地 |
 
 ### 辅助功能
 
@@ -168,8 +170,8 @@ main.go (DI 组合根)
 |------|------|
 | SSH 密钥生成 | keygen 命令 |
 | 批量命令执行 | bc 命令 |
-| 压缩功能 | zip 命令 |
 | 版本升级 | upgrade 命令 |
+| 自动更新 | 版本检查、强制更新、回滚 |
 
 ---
 
@@ -235,8 +237,13 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 | 3 | ssh connector + session + hostkey | Phase 2 (domain/repository), config, log | 7 (+ tests) |
 | 4 | cmd 组装 | 所有以上 | 5 |
 | 5 | sftp | ssh | 4 |
-| 6 | sync/qiniu | 无 | 6 |
-| 7 | proxy + tunnel | ssh | 6 |
+| 6 | 代理 & 隧道 (SOCKS5/端口转发/SSH隧道) | ssh | 6 |
+| 7 | 云同步 (Qiniu) | 无 | 6 |
+| 8 | 服务器健康检查 | ssh + CLI | 4 |
+| 9 | 跳板机/堡垒机 | ssh | 5 |
+| 10 | 远程挂载 (sshfs/webdav/samba) | ssh | 6 |
+| 11 | 自动更新/升级 | CLI | 4 |
+| X | 实验阶段: 虚拟命令 | CLI + 实验性 | 4 |
 
 详细任务清单见 [TODO.md](TODO.md)。
 
