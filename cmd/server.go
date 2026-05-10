@@ -439,11 +439,19 @@ func (a *App) serverListAction(c *cli.Context) error {
 		return nil
 	}
 
-	fmt.Printf("%-12s %-14s %-16s %-6s %-8s %-8s %s\n", "Group", "Name", "Host", "Port", "User", "Ver", "Auth")
-	fmt.Println(strings.Repeat("-", 80))
+	var groupColors = []int{32, 34, 33, 35, 36}
 
+	fmt.Printf("%-16s %-20s %-28s %-4s %-14s %s\n", "Group", "Name", "Host", "Ver", "Auth", "Remark")
+	fmt.Println(strings.Repeat("-", 88))
+
+	colorIdx := 0
 	for g, servers := range result {
+		baseColor := groupColors[colorIdx%len(groupColors)]
+		colorIdx++
+		row := 0
 		for _, s := range servers {
+			hostStr := fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
+
 			auth := "none"
 			if s.Auth != nil {
 				switch {
@@ -455,7 +463,17 @@ func (a *App) serverListAction(c *cli.Context) error {
 					auth = "key"
 				}
 			}
-			fmt.Printf("%-12s %-14s %-16s %-6d %-8s %-8d %s\n", g, s.Name, s.Host, s.Port, s.User, s.Version, auth)
+
+			var bold int
+			if row%2 == 0 {
+				bold = 1
+			} else {
+				bold = 0
+			}
+
+			fmt.Printf("\033[%d;%dm%-16s %-20s %-28s %-4d %-14s %s\033[0m\n",
+				bold, baseColor, g, s.Name, hostStr, s.Version, auth, s.Remark)
+			row++
 		}
 	}
 
