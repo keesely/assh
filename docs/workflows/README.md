@@ -7,6 +7,7 @@
 
 | 文档 | 内容 | 适用角色 |
 |------|------|----------|
+| [pm-handbook.md](pm-handbook.md) | PM Agent 实用手册：快速启动清单、决策模板、工具指南 | PM Agent |
 | [phase-lifecycle.md](phase-lifecycle.md) | Phase 完整生命周期：从需求到交付的 8 步流程 | PM Agent, Build Agent |
 | [document-management.md](document-management.md) | 文档创建/更新/对齐/ADR 的管理规范 | PM Agent |
 | [lessons-learned.md](lessons-learned.md) | 抽象复盘与可复用经验（含反模式） | 全部 |
