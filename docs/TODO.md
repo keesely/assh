@@ -435,6 +435,7 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 | P4.4-c ls 自适应列宽 | Group/Name/Host 按最长内容自适应，Group 右对齐 | ✅ |
 | P4.4-d 默认 Action 模糊建议 | `assh \<target\>` 找不到服务器时也给出近似提示 | ✅ |
 | P4.4-e Shell 补全支持 | info/rm/mv/rollback/login/run/bc 命令的服务器名 Tab 补全 | ✅ |
+| P4.4-f add/set 确认流程 | 新增/修改前预览信息 → 确认保存 → 显示结果 | ✅ |
 | P4.4-e 自动编译检查 | 每次代码变更后自动 `go build ./...` 验证 | ✅ |
 
 **相关文件**: `cmd/server.go`, `cmd/app.go`, `asshc/service/server.go`
