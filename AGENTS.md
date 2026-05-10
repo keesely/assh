@@ -107,6 +107,10 @@ bugfix/<issue>     # Bug 修复分支
 - **测试**: `cd asshv2 && go test ./... -v`
 - **静态检查**: `cd asshv2 && go vet ./...`
 
+## 工作流规则
+
+- **自动编译检查**: 每次修改代码文件后（包括 PM Agent 直接编辑或 build agent 执行），必须立即执行 `cd asshv2 && go build ./...` 确认编译通过，否则不得进入下一步。
+
 ## 文档
 
 - [项目需求文档](docs/demand.md) - 项目需求原始文档(草稿)
