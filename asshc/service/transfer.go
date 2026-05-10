@@ -60,6 +60,9 @@ func (s *TransferService) PushFile(ctx context.Context, name, localPath, remoteP
 			remotePath += "/"
 		}
 		remotePath += baseName
+	} else if strings.HasSuffix(remotePath, "/") {
+		// Push file to a directory (remote path ends with /)
+		remotePath += filepath.Base(localPath)
 	}
 
 	if !s.transfer.IsDir(server, s.remoteDir(remotePath)) {
@@ -133,6 +136,9 @@ func (s *TransferService) PushFileDirect(ctx context.Context, server *domain.Ser
 			remotePath += "/"
 		}
 		remotePath += baseName
+	} else if strings.HasSuffix(remotePath, "/") {
+		// Push file to a directory (remote path ends with /)
+		remotePath += filepath.Base(localPath)
 	}
 
 	if !s.transfer.IsDir(server, s.remoteDir(remotePath)) {
@@ -194,13 +200,22 @@ func (s *TransferService) PullFile(ctx context.Context, name, remotePath, localP
 		return fmt.Errorf("remote path does not exist: %s", remotePath)
 	}
 
-	if s.transfer.IsDir(server, remotePath) && !opts.Recursive {
+	remoteIsDir := s.transfer.IsDir(server, remotePath)
+	if remoteIsDir && !opts.Recursive {
 		return fmt.Errorf("omitting directory, use -r to download directory")
 	}
 
 	localPath, err = filepath.Abs(localPath)
 	if err != nil {
 		return fmt.Errorf("invalid local path: %w", err)
+	}
+
+	if remoteIsDir {
+		baseName := s.remoteBaseName(remotePath)
+		localPath = filepath.Join(localPath, baseName)
+	} else if s.localExists(localPath) && s.localIsDir(localPath) {
+		// Local target is an existing directory and remote is a file: append remote filename
+		localPath = filepath.Join(localPath, filepath.Base(remotePath))
 	}
 
 	if !s.localExists(filepath.Dir(localPath)) {
@@ -261,14 +276,17 @@ func (s *TransferService) PullFileDirect(ctx context.Context, server *domain.Ser
 		return fmt.Errorf("invalid local path: %w", err)
 	}
 
-	isDir := s.transfer.IsDir(server, remotePath)
-	if isDir && !opts.Recursive {
+	remoteIsDir := s.transfer.IsDir(server, remotePath)
+	if remoteIsDir && !opts.Recursive {
 		return fmt.Errorf("omitting directory, use -r to download directory")
 	}
 
-	if isDir {
+	if remoteIsDir {
 		baseName := filepath.Base(remotePath)
 		localPath = filepath.Join(localPath, baseName)
+	} else if s.localExists(localPath) && s.localIsDir(localPath) {
+		// Local target is an existing directory and remote is a file: append remote filename
+		localPath = filepath.Join(localPath, filepath.Base(remotePath))
 	}
 
 	localDir := filepath.Dir(localPath)
