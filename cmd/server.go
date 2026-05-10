@@ -378,36 +378,56 @@ func (a *App) serverRollbackAction(c *cli.Context) error {
 }
 
 // printServerDetail 打印服务器配置的详细信息，用于 server info 命令。
+// 输出格式：
+//   --------------------------------
+//   +  server-name (ver. N) +
+//   ================================
+//                 name: value
+//                 host: value
+//                 ...
 func (a *App) printServerDetail(s *domain.Server) {
 	fullName := s.Name
 	if s.Group != "" {
 		fullName = domain.JoinName(s.Group, s.Name)
 	}
 
-	fmt.Printf("Name:    %s\n", fullName)
-	fmt.Printf("Host:    %s\n", s.Host)
-	fmt.Printf("Port:    %d\n", s.Port)
-	fmt.Printf("User:    %s\n", s.User)
+	// ---- header ----
+	const headerWidth = 40
+	fmt.Println(strings.Repeat("-", headerWidth))
+	fmt.Printf("+  %s (ver. %d) +\n", fullName, s.Version)
+	fmt.Println(strings.Repeat("=", headerWidth))
+
+	// ---- detail items (label right-aligned) ----
+	const labelWidth = 14
+	pl := func(label string, value interface{}) {
+		fmt.Printf("%*s: %v\n", labelWidth, label, value)
+	}
+
+	pl("name", fullName)
+	pl("host", s.Host)
+	pl("port", s.Port)
+	pl("user", s.User)
+
 	if s.Auth != nil {
 		if s.Auth.Password != "" {
-			fmt.Printf("Password:%s\n", s.Auth.Password)
+			pl("password", s.Auth.Password)
 		}
 		if s.Auth.KeyFile != "" {
-			fmt.Printf("KeyFile: %s\n", s.Auth.KeyFile)
+			pl("key file", s.Auth.KeyFile)
 		}
 		if s.Auth.Password == "" && s.Auth.KeyFile == "" {
-			fmt.Printf("Auth:    none\n")
+			pl("auth", "none")
 		}
 	} else {
-		fmt.Printf("Auth:    none\n")
+		pl("auth", "none")
 	}
+
 	if s.Remark != "" {
-		fmt.Printf("Remark:  %s\n", s.Remark)
+		pl("remark", s.Remark)
 	}
 	for k, v := range s.Options {
-		fmt.Printf("Option:  %s=%v\n", k, v)
+		pl("option: "+k, v)
 	}
-	fmt.Printf("Version: %d\n", s.Version)
 }
 
 // serverListAction 处理 server ls 命令，支持按分组和关键字筛选。
