@@ -5,9 +5,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
+	"assh/asshc/domain"
 	"assh/asshc/service"
 	"assh/config"
 	"assh/log"
@@ -116,6 +118,7 @@ func (a *App) versionAction(c *cli.Context) error {
 // defaultAction 是默认 Action，当输入不匹配任何命令时触发。
 // 行为与 v1 兼容：自动识别目标（name / user@host / -H host），
 // 支持 -c/--command 参数执行远程命令。
+// 服务器不存在时，自动给出近似名称建议。
 func (a *App) defaultAction(c *cli.Context) error {
 	target := c.Args().Get(0)
 	host := c.String("host")
@@ -126,6 +129,11 @@ func (a *App) defaultAction(c *cli.Context) error {
 
 	client, err := a.loginCore(c)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) && target != "" {
+			if suggestion, ok := a.serverSvc.SuggestServer(target); ok {
+				return fmt.Errorf("server not found, did you mean [%s]?", suggestion)
+			}
+		}
 		return err
 	}
 	defer a.connectSvc.Close(client)
