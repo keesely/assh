@@ -18,11 +18,23 @@ function build () {
 
   BuildPath="./build/${package}"
   mkdir -p $BuildPath
-  CGO_ENABLED=0 GOOS=${os} GOARCH=${arch} go build -o "${BuildPath}/assh" -ldflags "-X main.Version=${VERSION} -X main.Build=${BUILD}" ./
+
+  # 构建 assh 主二进制（SSH 客户端）
+  echo "  -> assh (SSH client)"
+  CGO_ENABLED=0 GOOS=${os} GOARCH=${arch} go build \
+    -o "${BuildPath}/assh" \
+    -ldflags "-X main.Version=${VERSION} -X main.Build=${BUILD}" ./
+
+  # 构建 assh-fs 文件系统工具二进制（SFTP + 将来挂载）
+  echo "  -> assh-fs (file system tool)"
+  CGO_ENABLED=0 GOOS=${os} GOARCH=${arch} go build \
+    -o "${BuildPath}/assh-fs" \
+    -ldflags "-X main.Version=${VERSION} -X main.Build=${BUILD}" ./cmd/fs/
 
   if [ ${os} == "windows" ]; then
     cd ${BuildPath}
     mv assh assh.exe
+    mv assh-fs assh-fs.exe
     cd -
   fi
 
