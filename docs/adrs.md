@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 13 |
+| accepted | 14 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -28,6 +28,7 @@
 | **ADR-011** | **SSH 连接层架构设计：接口分离 + 可配置 HostKey + Keepalive** | **accepted** | **2026-05-09** |
 | **ADR-012** | **CLI 参数对齐与命令架构：与 ssh 兼容 + 自动识别 + bc 三通道** | **accepted** | **2026-05-09** |
 | **ADR-013** | **配置版本管理与回滚机制：快照式 changelog + rollback** | **accepted** | **2026-05-09** |
+| **ADR-014** | **server 命令组扁平化上移顶层** | **accepted** | **2026-05-10** |
 
 ## 新增 ADR
 
@@ -90,5 +91,6 @@ YYYY-MM-DD
 |-----|------|------|
 | ADR-012 | CLI 参数与 ssh 对齐 + 自动识别直连 + bc 三通道输出 | 参数命名规范、命令层级、login 自动识别策略、bc 输出架构 |
 | ADR-013 | 配置版本管理与回滚机制：快照式 changelog + rollback | store.Set() 版本递增 + 快照、store.RollbackTo()、service.SetServer() upsert |
+| ADR-014 | server 命令组扁平化上移顶层 | server 子命令（add/set/ls/info/rm/mv/rollback）上移为顶层扁平命令 |
 
 详细内容见对应 ADR 文件。

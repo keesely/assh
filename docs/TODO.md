@@ -278,10 +278,11 @@ cd asshv2 && go test ./... -v -count=1   # 全量测试 ✅ (6 包全部通过)
 
 目标：组装完整 CLI，实现 MVP
 补充（2026-05-09）：set(upsert) + rollback + 版本管理/changelog
+补充（2026-05-10）：ADR-014 server 命令组扁平化，add/set/ls/info/rm/mv/rollback 上移为顶层命令
 
 依赖：Phase 2 + Phase 3 + 全局参数对齐 ssh（ADR-012）
 设计文档：[Phase4-Design.md](Phase4-Design.md)
-架构决策：ADR-012（CLI 参数对齐与命令架构）, ADR-013（配置版本管理与回滚）
+架构决策：ADR-012（CLI 参数对齐与命令架构）, ADR-013（配置版本管理与回滚）, ADR-014（server 命令扁平化）
 
 ---
 
