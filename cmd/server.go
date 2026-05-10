@@ -380,10 +380,10 @@ func (a *App) serverRollbackAction(c *cli.Context) error {
 // printServerDetail 打印服务器配置的详细信息，用于 server info 命令。
 // 输出格式：
 //   --------------------------------
-//   +  server-name (ver. N) +
+//   +   server-name (ver. N)    +
 //   ================================
-//                 name: value
-//                 host: value
+//        Server Name: value
+//        Server Host: value
 //                 ...
 func (a *App) printServerDetail(s *domain.Server) {
 	fullName := s.Name
@@ -391,42 +391,59 @@ func (a *App) printServerDetail(s *domain.Server) {
 		fullName = domain.JoinName(s.Group, s.Name)
 	}
 
-	// ---- header ----
+	// ---- header (title centered, + aligned to separators) ----
 	const headerWidth = 40
+	title := fmt.Sprintf("%s (ver. %d)", fullName, s.Version)
+	inner := headerWidth - 2 // exclude the two + signs
+	leftPad := (inner - len(title)) / 2
+	rightPad := inner - len(title) - leftPad
+
 	fmt.Println(strings.Repeat("-", headerWidth))
-	fmt.Printf("+  %s (ver. %d) +\n", fullName, s.Version)
+	fmt.Printf("+%s%s%s+\n", strings.Repeat(" ", leftPad), title, strings.Repeat(" ", rightPad))
 	fmt.Println(strings.Repeat("=", headerWidth))
 
-	// ---- detail items (label right-aligned) ----
-	const labelWidth = 14
+	// ---- detail items (label right-aligned, no excess indent) ----
+	// label style: "Server Name", "Server Host", "Server Port", "Server User",
+	//              "Password", "Key File", "Remark", "Auth"
+	// labelWidth = longest label length ("Server Name" = 11) so longest label has 0 padding
+	const labelWidth = 11
 	pl := func(label string, value interface{}) {
 		fmt.Printf("%*s: %v\n", labelWidth, label, value)
 	}
 
-	pl("name", fullName)
-	pl("host", s.Host)
-	pl("port", s.Port)
-	pl("user", s.User)
+	pl("Server Name", fullName)
+	pl("Server Host", s.Host)
+	pl("Server Port", s.Port)
+	pl("Server User", s.User)
 
 	if s.Auth != nil {
-		if s.Auth.Password != "" {
-			pl("password", s.Auth.Password)
+		hasPwd := s.Auth.Password != ""
+		hasKey := s.Auth.KeyFile != ""
+		switch {
+		case hasPwd && hasKey:
+			pl("Auth Type", "password+key")
+		case hasPwd:
+			pl("Auth Type", "password")
+		case hasKey:
+			pl("Auth Type", "key")
+		default:
+			pl("Auth Type", "none")
 		}
-		if s.Auth.KeyFile != "" {
-			pl("key file", s.Auth.KeyFile)
+		if hasPwd {
+			pl("Password", s.Auth.Password)
 		}
-		if s.Auth.Password == "" && s.Auth.KeyFile == "" {
-			pl("auth", "none")
+		if hasKey {
+			pl("Key File", s.Auth.KeyFile)
 		}
 	} else {
-		pl("auth", "none")
+		pl("Auth Type", "none")
 	}
 
 	if s.Remark != "" {
-		pl("remark", s.Remark)
+		pl("Remark", s.Remark)
 	}
 	for k, v := range s.Options {
-		pl("option: "+k, v)
+		pl("Option: "+k, v)
 	}
 }
 
