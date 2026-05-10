@@ -1,203 +1,297 @@
-# Assh  (An ssh) Client
+# ASSH - An SSH Client
 
-一个可以记录密码的SSH客户端
+`ASSH` 是一个使用 Go 开发的 SSH 客户端，适用于服务器管理、维护和快速使用。
+采用 **port / service / infra** 三层架构，基于 SQLite 加密存储服务器配置，支持密码和密钥认证。
 
-# 功能特性
-- [x] 支持 `assh [服务器名称]` 快捷登陆
-- [x] 支持记录ssh密码
-- [x] 支持独立公钥登陆(每个服务器用户可以独立关联公钥)
-- [x] `assh [add/mod/rm/info/ls]` 服务器记录(新增/修改/删除/查看详情/列表)
-- [x] 支持服务器群组
-- [x] 支持安全启动密码
-- [x] 使用数据文件密钥加密
-- [x] `assh push / assh pull` 支持 scp [push / pull] 文件及文件夹
-- [x] `assh sync [云端标识]` 同步备份服务器列表到自定义云端 - 目前只支持七牛云
-- [x] `assh import/export <file.yml` 导入/导出服务器配置数据
-- [x] `assh upgrade`自动检测更新/自动升级
-- [ ] `assh ping [服务器名称]` ping服务器
+当前版本：**v2.0.0**（Phase 4 完成）
 
-# 安装
+## 项目状态
 
-## 编译安装
+| Phase | 阶段 | 状态 | 交付功能 |
+|-------|------|:----:|----------|
+| 0 | 项目骨架搭建 | ✅ 完成 | 目录结构、build.sh、main.go、CLI 框架 |
+| 1 | 基础设施移植 | ✅ 完成 | log、config、crypto 模块 |
+| 2 | 数据持久化层 | ✅ 完成 | SQLite 存储 + AES 加密 + 服务器 CRUD |
+| 3 | SSH 连接层 | ✅ 完成 | SSH 客户端、会话管理、认证链 |
+| 4 | CLI 命令组装 | ✅ 完成 | 全部 CLI 命令、DI 注入、版本回滚 |
+| 5 | SFTP 文件传输 | ⏳ 待开始 | push/pull、断点续传 |
+| 6 | 云同步 (Qiniu) | ⏳ 待开始 | 七牛云同步备份 |
+| 7 | 代理 & 隧道 | ⏳ 待开始 | SOCKS5、端口转发、SSH 隧道 |
 
-执行编译脚本即可: `sh build.sh`
+## 安装
 
-> 暂不支持 Windows 平台编译
+### 编译安装
 
-## 下载安装
-> 略
+```bash
+cd asshv2 && sh build.sh
+```
 
-# 使用
+编译产物在 `asshv2/build/` 目录。
+
+### 单平台构建
+
+```bash
+cd asshv2 && sh build.sh <os> <arch> <alias>
+# 示例：sh build.sh linux amd64 linux
+```
+
+## 快速开始
+
+### 添加服务器
+
+```bash
+# 添加新服务器（未指定密码时将交互式提示输入）
+assh server add myserver -H 192.168.1.100 -u root -P mypassword -p 22
+
+# 使用分组
+assh server add prod.web -H 10.0.0.1 -u admin -P secret --group prod
+
+# 使用密钥认证
+assh server add myserver -H example.com -u deploy -i ~/.ssh/id_rsa
+
+# 设置自定义选项（如 Keepalive 心跳）
+assh server set myserver -o keepalive=30
+```
+
+### 查看和管理服务器
+
+```bash
+# 列出所有服务器
+assh server ls
+
+# 按分组筛选
+assh server ls --group prod
+
+# 搜索服务器
+assh server ls --search example
+
+# 查看服务器详情
+assh server info myserver
+
+# 更新服务器参数（upsert）
+assh server set myserver -p 2222 --remark "生产环境Web服务器"
+
+# 重命名/移动服务器
+assh server mv myserver prod.web
+
+# 删除服务器
+assh server rm myserver
+```
+
+### 登录服务器
+
+```bash
+# 通过已保存的名称登录
+assh login myserver
+
+# 直接指定主机和用户
+assh login root@192.168.1.100
+
+# 或使用 -H 参数
+assh login -H 192.168.1.100 -u root -P password
+```
+
+### 执行远程命令
+
+```bash
+# 在单台服务器上执行命令
+assh run myserver "uptime"
+
+# 批量执行（多服务器并发）
+assh bc "df -h" --servers web1,web2,web3
+
+# 按分组批量执行
+assh bc "systemctl status nginx" --group prod
+```
+
+### 版本回滚
+
+```bash
+# 查看变更历史
+assh server rollback myserver --list
+
+# 回滚到指定版本
+assh server rollback myserver 2
+```
 
 ## 命令列表
 
-| 命令       | 命令描述                      | 命令参数                                      | 备注                             |
-|------------|-------------------------------|-----------------------------------------------|----------------------------------|
-| account    | 设置安全密码                  | 密码                                          | 解析数据的关键密码               |
-| ls         | 列出已添加的服务器            | 无                                            | 略                               |
-| search     | 检索并列举服务器              | 检索key                                       | 略                               |
-| info       | 输出服务器信息                | 组名称.服务器名称                             | 略                               |
-| set        | 添加/修改服务器               | 组名称.服务器名称 `-u` `-p` `-k` `-host` `-P` | 略                               |
-| rm         | 删除服务器                    | 组名称.服务器名称                             | 略                               |
-| login      | 登陆服务器                    | 组名称.服务器名称 `-c`                        | 执行远程命令将不执行登陆         |
-| sync       | 同步数据                      | `account` `push` `pull`                       | 同步数据到云端或从云端同步到本地 |
-| keygen     | 生成ssh rsa key               | `-c` `-f`                                     | 略                               |
-| upgrade    | 检测更新                      | 无                                            | 略                               |
-| mv         | 服务器更名/转移群组           | 略                                            | 略                               |
-| push       | 推送本地文件/文件夹到服务器   |                                               |                                  |
-| pull       | 从服务器拉取文件/文件夹到本地 |                                               |                                  |
-| proxy      | 建立端口代理服务              | 略                                            |                                  |
-| hostproxy  | 建立域名代理服务              |                                               |                                  |
-| localproxy | 服务反向代理/ssh隧道/内网穿透 |                                               |                                  |
+| 命令 | 功能 | 状态 |
+|------|------|:----:|
+| `version` | 显示版本号 | ✅ |
+| `server add` | 添加服务器 | ✅ |
+| `server set` | 创建/更新服务器（upsert） | ✅ |
+| `server ls` | 列出服务器（支持 --group/--search） | ✅ |
+| `server info` | 查看服务器详情 | ✅ |
+| `server rm` | 删除服务器 | ✅ |
+| `server mv` | 重命名/移动服务器 | ✅ |
+| `server rollback` | 回滚服务器配置（--list 查看历史） | ✅ |
+| `login` | SSH 登录（名称 / user@host / -H） | ✅ |
+| `run` | 远程执行命令 | ✅ |
+| `bc` | 批量并发执行命令 | ✅ |
+| `push` | 推送文件 | ⏳ Phase 5 |
+| `pull` | 拉取文件 | ⏳ Phase 5 |
+| `keygen` | 生成 SSH 密钥 | ⏳ |
+| `sync` | 云同步 | ⏳ Phase 6 |
+| `proxy` | 端口代理 | ⏳ Phase 7 |
 
-配置参数:
+### 全局标志
 
-```
-$ assh account 设置安全密码
-$ assh -log 设置日志文件路径
-$ assh -llv 设置日志等级 (off | debug | info | warn | error | panic | fatal )
-```
+| 标志 | 说明 |
+|------|------|
+| `-v` / `--verbose` | 详细日志输出（DEBUG 级别） |
+| `-q` / `--quiet` | 关闭日志输出 |
+| `-F` / `--config` | 指定配置文件路径 |
+| `-V` / `--version` | 打印版本信息 |
 
-> 注意: 初始情况下，`assh` 不会开启日志，如需查看相关信息，请设置 `--log` `--llv` 设置对应的日志参数
+## 配置
 
-## 安全密码
+### 存储路径（v2 路径隔离）
 
-assh 开始使用之前需先设定一个安全密码, 安全密码为数据文件提供加密密钥
+| 路径 | 说明 |
+|------|------|
+| `~/.assh/v2/` | 配置目录 |
+| `~/.assh/v2/asshv2.db` | SQLite 数据库（服务器数据 + AES 加密密钥） |
+| `~/.assh/v2/.rsa` | RSA 私钥 |
+| `~/.assh/v2/.rsa.pub` | RSA 公钥 |
+| `~/.assh/v2/.account` | 加密密码文件 |
+| `~/.assh/v2/assh.yml` | 配置文件 |
 
-```
-$ assh account <password>
-```
+### 环境变量
 
-> 注意:
-如果您之前已设置过安全密码，并且同步文件到云端，安全密码不会同数据同步到云端
-且每台机器会新生成独立的rsa公/私钥，所以安全密码即使明文相同，密钥文件也会不同
-如果您在新机器上同步下载云端数据后，需要先设定与之前机器的安全密码相同的密码明文才可使用同步的数据
-密码改动后相应的数据文件也会被重新编码，将会多台设备使用相同数据出错，请谨慎设置
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `ASSH_CONFIG_DIR` | 配置目录 | `~/.assh/v2` |
 
-## 添加服务器
+### 日志级别
 
-```shell
-$ assh add group.name [-u 用户名] [-p 密码] [-k 公钥位置] [-host 远程主机名/IP] [-P 端口]
+| 级别 | 值 | 说明 |
+|------|:---:|------|
+| OFF | 0 | 关闭日志 |
+| FATAL | 100 | 致命错误 |
+| PANIC | 150 | 严重错误 |
+| ERROR | 200 | 错误 |
+| WARN | 300 | 警告 |
+| INFO | 400 | 信息 |
+| DEBUG | 500 | 调试 |
 
-## 或者
-
-$ assh add group.name user@hostname [-P 端口] [-p 密码] [-k 公钥位置]
-
-```
-
-> 注意:
-- 不指定登陆端口，则默认`22`端口
-- 不指定密码默认使用`本地公钥文件(~/.ssh/id_rsa)`
-- 不指定用户名，则默认`root`
-- 添加服务器的服务器名称是必须的, 格式如: group.name
-- group可为空，如: `assh server_1 -u root ...`
-
-
-## 快捷登陆
+## 项目结构
 
 ```
-$ assh group.name
-
-## 执行远程命令
-$ assh group.name -c "远程命令"
-
-## 或者
-$ assh login group.name
-
-$ assh login group.name -c "远程命令"
-
-## 陌生登陆
-$ assh [-u 用户名] [-p 密码] [-k 公钥] [-host 远程主机名/ip] [-P 端口]
-
-$ assh [-u 用户名] [-p 密码] [-k 公钥] [-host 远程主机名/ip] [-P 端口] [-c 远程命令]
-
+asshv2/
+├── main.go                  # 程序入口（DI 组合根）
+├── build.sh                 # 构建脚本（多平台交叉编译）
+├── go.mod / go.sum          # 模块定义
+│
+├── cmd/                     # CLI 命令层 (urfave/cli)
+│   ├── app.go               # App 组装、全局标志、命令注册
+│   ├── server.go            # 服务器管理命令（add/set/ls/info/rm/mv/rollback）
+│   └── connect.go           # SSH 连接命令（login/run/bc）
+│
+├── asshc/                   # 核心业务库
+│   ├── domain/              # 领域实体（零依赖）
+│   │   ├── server.go        # Server / Auth 实体
+│   │   ├── errors.go        # 领域错误定义
+│   │   └── changelog.go     # 变更日志条目
+│   ├── port/                # 接口定义（依赖倒置）
+│   │   ├── repository.go    # ServerRepository 接口
+│   │   ├── connector.go     # SSHConnector 接口
+│   │   ├── session.go       # SSHSession 接口
+│   │   ├── hostkey.go       # HostKeyChecker 接口
+│   │   └── cryptor.go       # Cryptor 接口
+│   ├── service/             # 用例编排（依赖 port 接口）
+│   │   ├── server.go        # 服务器 CRUD + 版本回滚
+│   │   └── connect.go       # SSH 连接与会话编排
+│   └── infra/               # 接口实现
+│       ├── store/           # SQLite 持久化
+│       │   ├── db.go        # 连接管理 + 自动迁移
+│       │   ├── key.go       # AES-256-GCM 密钥管理
+│       │   └── server.go    # 服务器 CRUD + 变更日志 + 回滚
+│       ├── crypto/          # 加解密实现
+│       │   ├── rsa.go       # RSA 密钥生成/PEM/加解密
+│       │   ├── aes.go       # AES-CBC/CTR/GCM/ECB
+│       │   ├── ed25519.go   # Ed25519 密钥
+│       │   └── ecdsa.go     # ECDSA-P256/P384/P521 密钥
+│       └── ssh/             # SSH 协议实现
+│           ├── client.go    # 连接器（认证链 + Keepalive）
+│           ├── session.go   # 会话管理（PTY + 命令执行）
+│           └── hostkey.go   # HostKey 校验策略
+│
+├── config/                  # 配置管理
+│   ├── config.go            # 全局配置变量
+│   └── path.go              # 路径工具（展开/创建/检查）
+│
+├── log/                     # 日志模块（基于 zerolog）
+│   └── log.go               # 7 级日志 API
+│
+├── lib/                     # 第三方库封装
+│   └── qiniu/               # 七牛云存储（Phase 6 预热）
+│       ├── qiniu.go
+│       ├── bucket.go
+│       └── utils.go
+│
+├── README.md                # 本文件
+├── CHANGELOG.md             # 更新日志
+└── docs/                    # 项目文档
+    └── ...
 ```
 
-添加`-c "需要执行的命令"` 参数可以执行远程命令，并在终端输出结果
-陌生登陆的情况下，服务器并不会保存在服务器列表中，如需保存，请执行`assh add`命令
+## 架构设计
 
---ps: 后期将会添加群组执行命令的方法--
-
-## 推送/拉取文件
-
-支持多文件及文件夹推送/拉取
+采用 **port / service / infra** 三层架构，遵循依赖倒置原则：
 
 ```
-## 推送文件到远程主机
-$ assh push group.name [local path] [remote path]
-
-## 从远程主机拉取文件
-$ assh pull group.name [remote path] [local path]
-
-```
-多文件推送/拉取:
-`$ assh push/pull group.name 文件路径1 文件路径2 ... 目标路径`
-
-> 注意:
-- 单文件推送/拉取时可以不指定目标路径(默认使用本地当前路径 / 远程主机则为家目录)
-- 多文件推送/拉取时最后一个参数为目标路径
-- 群组推送将会在后期实现，目前只支持单服务器推送
-
-## 同步数据文件到七牛云
-Assh 可以支持数据文件同步到云端，目前只支持七牛云
-
-```
-## 同步权限设置
-$ assh sync account <accessKey> <secretKey> <bucket> <enpoint>
-
-## 同步本地数据到云端
-$ assh sync push [同步标识]
-
-## 同步云端数据到本地
-$ assh sync pull [同步标识]
+main.go (DI 组合根)
+  └── cmd/ (调用 service)
+        └── service/ (业务逻辑，依赖 port 接口)
+              ├── port/ (接口契约)
+              └── infra/ (接口实现)
 ```
 
-> 注意:
-- 同步数据到云端时将会覆盖原有的数据
-- 同步标识为空时，将使用默认标识`backup`
-- 同步云端数据到本地时，本地文件将会被覆盖，请确认您本地的数据已做好备份或同步
+- `service/` 只依赖 `port/` 接口 + `domain/` 实体，不直接依赖 `infra/`
+- 所有依赖通过构造器注入
+- `cmd/` 在 `main.go` 中完成组装（组合根）
 
+### 认证链
 
-## 生成ssh key
-```
-$ assh keygen [-c 指定密钥描述] [-f 密钥文件名称]
-```
-## 指定主机生成ssh key
-```
-$ assh keygen group.name
-```
-> 指定主机生成ssh key 会执行key的生成和 ssh-copy-id 文件
+SSH 连接时按以下顺序尝试认证：
+1. **SSH Agent**（通过 `SSH_AUTH_SOCK` 环境变量）
+2. **密钥文件**（`--identity-file` / `--key`）
+3. **密码**（`--password` 或交互式输入）
 
-## 建立代理服务
-```
-$ assh proxy -P [remote port] -d [local port] group.name
+### 数据加密
+
+- 服务器密码使用 **AES-256-GCM** 加密后存入 SQLite
+- 加密密钥自动生成并存储在数据库的 `config` 表中
+- 密钥通过 Base64 编码持久化
+
+### 版本管理
+
+- 每次服务器配置变更自动生成快照，记录到 `server_changelog` 表
+- 支持回滚到任意历史版本
+- 版本号自动递增
+
+## 从 v1 迁移
+
+v2.0.0 是完整重构版本，存储路径与 v1.x 不同（`~/.assh/v2/` 而非 `~/.assh/`）。
+数据不直接兼容，需手动迁移或重新配置。
+
+## 开发
+
+```bash
+# 运行
+cd asshv2 && go run . <命令>
+
+# 测试（48+ 个测试用例覆盖）
+cd asshv2 && go test ./...
+
+# 静态检查
+cd asshv2 && go vet ./...
+
+# 构建
+cd asshv2 && sh build.sh
 ```
 
-## 建立域名代理服务
-```
-$ assh hostproxy -P [remote port] -H [remote host] -d [local port] -i [local host] group.name
-```
-将远端服务器中`remote_host:remote_port`映射为本地`local_host:local_port`
-如：使用代理访问服务器内网数据库：`assh hostproxy -P 3306 -H localhost -d 3307 -i localhost server.db`
+## 许可
 
-## 建立ssh 隧道
-依托sshd服务一次性建立内网穿透隧道
-```
-$ assh localproxy -P [remote port] -d [local port] group.name
-```
-通过使用ssh隧道，在远程服务器上自动建立一个服务监听，并将数据转发到本地端口实现本地服务穿透到外网的能力
-- [remote port]: 远程服务器服务端口，需确保远程服务器上该端口未被占用
-- [local port]: 本地服务端口
-
-> PS: 如果出现隧道建立成功，但是外网无法访问，可能是您服务器的端口转发配置未开启。
- 确保 SSH 服务配置允许远程端口转发。在 SSH 服务器上，检查 /etc/ssh/sshd_config 文件，确保有以下设置：
-```
-GatewayPorts yes
-```
-
-## 检测更新
-
-```
-$ assh upgrade
-```
-PS: 暂未实现
+[MIT License](../LICENSE)

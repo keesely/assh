@@ -1,5 +1,7 @@
-// from https://github.com/qiniu/qshell
-
+// Package qiniu 提供七牛云存储的上传、下载和文件管理功能。
+//
+// 基于 qiniu/api.v7 库封装，支持文件上传、下载、Bucket 管理和 URI 编解码。
+// 代码源自 https://github.com/qiniu/qshell。
 package qiniu
 
 import (
@@ -16,15 +18,17 @@ import (
 	"syscall"
 )
 
+// 字符编码状态常量：需要转义或不需要转义。
 const (
-	needEscape = 0xff
-	dontEscape = 16
+	needEscape = 0xff // 需要转义的字符
+	dontEscape = 16   // 不需要转义的标记
 )
 
 const (
-	escapeChar = '\''
+	escapeChar = '\'' // 转义字符前缀
 )
 
+// genEncoding 生成 URI 编码表，定义每个字节的编码行为。
 func genEncoding() []byte {
 	var encoding [256]byte
 	for c := 0; c <= 0xff; c++ {
@@ -54,6 +58,7 @@ func genEncoding() []byte {
 
 var encoding = genEncoding()
 
+// encode 对字符串进行 Qiniu 自定义 URI 编码（非标准 URL 编码）。
 func encode(v string) string {
 	n := 0
 	hasEscape := false
@@ -91,6 +96,7 @@ func encode(v string) string {
 	return string(t)
 }
 
+// decode 对 Qiniu 自定义编码的字符串进行解码。
 func decode(s string) (v string, err error) {
 	n := 0
 	hasEscape := false
@@ -133,7 +139,7 @@ func decode(s string) (v string, err error) {
 	return string(t), nil
 }
 
-// 获取reader中行数
+// GetLineCount 统计读取器中的行数。
 func GetLineCount(reader io.Reader) (totalCount int64) {
 	bScanner := bufio.NewScanner(reader)
 	for bScanner.Scan() {
@@ -142,7 +148,7 @@ func GetLineCount(reader io.Reader) (totalCount int64) {
 	return
 }
 
-// 获取文件行数
+// GetFileLineCount 统计文件的总行数。
 func GetFileLineCount(filePath string) (totalCount int64) {
 	fp, openErr := os.Open(filePath)
 	if openErr != nil {
@@ -153,15 +159,13 @@ func GetFileLineCount(filePath string) (totalCount int64) {
 	return GetLineCount(fp)
 }
 
-// URL:
-//	 http://host/url
-//	 https://host/url
-// Path:
-//	 AbsolutePath	(Must start with '/')
-//	 Pid:RelPath	(Pid.len = 16)
-//	 Id: 			(Id.len = 16)
-//	 :LinkId:RelPath
-//	 :LinkId
+// Encode 对 URI 进行编码。
+// 支持的输入格式：
+//   - URL: http://host/path, https://host/path
+//   - 绝对路径: 以 '/' 开头
+//   - 资源路径: Pid:RelPath (Pid 长度 16)
+//   - 资源 ID: Id (Id 长度 16)
+//   - 链接路径: :LinkId:RelPath, :LinkId
 func Encode(uri string) string {
 
 	size := len(uri)
@@ -176,7 +180,7 @@ func Encode(uri string) string {
 	return "!" + encodedURI
 }
 
-// Decode
+// Decode 对 Qiniu 编码的 URI 进行解码，支持 Base64 URL 编码和自定义编码。
 func Decode(encodedURI string) (uri string, err error) {
 
 	size := len(encodedURI)
@@ -200,6 +204,7 @@ func Decode(encodedURI string) (uri string, err error) {
 	return string(b[:n]), err
 }
 
+// getAkBucketFromUploadToken 从上传令牌中解析 AccessKey 和存储空间名。
 func getAkBucketFromUploadToken(token string) (ak, bucket string, err error) {
 	items := strings.Split(token, ":")
 	if len(items) != 3 {
@@ -225,7 +230,7 @@ func getAkBucketFromUploadToken(token string) (ak, bucket string, err error) {
 	return
 }
 
-// 从URL中获取文件名字
+// KeyFromUrl 从 URL 中提取文件名（最后一段路径）。
 func KeyFromUrl(uri string) (key string, err error) {
 	u, pErr := url.Parse(uri)
 	if pErr != nil {
@@ -241,16 +246,18 @@ func KeyFromUrl(uri string) (key string, err error) {
 	return
 }
 
-// 表示大小
+// ByteSize 表示文件大小，支持自动转换为人类可读的字符串格式。
 type ByteSize int64
 
 const (
-	KB ByteSize = 1024
-	MB          = 1024 * KB
-	GB          = 1024 * MB
-	TB          = 1024 * GB
+	KB ByteSize = 1024       // 千字节
+	MB          = 1024 * KB  // 兆字节
+	GB          = 1024 * MB  // 吉字节
+	TB          = 1024 * GB  // 太字节
 )
 
+// String 将文件大小转换为人类可读的字符串表示。
+// 例如：1304 -> "1.27KB"。
 func (b ByteSize) String() string {
 	if b < KB {
 		return strconv.FormatInt(int64(b), 10) + "B"
@@ -271,9 +278,8 @@ func (b ByteSize) String() string {
 	return strconv.FormatFloat(size, 'f', 2, 64) + "TB"
 }
 
-// 将字节转化为人工可读的字符串
-// b - 表示文件大小，单位字节, readable - 可读字符串
-// 比如1304 ==》1304/1024 ==> 1.27KB
+// BytesToReadable 将字节数转换为人类可读的字符串。
+// 例如：BytesToReadable(1304) 返回 "1.27KB"。
 func BytesToReadable(size int64) (readable string) {
 	return ByteSize(size).String()
 }

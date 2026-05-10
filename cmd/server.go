@@ -1,684 +1,714 @@
-// server.go kee > 2019/12/02
-
 package cmd
 
 import (
-	assh "assh/asshc"
-	keygen "assh/asshc/keygen"
-	"assh/log"
+	"bufio"
+	"errors"
 	"fmt"
-	"reflect"
+	"os"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/keesely/kiris"
-	"github.com/keesely/kiris/hash"
+	"assh/asshc/domain"
+
 	"github.com/urfave/cli"
+	"golang.org/x/term"
 )
 
-func printListServer(data map[string]map[string]*assh.Server) {
-	fmt.Println(kiris.StrPad("", "=", 160, 0))
-	fmt.Printf("  %-20s | %-20s | %-50s | %-50s \n", "Group Name", "Server Name", "Server Host", "Remark")
-	fmt.Println(kiris.StrPad("", "-", 160, 0))
-	var i = 0
-	for g, ss := range data {
-		for n, s := range ss {
-			i++
-			var color = fmt.Sprintf("\033[0m")
-			if i%4 == 0 {
-				color = fmt.Sprintf("\033[1m")
-			}
+// registerServerCommands 注册顶层 server 命令（add/set/ls/info/rm/mv/rollback）。
+func (a *App) registerServerCommands() {
+	a.cli.Commands = append(a.cli.Commands, []cli.Command{
+		{
+			Name:      "add",
+			Usage:     "Add a server",
+			ArgsUsage: "<name>",
+			Action:    a.serverAddAction,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "H, host", Usage: "host address (required)"},
+				cli.IntFlag{Name: "p, port", Value: 22, Usage: "port"},
+				cli.StringFlag{Name: "u, user", Usage: "username"},
+				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
+				cli.StringFlag{Name: "P, password", Usage: "password (omit for interactive prompt)"},
+				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
+				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+				cli.StringSliceFlag{Name: "o, option", Usage: "option in key=value format"},
+				cli.StringFlag{Name: "remark", Usage: "remark"},
+				cli.StringFlag{Name: "group", Usage: "group"},
+			},
+		},
+		{
+			Name:      "set",
+			Usage:     "Create or update server parameters (upsert)",
+			ArgsUsage: "<name>",
+			Action:    a.serverSetAction,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "H, host", Usage: "host address (required for new)"},
+				cli.IntFlag{Name: "p, port", Usage: "port"},
+				cli.StringFlag{Name: "u, user", Usage: "username"},
+				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
+				cli.StringFlag{Name: "P, password", Usage: "password"},
+				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
+				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+				cli.StringSliceFlag{Name: "o, option", Usage: "add/replace option in key=value format"},
+				cli.StringFlag{Name: "remark", Usage: "remark"},
+				cli.BoolFlag{Name: "clear-password", Usage: "clear the password"},
+				cli.BoolFlag{Name: "clear-key", Usage: "clear the key file"},
+			},
+		},
+		{
+			Name:   "ls",
+			Usage:  "List servers",
+			Action: a.serverListAction,
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "group", Usage: "filter by group"},
+				cli.StringFlag{Name: "search", Usage: "search by keyword"},
+			},
+		},
+		{
+			Name:      "info",
+			Usage:     "Show server details",
+			ArgsUsage: "<name>",
+			Action:    a.serverInfoAction,
+		},
+		{
+			Name:      "rm",
+			Usage:     "Remove a server",
+			ArgsUsage: "<name>",
+			Action:    a.serverRemoveAction,
+		},
+		{
+			Name:      "mv",
+			Usage:     "Rename/move a server",
+			ArgsUsage: "<from> <to>",
+			Action:    a.serverMoveAction,
+		},
+		{
+			Name:      "rollback",
+			Usage:     "Rollback server configuration to a previous version",
+			ArgsUsage: "<name> [version]",
+			Action:    a.serverRollbackAction,
+			Flags: []cli.Flag{
+				cli.BoolFlag{Name: "list", Usage: "show changelog versions"},
+			},
+		},
+	}...)
+}
 
-			sInfo := fmt.Sprintf("%s@%s:%d (%s)",
-				s.User,
-				s.Host,
-				s.Port,
-				kiris.Ternary(s.Password != "",
-					"passwd:yes",
-					kiris.Ternary(s.PemKey != "", "pub key:yes", "passwd:no").(string),
-				).(string),
-			)
-			remark := kiris.Ternary(s.Remark != "", s.Remark, "\033[0;37m (no remark) \033[0m")
+// serverAddAction 处理 server add 命令。
+// 如果未指定密码且未指定密钥文件，交互式提示用户输入密码。
+// 支持 --group 参数，在添加时自动为名称添加分组前缀。
+func (a *App) serverAddAction(c *cli.Context) error {
+	name := c.Args().Get(0)
+	if name == "" {
+		return fmt.Errorf("server name is required")
+	}
 
-			fmt.Printf("> "+color+"%-20s\033[0m | "+color+"%-20s\033[0m | "+color+"%-50s\033[0m | %s \n", g, n, sInfo, remark)
+	host := c.String("host")
+	if host == "" {
+		return fmt.Errorf("--host/-H is required")
+	}
+
+	if group := c.String("group"); group != "" {
+		name = group + "." + name
+	}
+
+	port := c.Int("port")
+	user := firstNonEmpty(c.String("user"), c.String("login"))
+	password := c.String("password")
+	keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
+
+	if password == "" && keyFile == "" {
+		fmt.Fprint(os.Stderr, "Enter password: ")
+		passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Fprintln(os.Stderr)
+		if err == nil && len(passwordBytes) > 0 {
+			password = string(passwordBytes)
 		}
 	}
-	fmt.Println(kiris.StrPad("", "=", 160, 0))
-}
 
-func ListServer(c *cli.Context) error {
-	ss := assh.NewAssh()
-	printListServer(ss.List())
-	return nil
-}
-
-func SearchServer(c *cli.Context) error {
-	name := c.Args().First()
-	data := assh.NewAssh().Search(name)
-	printListServer(data)
-	return nil
-}
-
-func printServerInfo(s *assh.Server) {
-	fmt.Println(kiris.StrPad("", "=", 100, 0))
-	fmt.Println(kiris.StrPad(" Server Information Detail ", "+", 100, kiris.KIRIS_STR_PAD_BOTH))
-	fmt.Println(kiris.StrPad("", "-", 100, 0))
-	ss := reflect.ValueOf(s).Elem()
-	for i, k := range []string{"Name", "Host", "Port", "User", "Password", "PemKey", "Remark"} {
-		fmt.Printf("%20s:   %v\n", "Server "+k, ss.Field(i))
+	auth := &domain.Auth{
+		Password: password,
+		KeyFile:  keyFile,
 	}
-	fmt.Println(kiris.StrPad("", "=", 100, 0))
-}
+	if auth.Password == "" && auth.KeyFile == "" {
+		auth = nil
+	}
 
-func InfoServer(c *cli.Context) error {
-	name := c.Args().First()
-	if name == "" {
+	options := make(map[string]interface{})
+	for _, opt := range c.StringSlice("option") {
+		parts := strings.SplitN(opt, "=", 2)
+		if len(parts) == 2 {
+			options[parts[0]] = parts[1]
+		}
+	}
+
+	server := &domain.Server{
+		Host:    host,
+		Port:    port,
+		User:    user,
+		Auth:    auth,
+		Remark:  c.String("remark"),
+		Options: options,
+	}
+
+	// 1) Preview
+	a.previewServer(server, name)
+
+	// 2) Confirm
+	if !a.askConfirmation(fmt.Sprintf("Add server %q?", name)) {
+		fmt.Println("cancelled")
 		return nil
 	}
 
-	ss := assh.NewAssh()
-	if s := ss.Get(name); s != nil {
-		printServerInfo(s)
-	} else {
-		fmt.Printf("Server [%s] not found\n", name)
-		log.Infof("show info: Server [%s] not found\n", name)
+	// 3) Execute
+	if err := a.serverSvc.AddServer(name, server); err != nil {
+		return err
 	}
+
+	fmt.Printf("server %q added (v%d)\n", name, 1)
 	return nil
 }
 
-func SetServer(c *cli.Context) (err error) {
-	var server = &assh.Server{User: "root", Port: 22}
+// serverSetAction 处理 server set 命令（upsert 语义）。
+// 如果服务器不存在则创建，存在则部分更新（仅修改通过标志指定的字段）。
+// 支持 --clear-password 和 --clear-key 清除认证信息。
+func (a *App) serverSetAction(c *cli.Context) error {
+	name := c.Args().Get(0)
+	if name == "" {
+		return fmt.Errorf("server name is required")
+	}
 
-	ss := assh.NewAssh()
-	name := c.Args().First()
-	host := c.Args().Get(1)
-	if s := ss.Get(name); s != nil {
-		server = s
-		if !c.IsSet("f") {
-			fmt.Printf("The server %s is exists, do you sure cover it? [y/n]:", name)
-			var yes string
-			fmt.Scanln(&yes)
-			if "Y" != strings.ToUpper(yes) {
-				return
-			}
+	existing, err := a.serverSvc.GetServer(name)
+	isNew := err != nil
+
+	// 检查是否有任何修改标志被设置
+	modFlags := []string{"host", "port", "user", "login", "password",
+		"identity-file", "key", "remark", "clear-password", "clear-key"}
+	hasChanges := false
+	for _, f := range modFlags {
+		if c.IsSet(f) {
+			hasChanges = true
+			break
 		}
 	}
-	if host != "" {
-		if h, u, p := parseHostString(host); h != "" {
-			server.Host = h
-			if p > 0 {
-				server.Port = p
+	if !hasChanges && len(c.StringSlice("option")) > 0 {
+		hasChanges = true
+	}
+
+	// 构建待保存的服务器对象
+	var serverToSave *domain.Server
+	action := "update" // or "create"
+
+	if isNew {
+		// --- 创建分支 ---
+		if !hasChanges {
+			return fmt.Errorf("--host/-H is required for a new server")
+		}
+
+		host := c.String("host")
+		if host == "" {
+			return fmt.Errorf("--host/-H is required for a new server")
+		}
+
+		port := 22
+		if c.IsSet("port") {
+			port = c.Int("port")
+		}
+		if port < 1 || port > 65535 {
+			return domain.ErrInvalidPort
+		}
+
+		user := firstNonEmpty(c.String("user"), c.String("login"))
+		if user == "" {
+			user = "root"
+		}
+
+		password := c.String("password")
+		keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
+
+		auth := &domain.Auth{
+			Password: password,
+			KeyFile:  keyFile,
+		}
+		if auth.Password == "" && auth.KeyFile == "" {
+			auth = nil
+		}
+
+		options := make(map[string]interface{})
+		for _, opt := range c.StringSlice("option") {
+			parts := strings.SplitN(opt, "=", 2)
+			if len(parts) == 2 {
+				options[parts[0]] = parts[1]
 			}
-			if u != "" {
-				server.User = u
+		}
+
+		serverToSave = &domain.Server{
+			Host:    host,
+			Port:    port,
+			User:    user,
+			Auth:    auth,
+			Remark:  c.String("remark"),
+			Options: options,
+		}
+		action = "create"
+	} else {
+		// --- 更新分支 ---
+		if !hasChanges {
+			a.printServerDetail(existing)
+			fmt.Println("\nhint: use flags to modify parameters, e.g. --host, -p, -P, --remark")
+			return nil
+		}
+
+		// 深拷贝现有配置，仅修改显式设置的字段
+		updated := *existing
+		if existing.Options != nil {
+			updated.Options = make(map[string]interface{})
+			for k, v := range existing.Options {
+				updated.Options[k] = v
 			}
+		} else {
+			updated.Options = make(map[string]interface{})
+		}
+		if existing.Auth != nil {
+			authCopy := *existing.Auth
+			updated.Auth = &authCopy
+		}
+
+		if c.IsSet("host") {
+			updated.Host = c.String("host")
+		}
+		if c.IsSet("port") {
+			p := c.Int("port")
+			if p < 1 || p > 65535 {
+				return domain.ErrInvalidPort
+			}
+			updated.Port = p
+		}
+		if c.IsSet("user") || c.IsSet("login") {
+			updated.User = firstNonEmpty(c.String("user"), c.String("login"))
+		}
+		if c.IsSet("password") {
+			if updated.Auth == nil {
+				updated.Auth = &domain.Auth{}
+			}
+			updated.Auth.Password = c.String("password")
+		}
+		if c.IsSet("identity-file") || c.IsSet("key") {
+			keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
+			if updated.Auth == nil {
+				updated.Auth = &domain.Auth{}
+			}
+			updated.Auth.KeyFile = keyFile
+		}
+		if opts := c.StringSlice("option"); len(opts) > 0 {
+			for _, opt := range opts {
+				parts := strings.SplitN(opt, "=", 2)
+				if len(parts) == 2 {
+					updated.Options[parts[0]] = parts[1]
+				}
+			}
+		}
+		if c.IsSet("remark") {
+			updated.Remark = c.String("remark")
+		}
+
+		if c.Bool("clear-password") {
+			if updated.Auth != nil {
+				updated.Auth.Password = ""
+			}
+		}
+		if c.Bool("clear-key") {
+			if updated.Auth != nil {
+				updated.Auth.KeyFile = ""
+			}
+		}
+
+		if updated.Auth != nil && updated.Auth.Password == "" && updated.Auth.KeyFile == "" {
+			updated.Auth = nil
+		}
+
+		serverToSave = &updated
+		action = "update"
+	}
+
+	// 1) Preview
+	a.previewServer(serverToSave, name)
+
+	// 2) Confirm
+	confirmMsg := fmt.Sprintf("%s server %q?", action, name)
+	if !a.askConfirmation(confirmMsg) {
+		fmt.Println("cancelled")
+		return nil
+	}
+
+	// 3) Execute
+	if err := a.serverSvc.SetServer(name, serverToSave); err != nil {
+		return err
+	}
+
+	if action == "create" {
+		fmt.Printf("server %q created (v%d)\n", name, 1)
+	} else {
+		after, err := a.serverSvc.GetServer(name)
+		if err == nil {
+			fmt.Printf("server %q updated (v%d)\n", name, after.Version)
+		} else {
+			fmt.Printf("server %q updated\n", name)
 		}
 	}
 
-	if h := c.String("H"); h != "" {
-		server.Host = h
-	}
-	if server.Host == "" {
-		log.Fatal("set server: hostname is nil")
-	}
-
-	if u := c.String("l"); u != "" {
-		server.User = u
-	}
-	if p := c.Int("p"); p > 0 {
-		server.Port = p
-	}
-	if P := c.String("P"); P != "" {
-		server.Password = P
-	}
-	if k := c.String("k"); k != "" {
-		server.PemKey = k
-	}
-	if R := c.String("R"); R != "" {
-		server.Remark = R
-	}
-
-	server.Name = name
-
-	ss.Set(name, *server)
-	fmt.Printf("Server [%s] success.\n", name)
-	printServerInfo(server)
-	return
+	return nil
 }
 
-func MoveServer(c *cli.Context) (err error) {
-	from := c.Args().First()
+// serverRollbackAction 处理 server rollback 命令。
+// 使用 --list 标志查看可回滚的版本列表，或指定回滚到目标版本。
+func (a *App) serverRollbackAction(c *cli.Context) error {
+	name := c.Args().Get(0)
+	if name == "" {
+		return fmt.Errorf("server name is required")
+	}
+
+	// --list 模式：显示变更历史
+	if c.Bool("list") {
+		entries, err := a.serverSvc.GetServerChangelog(name)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Changelog for %q:\n", name)
+		fmt.Printf("%-8s %-12s %-19s\n", "Version", "Type", "Date")
+		fmt.Println(strings.Repeat("-", 42))
+		for _, e := range entries {
+			date := e.CreatedAt
+			if len(date) > 19 {
+				date = date[:19]
+			}
+			fmt.Printf("%-8d %-12s %-19s\n", e.Version, e.ChangeType, date)
+		}
+		return nil
+	}
+
+	// 回滚到指定版本
+	versionStr := c.Args().Get(1)
+	if versionStr == "" {
+		return fmt.Errorf("version number is required (use --list to see available versions)")
+	}
+
+	version, err := strconv.Atoi(versionStr)
+	if err != nil {
+		return fmt.Errorf("invalid version number: %s", versionStr)
+	}
+
+	if err := a.serverSvc.RollbackServer(name, version); err != nil {
+		return err
+	}
+
+	fmt.Printf("server %q rolled back to v%d\n", name, version)
+	return nil
+}
+
+// printServerDetail 打印服务器配置的详细信息，用于 server info 命令。
+// 输出格式：
+//   --------------------------------
+//   +   server-name (ver. N)    +
+//   ================================
+//        Server Name: value
+//        Server Host: value
+//                 ...
+func (a *App) printServerDetail(s *domain.Server) {
+	fullName := s.Name
+	if s.Group != "" {
+		fullName = domain.JoinName(s.Group, s.Name)
+	}
+
+	// ---- header (title centered, + aligned to separators) ----
+	const headerWidth = 40
+	title := fmt.Sprintf("%s (ver. %d)", fullName, s.Version)
+	inner := headerWidth - 2 // exclude the two + signs
+	leftPad := (inner - len(title)) / 2
+	rightPad := inner - len(title) - leftPad
+
+	fmt.Println(strings.Repeat("-", headerWidth))
+	fmt.Printf("+%s%s%s+\n", strings.Repeat(" ", leftPad), title, strings.Repeat(" ", rightPad))
+	fmt.Println(strings.Repeat("=", headerWidth))
+
+	// ---- detail items (label right-aligned, no excess indent) ----
+	// label style: "Server Name", "Server Host", "Server Port", "Server User",
+	//              "Password", "Key File", "Remark", "Auth"
+	// labelWidth = longest label length ("Server Name" = 11) so longest label has 0 padding
+	const labelWidth = 11
+	pl := func(label string, value interface{}) {
+		fmt.Printf("%*s: %v\n", labelWidth, label, value)
+	}
+
+	pl("Server Name", fullName)
+	pl("Server Host", s.Host)
+	pl("Server Port", s.Port)
+	pl("Server User", s.User)
+
+	if s.Auth != nil {
+		hasPwd := s.Auth.Password != ""
+		hasKey := s.Auth.KeyFile != ""
+		switch {
+		case hasPwd && hasKey:
+			pl("Auth Type", "password+key")
+		case hasPwd:
+			pl("Auth Type", "password")
+		case hasKey:
+			pl("Auth Type", "key")
+		default:
+			pl("Auth Type", "none")
+		}
+		if hasPwd {
+			pl("Password", s.Auth.Password)
+		}
+		if hasKey {
+			pl("Key File", s.Auth.KeyFile)
+		}
+	} else {
+		pl("Auth Type", "none")
+	}
+
+	if s.Remark != "" {
+		pl("Remark", s.Remark)
+	}
+	for k, v := range s.Options {
+		pl("Option: "+k, v)
+	}
+}
+
+// serverListAction 处理 server ls 命令，支持按分组和关键字筛选。
+func (a *App) serverListAction(c *cli.Context) error {
+	group := c.String("group")
+	search := c.String("search")
+
+	var result map[string]map[string]*domain.Server
+	var err error
+
+	switch {
+	case search != "":
+		result, err = a.serverSvc.SearchServers(search)
+	case group != "":
+		var servers map[string]*domain.Server
+		servers, err = a.serverSvc.GetGroup(group)
+		if err == nil {
+			result = map[string]map[string]*domain.Server{group: servers}
+		}
+	default:
+		result, err = a.serverSvc.ListServers()
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if len(result) == 0 {
+		fmt.Println("no servers found")
+		return nil
+	}
+
+	// 1) collect all rows
+	type row struct {
+		group, name, host, auth, remark string
+		version                         int
+	}
+	var rows []row
+	for g, servers := range result {
+		for _, s := range servers {
+			hostStr := fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
+
+			auth := "none"
+			if s.Auth != nil {
+				switch {
+				case s.Auth.Password != "" && s.Auth.KeyFile != "":
+					auth = "password+key"
+				case s.Auth.Password != "":
+					auth = "password"
+				case s.Auth.KeyFile != "":
+					auth = "key"
+				}
+			}
+
+			rows = append(rows, row{
+				group:   g,
+				name:    s.Name,
+				host:    hostStr,
+				version: s.Version,
+				auth:    auth,
+				remark:  s.Remark,
+			})
+		}
+	}
+
+	// 2) calculate adaptive column widths
+	maxGroup, maxName, maxHost := len("Group"), len("Name"), len("Host")
+	for _, r := range rows {
+		if l := len(r.group); l > maxGroup {
+			maxGroup = l
+		}
+		if l := len(r.name); l > maxName {
+			maxName = l
+		}
+		if l := len(r.host); l > maxHost {
+			maxHost = l
+		}
+	}
+
+	// 3) print header + separator
+	authWidth := 14
+	headerFmt := fmt.Sprintf("%%%ds %%-%ds %%-%ds %%-4s %%-%ds %%s",
+		maxGroup, maxName, maxHost, authWidth)
+	fmt.Printf(headerFmt+"\n", "Group", "Name", "Host", "Ver", "Auth", "Remark")
+
+	// fixed-width area: Group + 1sp + Name + 1sp + Host + 1sp + Ver(4) + 1sp + Auth + 1sp
+	sepLen := maxGroup + maxName + maxHost + authWidth + 10
+	if sepLen < 60 {
+		sepLen = 60
+	}
+	fmt.Println(strings.Repeat("-", sepLen))
+
+	// 4) print data rows (with color per group, bold alternation within group)
+	var groupColors = []int{32, 34, 33, 35, 36}
+	groupOrder := make([]string, 0, len(result))
+	groupSeen := make(map[string]bool)
+	groupRow := make(map[string]int) // group → row counter for bold alternation
+	for _, r := range rows {
+		if !groupSeen[r.group] {
+			groupSeen[r.group] = true
+			groupOrder = append(groupOrder, r.group)
+		}
+	}
+
+	for _, r := range rows {
+		groupIdx := 0
+		for i, g := range groupOrder {
+			if g == r.group {
+				groupIdx = i
+				break
+			}
+		}
+		baseColor := groupColors[groupIdx%len(groupColors)]
+
+		rowN := groupRow[r.group]
+		var bold int
+		if rowN%2 == 0 {
+			bold = 1
+		} else {
+			bold = 0
+		}
+		groupRow[r.group] = rowN + 1
+
+		fmt.Printf("\033[%d;%dm%*s %-*s %-*s %-4d %-*s %s\033[0m\n",
+			bold, baseColor,
+			maxGroup, r.group,
+			maxName, r.name,
+			maxHost, r.host,
+			r.version, authWidth, r.auth, r.remark)
+	}
+
+	return nil
+}
+
+// serverInfoAction 处理 server info 命令，显示服务器的完整配置详情。
+// 如果服务器不存在，自动搜索最接近的名称并给出建议。
+func (a *App) serverInfoAction(c *cli.Context) error {
+	name := c.Args().Get(0)
+	if name == "" {
+		return fmt.Errorf("server name is required")
+	}
+
+	server, err := a.serverSvc.GetServer(name)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			if suggestion, ok := a.serverSvc.SuggestServer(name); ok {
+				return fmt.Errorf("%q not found, did you mean [%s]?", name, suggestion)
+			}
+		}
+		return err
+	}
+
+	a.printServerDetail(server)
+	return nil
+}
+
+// serverRemoveAction 处理 server rm 命令，删除指定服务器配置。
+func (a *App) serverRemoveAction(c *cli.Context) error {
+	name := c.Args().Get(0)
+	if name == "" {
+		return fmt.Errorf("server name is required")
+	}
+
+	if err := a.serverSvc.RemoveServer(name); err != nil {
+		return err
+	}
+
+	fmt.Printf("server %q removed\n", name)
+	return nil
+}
+
+// serverMoveAction 处理 server mv 命令，重命名或跨分组移动服务器。
+func (a *App) serverMoveAction(c *cli.Context) error {
+	from := c.Args().Get(0)
 	to := c.Args().Get(1)
-	assh.NewAssh().Move(from, to)
+
+	if from == "" || to == "" {
+		return fmt.Errorf("both <from> and <to> names are required")
+	}
+
+	if err := a.serverSvc.MoveServer(from, to); err != nil {
+		return err
+	}
+
+	fmt.Printf("server %q moved to %q\n", from, to)
 	return nil
 }
 
-func RemoveServer(c *cli.Context) (err error) {
-	name := c.Args().First()
-	ss := assh.NewAssh()
-	if c.IsSet("g") {
-		if name == "" {
-			fmt.Println("group name is nil")
-		}
-		g := ss.GetGroup(name)
-		if g == nil {
-			fmt.Println("group no exists.")
-			return
-		}
+// previewServer 预览服务器配置信息，用于 add/set 确认前的预览。
+// 显示格式简洁，便于用户确认。
+func (a *App) previewServer(s *domain.Server, name string) {
+	group, serverName := domain.ParseName(name)
+	fullName := domain.JoinName(group, serverName)
 
-		for _, s := range g {
-			delServer(ss, s.Name, c)
-		}
-		return
-	}
-	if name != "" {
-		delServer(ss, name, c)
-	} else {
-		ss.List()
-		fmt.Printf("witch do you want to delete: ")
-		fmt.Scanln(&name)
-		if name != "" {
-			delServer(ss, name, c)
-		}
-		return
-	}
-	return
-}
+	fmt.Println("=== Server Preview ===")
+	fmt.Printf("Name:    %s\n", fullName)
+	fmt.Printf("Host:    %s\n", s.Host)
+	fmt.Printf("Port:    %d\n", s.Port)
+	fmt.Printf("User:    %s\n", s.User)
 
-func delServer(ss *assh.Assh, name string, c *cli.Context) {
-	if s := ss.Get(name); s != nil {
-		var yes string
-
-		if !c.IsSet("f") {
-			fmt.Printf("Are you sure (delete %s) [y/n]: ", name)
-			fmt.Scanln(&yes)
-		} else {
-			yes = "Y"
+	if s.Auth != nil {
+		hasPwd := s.Auth.Password != ""
+		hasKey := s.Auth.KeyFile != ""
+		switch {
+		case hasPwd && hasKey:
+			fmt.Printf("Auth:    password+key\n")
+		case hasPwd:
+			fmt.Printf("Auth:    password\n")
+		case hasKey:
+			fmt.Printf("Auth:    key\n")
+		default:
+			fmt.Printf("Auth:    none\n")
 		}
-		if "Y" == strings.ToUpper(yes) {
-			ss.Del(name)
-			log.Infof("Remove Server [%s]\n", name)
+		if hasKey {
+			fmt.Printf("Key:     %s\n", s.Auth.KeyFile)
 		}
 	} else {
-		fmt.Printf("服务器(%s)不存在于服务器列表中.\n", name)
+		fmt.Printf("Auth:    none\n")
+	}
+
+	if s.Remark != "" {
+		fmt.Printf("Remark:  %s\n", s.Remark)
+	}
+	if len(s.Options) > 0 {
+		fmt.Printf("Options: %v\n", s.Options)
 	}
 }
 
-func Connection(c *cli.Context) (err error) {
-	s := &assh.Server{User: "root", Port: 22}
-	args := c.Args()
+// askConfirmation 询问用户确认，返回 true 表示用户确认（Y/y/yes）。
+func (a *App) askConfirmation(prompt string) bool {
+	fmt.Print(prompt)
+	fmt.Print(" [Y/n]: ")
 
-	name := args.First()
-	if "" != name && "-c" != name {
-		if server := assh.NewAssh().Get(name); server != nil {
-			connection(server, c)
-			return
-		}
-		if h, u, p := parseHostString(name); h != "" {
-			s.Host = h
-			if u != "" {
-				s.User = u
-			}
-			if p > 0 {
-				s.Port = p
-			}
-		}
-	}
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
 
-	if h := c.String("H"); h != "" {
-		s.Host = h
-	}
-	if s.Host == "" {
-		log.Fatal("login server: hostname is nil")
-	}
-
-	if u := c.String("l"); u != "" {
-		s.User = u
-	}
-	if p := c.Int("p"); p > 0 {
-		s.Port = p
-	}
-	if P := c.String("P"); P != "" {
-		s.Password = P
-		fmt.Printf("Password: %s", P)
-	}
-	if k := c.String("k"); k != "" {
-		s.PemKey = k
-	}
-	s.Name = fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
-	connection(s, c)
-	return
-}
-
-func BatchCommand(c *cli.Context) (err error) {
-	args := c.Args()
-	Assh := assh.NewAssh()
-	cmd := args.Get(1)
-	if f := c.String("f"); f != "" {
-		if _c, ferr := kiris.FileGetContents(f); ferr == nil {
-			cmd = string(_c)
-		}
-	}
-
-	if name := args.First(); "" != name && "" != cmd {
-		defer timeCost(time.Now(), "BATCH COMMAND: ")
-		c.Set("c", cmd)
-		ch := make(chan string)
-
-		var chConnect = func(s *assh.Server, cmd string, ch chan string) {
-			_connection(s, cmd)
-			ch <- s.Name
-		}
-		if g := Assh.GetGroup(name); g != nil {
-			for _, s := range g {
-				s.Name = fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
-				go chConnect(s, cmd, ch)
-			}
-
-			for i := 0; i < len(g); i++ {
-				println("connection closed.", <-ch)
-			}
-		}
-	}
-
-	return
-}
-
-func parseHostString(s string) (host, user string, port int) {
-	if i := strings.Index(s, "@"); i > 0 {
-		user = s[:i]
-		s = s[i+1:]
-	}
-	if i := strings.Index(s, ":"); i > 0 {
-		if p, _ := strconv.Atoi(s[i+1:]); p > 0 {
-			port = p
-		}
-		s = s[:i]
-	}
-
-	host = s
-	return
-}
-
-func getSshClient(c *cli.Context) *assh.Server {
-	s := &assh.Server{User: "root", Port: 22}
-	args := c.Args()
-
-	name := args.First()
-	if "" != name && "-c" != name {
-		if server := assh.NewAssh().Get(name); server != nil {
-			return server
-		}
-		if h, u, p := parseHostString(name); h != "" {
-			s.Host = h
-			if u != "" {
-				s.User = u
-			}
-			if p > 0 {
-				s.Port = p
-			}
-		}
-	}
-
-	if h := c.String("H"); h != "" {
-		s.Host = h
-	}
-	if s.Host == "" {
-		log.Fatal("login server: hostname is nil")
-	}
-
-	if u := c.String("l"); u != "" {
-		s.User = u
-	}
-	if p := c.Int("p"); p > 0 {
-		s.Port = p
-	}
-	if P := c.String("P"); P != "" {
-		s.Password = P
-	}
-	if k := c.String("k"); k != "" {
-		s.PemKey = k
-	}
-	s.Name = fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
-
-	if "" == s.Password && "" == s.PemKey {
-		// 使用默认公钥
-		if c.IsSet("k") {
-			s.PemKey = "~/.ssh/id_rsa"
-		} else {
-			fmt.Printf("%s@%s's password: ", s.User, s.Host)
-			fmt.Scanln(&s.Password)
-		}
-	}
-	return s
-}
-
-func connection(s *assh.Server, c *cli.Context) {
-	// 执行远程命令
-	var cmd string
-	if _c := lookupShortFlag(c, "c"); _c != nil || c.IsSet("c") {
-		if _c != nil {
-			cmd = _c.(string)
-		} else {
-			cmd = c.String("c")
-		}
-	}
-	_connection(s, cmd)
-}
-
-func _connection(s *assh.Server, cmd string) {
-	if cmd != "" {
-		s.Command(cmd)
-	}
-
-	defer timeCost(time.Now())
-
-	host := fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
-	passwd := kiris.Ternary(s.PemKey != "",
-		"(pemKey: yes)",
-		fmt.Sprintf("(password: %s)", kiris.Ternary(s.Password != "", "yes", "no")),
-	)
-
-	fmt.Printf("> connection: %s %s \n", host, passwd)
-	log.Infof("connection server [%s]\n", host)
-
-	err := s.Connection()
-	if err != nil {
-		log.Error(err.Error())
-	}
-	log.Infof("%s connection closed.", host)
-
-	if cmd != "" {
-		cout := s.CombinedOutput()
-		fmt.Printf("\n> Result (%s): \n%s\n", fmt.Sprintf("%s -> '%s'", s.Name, host), cout)
-		log.Infof("Executive (%s -> '%s'):"+
-			"\n==============================================================================="+
-			"\nCommand > %s"+
-			"\n-------------------------------------------------------------------------------"+
-			"\n%s"+
-			"\n==============================================================================="+
-			"\n\n", s.Name, host, cmd, cout)
-	}
-}
-
-func ScpPush(c *cli.Context) (err error) {
-	var (
-		localPath  []string
-		remotePath string
-	)
-
-	args := c.Args()
-	if len(args) > 2 {
-		localPath = args[1 : len(args)-1]
-		remotePath = args[len(args)-1]
-	} else {
-		localPath = args[1:]
-		remotePath = "~/"
-	}
-
-	if 0 >= len(localPath) {
-		fmt.Println("sftp push fail: the local file/directory is empty")
-	}
-
-	defer timeCost(time.Now(), "SFTP PUSH")
-	name := args.First()
-	bufSize := c.Int("b")
-	if g := assh.NewAssh().GetGroup(name); g != nil {
-		ch := make(chan string)
-		if 0 >= bufSize {
-			bufSize = 2048
-		}
-		var chPush = func(s *assh.Server, localPath []string, remotePath string, ch chan string, bufSize int) {
-			if err := s.ScpPushFiles(localPath, remotePath, bufSize); err != nil {
-				log.Errorf("sftp push[%s] fail: %s", s.Name, err.Error())
-			}
-			ch <- fmt.Sprintf("[%s] pushed.\n", s.Name)
-		}
-		for _, s := range g {
-			go chPush(s, localPath, remotePath, ch, bufSize)
-		}
-		for i := 0; i < len(g); i++ {
-			print(<-ch)
-		}
-		return
-	}
-
-	if s := getSshClient(c); s != nil {
-		if err := s.ScpPushFiles(localPath, remotePath, bufSize); err != nil {
-			log.Error("sftp push fail: ", err.Error())
-		}
-		return
-	}
-	fmt.Println("sftp push fail: invalid server.")
-	return
-}
-
-func ScpPull(c *cli.Context) (err error) {
-	var (
-		remotePath []string
-		localPath  string
-	)
-
-	args := c.Args()
-	if len(args) > 2 {
-		remotePath = args[1 : len(args)-1]
-		localPath = args[len(args)-1]
-	} else {
-		remotePath = args[1:]
-		localPath = "./"
-	}
-
-	if 0 >= len(remotePath) {
-		fmt.Println("sftp pull fail: the remote file/directory is nil")
-	}
-
-	name := args.First()
-	if g := assh.NewAssh().GetGroup(name); g != nil {
-		ch := make(chan string)
-		var chPull = func(s *assh.Server, remotePath []string, localPath string, ch chan string) {
-			if err := s.ScpPullFiles(remotePath, localPath); err != nil {
-				log.Errorf("sftp push[%s] fail: %s", s.Name, err.Error())
-			}
-			ch <- fmt.Sprintf("[%s] pushed.\n", s.Name)
-		}
-		for _, s := range g {
-			go chPull(s, remotePath, localPath, ch)
-		}
-		for i := 0; i < len(g); i++ {
-			println(<-ch)
-		}
-		return
-	}
-
-	if s := getSshClient(c); s != nil {
-		if err := s.ScpPullFiles(remotePath, localPath); err != nil {
-			log.Errorf("sftp pull [%s] fail: ", err.Error())
-		}
-		return
-	}
-	fmt.Println("sftp pull fail: invalid server.")
-	return
-}
-
-func Keygen(c *cli.Context) (err error) {
-	comment := c.String("c")
-	saveFs := c.String("f")
-
-	if comment == "" && c.Args().First() != "" {
-		comment = fmt.Sprintf("assh@%s", c.Args().First())
-	}
-
-	key, _ := keygen.NewRsa(2048)
-	public, private, _ := key.GenSSHKey(comment)
-
-	var saveKey = func(f, private, public string) {
-		kiris.FilePutContents(f, private, 0)
-		kiris.FilePutContents(f+".pub", public, 0)
-	}
-
-	// 生成服务器公钥
-	if name := c.Args().First(); name != "" {
-		Assh := assh.NewAssh()
-		var ss []*assh.Server
-
-		if g := Assh.GetGroup(name); g != nil {
-			for _, s := range g {
-				ss = append(ss, s)
-			}
-		} else if s := Assh.Get(name); s != nil {
-			ss = append(ss, s)
-		}
-		if len(ss) > 0 {
-			for _, s := range ss {
-				pemKey := "/tmp/" + hash.Md5(name)
-				saveKey(pemKey, private, public)
-				sshCopyId(s, public)
-				s.PemKey = pemKey
-				Assh.Set(name, *s)
-			}
-		}
-	}
-
-	saveKey(saveFs, private, public)
-	return
-}
-
-func PingServers(c *cli.Context) (err error) {
-	ss := assh.NewAssh()
-	pingServersPrint(ss.List())
-	return
-}
-
-func sshCopyId(s *assh.Server, public string) {
-	script := `umask 077;` +
-		`test -d ~/.ssh || mkdir ~/.ssh; echo "` + public + `"  >> ~/.ssh/authorized_keys ` +
-		`&& (test -x /sbin/restorecon && /sbin/restorecon ~/.ssh ~/.ssh/authorized_keys >/dev/null 2>&1 || true)`
-	s.Command(script)
-	host := fmt.Sprintf("%s -> %s@%s", s.Name, s.User, s.Host)
-	fmt.Printf("> connection: %s \n", host)
-	log.Infof("connection server [%s]: ssh_copy_id \n", host)
-	err := s.Connection()
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Infof("connection server [%s] close: ssh_copy_id\n", host)
-	if cout := s.CombinedOutput(); cout != "" {
-		log.Infof("ssh_copy_id -> %s: \n> %s \n", host, cout)
-	}
-}
-
-func timeCost(start time.Time, prefix ...string) {
-	tc := time.Since(start)
-	px := strings.Join(prefix, "")
-	fmt.Printf("> %s time cost: %v\n", px, tc)
-}
-
-func pingServersPrint(data map[string]map[string]*assh.Server) {
-	fmt.Println(kiris.StrPad("", "=", 160, 0))
-	fmt.Printf(" %-20s | %-50s | %-50s \n", "Server Name", "Server Host", "Result")
-	fmt.Println(kiris.StrPad("", "-", 160, 0))
-
-	var ch = make(chan string)
-	var chn = make(chan int)
-	var printServer = func(color, remark string, s *assh.Server) string {
-		sInfo := fmt.Sprintf("%s@%s:%d (%s)",
-			s.User,
-			s.Host,
-			s.Port,
-			kiris.Ternary(s.Password != "",
-				"passwd:yes",
-				kiris.Ternary(s.PemKey != "", "pub key:yes", "passwd:no").(string),
-			).(string),
-		)
-		return fmt.Sprintf("> "+color+"%-20s\033[0m | "+color+"%-50s\033[0m | "+color+"%s\033[0m", s.Name, sInfo, remark)
-	}
-	var chPrintServer = func(n int, s *assh.Server) {
-		var color = fmt.Sprintf("\033[0m")
-		start := time.Now()
-
-		if _, err := s.SSHActive(); err != nil {
-			color = fmt.Sprintf("\033[31m")
-			ch <- printServer(color, fmt.Sprintf(err.Error()), s)
-			chn <- n
-		} else {
-			tc := time.Since(start)
-			ch <- printServer(color, fmt.Sprintf("time cost: %v", tc), s)
-			chn <- n
-		}
-	}
-
-	var x = 0
-	for _, ss := range data {
-		for _, s := range ss {
-			go chPrintServer(x, s)
-			x++
-		}
-	}
-
-	for i := 0; i < x; i++ {
-		println(<-ch)
-		fmt.Printf("Scanning: %d/%d\r", i, x)
-	}
-	fmt.Println(kiris.StrPad("", "=", 160, 0))
-
-}
-
-// 处理转发
-func Proxy(c *cli.Context) (err error) {
-	port := c.String("d")
-	host := c.String("i")
-	if port == "" {
-		port = "1080"
-	}
-
-	defer timeCost(time.Now(), "SSH PROXY")
-
-	args := c.Args()
-	name := args.First()
-	if server := assh.NewAssh().Get(name); server != nil {
-		server.Proxy(host, port)
-	}
-	return nil
-}
-
-// 远程主机端口转发: ProtForwarding
-func ProxyHost(c *cli.Context) (err error) {
-	rhost := c.String("H")
-	rport := c.String("P")
-	port := c.String("d")
-	host := c.String("i")
-	if port == "" {
-		port = "1080"
-	}
-
-	defer timeCost(time.Now(), "SSH PROXY Host")
-
-	args := c.Args()
-	name := args.First()
-	if server := assh.NewAssh().Get(name); server != nil {
-		server.PortForwarding(host, port, rhost, rport)
-	}
-	return nil
-}
-
-// 监听远程主机端口转发: LocalProxy
-func LocalProxy(c *cli.Context) (err error) {
-	rhost := c.String("H")
-	rport := c.String("P")
-	port := c.String("d")
-	host := c.String("i")
-	if port == "" {
-		port = "1080"
-	}
-
-	defer timeCost(time.Now(), "SSH PROXY Host")
-
-	args := c.Args()
-	name := args.First()
-	if server := assh.NewAssh().Get(name); server != nil {
-		server.LocalProxy(rhost, rport, host, port)
-		//server.LocalProxyWithRetry(rhost, rport, host, port)
-	}
-	return nil
+	return input == "" || input == "y" || input == "yes"
 }

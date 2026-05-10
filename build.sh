@@ -1,15 +1,11 @@
-#########################################################################
-# File Name: build.sh
-# Author: Kee
-# mail: chinboy2012@gmail.com
-# Created Time: 2019.11.08
-#########################################################################
 #!/bin/bash
 export GO11MODULE="on"
+
+cd "$(dirname "$0")"
 go mod tidy
 
 PROJECT="assh"
-VERSION="`go run . version`"
+VERSION="`go run . version 2>/dev/null || echo "v2.0.0-dev"`"
 BUILD=`date +%FT%T%z`
 
 function build () {
@@ -29,6 +25,7 @@ function build () {
     mv assh assh.exe
     cd -
   fi
+
   cd ./build
   zip -r "${package}.zip" "./${package}"
   echo "Clean ${package}..."
@@ -37,17 +34,14 @@ function build () {
 }
 
 if [ -z "$1" ];then
-  # OS X Mac
   build darwin amd64 macOS
   build darwin 386 macOS
   build darwin arm macOS
 
-  # Linux
   build linux amd64 linux
   build linux 386 linux
   build linux arm linux
 
-  # Windows
   build windows amd64 windows
   build windows 386 windows
 else
