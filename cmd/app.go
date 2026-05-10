@@ -101,6 +101,13 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 				cli.BoolFlag{Name: "skip", Usage: "skip existing files"},
 				cli.BoolFlag{Name: "S, checksum", Usage: "verify SHA256 checksum after transfer"},
 				cli.IntFlag{Name: "c, concurrency", Value: 3, Usage: "number of concurrent transfers"},
+				// Direct connection flags (F12)
+				cli.StringFlag{Name: "H, host", Usage: "remote host address (direct connection)"},
+				cli.StringFlag{Name: "u, user", Usage: "username (direct connection)"},
+				cli.IntFlag{Name: "p, port", Value: 22, Usage: "SSH port (direct connection)"},
+				cli.StringFlag{Name: "P, password", Usage: "password (direct connection)"},
+				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path (direct connection)"},
+				cli.StringFlag{Name: "k, key", Usage: "key file path (alias for -i)"},
 			},
 		},
 		{
@@ -114,6 +121,13 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 				cli.BoolFlag{Name: "skip", Usage: "skip existing files"},
 				cli.BoolFlag{Name: "S, checksum", Usage: "verify SHA256 checksum after transfer"},
 				cli.IntFlag{Name: "c, concurrency", Value: 3, Usage: "number of concurrent transfers"},
+				// Direct connection flags (F12)
+				cli.StringFlag{Name: "H, host", Usage: "remote host address (direct connection)"},
+				cli.StringFlag{Name: "u, user", Usage: "username (direct connection)"},
+				cli.IntFlag{Name: "p, port", Value: 22, Usage: "SSH port (direct connection)"},
+				cli.StringFlag{Name: "P, password", Usage: "password (direct connection)"},
+				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path (direct connection)"},
+				cli.StringFlag{Name: "k, key", Usage: "key file path (alias for -i)"},
 			},
 		},
 		{
@@ -233,9 +247,30 @@ func fsPushAction(transferSvc *service.TransferService, serverSvc *service.Serve
 			return cli.ShowSubcommandHelp(c)
 		}
 
-		name := c.Args()[0]
-		localPath := c.Args()[1]
-		remotePath := c.Args()[2]
+		// Check for direct connection parameters (F12)
+		host := c.String("H")
+		user := c.String("u")
+		port := c.Int("p")
+		password := c.String("P")
+		identityFile := c.String("i")
+		if identityFile == "" {
+			identityFile = c.String("k")
+		}
+
+		var name string
+		var localPath string
+		var remotePath string
+
+		// If -H is provided, use direct connection mode
+		if host != "" {
+			name = "__direct__"  // Special marker for direct connection
+			localPath = c.Args()[0]
+			remotePath = c.Args()[1]
+		} else {
+			name = c.Args()[0]
+			localPath = c.Args()[1]
+			remotePath = c.Args()[2]
+		}
 
 		opts := service.TransferOptions{
 			Recursive:      c.Bool("r"),
@@ -252,8 +287,28 @@ func fsPushAction(transferSvc *service.TransferService, serverSvc *service.Serve
 		}
 
 		ctx := context.Background()
-		if err := transferSvc.PushFile(ctx, name, localPath, remotePath, opts); err != nil {
-			return fmt.Errorf("push failed: %w", err)
+
+		// Direct connection mode
+		if host != "" {
+			// Create a temporary server config for direct connection
+server := &domain.Server{
+				Name: "direct-" + host,
+				Host: host,
+				Port: port,
+				User: user,
+				Auth: &domain.Auth{
+					Password: password,
+					KeyFile:   identityFile,
+				},
+			}
+			if err := transferSvc.PushFileDirect(ctx, server, localPath, remotePath, opts); err != nil {
+				return fmt.Errorf("push failed: %w", err)
+			}
+		} else {
+			// Normal mode - use server name lookup
+			if err := transferSvc.PushFile(ctx, name, localPath, remotePath, opts); err != nil {
+				return fmt.Errorf("push failed: %w", err)
+			}
 		}
 
 		fmt.Println("push completed")
@@ -267,11 +322,35 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 			return cli.ShowSubcommandHelp(c)
 		}
 
-		name := c.Args()[0]
-		remotePath := c.Args()[1]
-		localPath := "."
-		if c.NArg() >= 3 {
-			localPath = c.Args()[2]
+		// Check for direct connection parameters (F12)
+		host := c.String("H")
+		user := c.String("u")
+		port := c.Int("p")
+		password := c.String("P")
+		identityFile := c.String("i")
+		if identityFile == "" {
+			identityFile = c.String("k")
+		}
+
+		var name string
+		var remotePath string
+		var localPath string
+
+		// If -H is provided, use direct connection mode
+		if host != "" {
+			name = "__direct__"
+			remotePath = c.Args()[0]
+			localPath = c.Args()[1]
+			if c.NArg() >= 3 {
+				localPath = c.Args()[2]
+			}
+		} else {
+			name = c.Args()[0]
+			remotePath = c.Args()[1]
+			localPath = "."
+			if c.NArg() >= 3 {
+				localPath = c.Args()[2]
+			}
 		}
 
 		opts := service.TransferOptions{
@@ -289,8 +368,26 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 		}
 
 		ctx := context.Background()
-		if err := transferSvc.PullFile(ctx, name, remotePath, localPath, opts); err != nil {
-			return fmt.Errorf("pull failed: %w", err)
+
+		// Direct connection mode
+		if host != "" {
+			server := &domain.Server{
+				Name: "direct-" + host,
+				Host: host,
+				Port: port,
+				User: user,
+				Auth: &domain.Auth{
+					Password: password,
+					KeyFile:   identityFile,
+				},
+			}
+			if err := transferSvc.PullFileDirect(ctx, server, remotePath, localPath, opts); err != nil {
+				return fmt.Errorf("pull failed: %w", err)
+			}
+} else {
+			if err := transferSvc.PullFile(ctx, name, remotePath, localPath, opts); err != nil {
+				return fmt.Errorf("pull failed: %w", err)
+			}
 		}
 
 		fmt.Println("pull completed")

@@ -29,8 +29,11 @@ var Version = "v2.0.0"
 var Build string
 
 func main() {
+	// RQ-001: Expand combined short flags (e.g., -qnt -> -q -n -t)
+	args := expandCombinedFlags(os.Args)
+
 	// 1. 解析配置目录（-F 参数或 ASSH_CONFIG_DIR 环境变量）
-	cfgDir := resolveConfigDir()
+	cfgDir := resolveConfigDir(args)
 	if cfgDir != "" {
 		config.ConfigPath = cfgDir
 		config.SetDbPath(cfgDir + "/asshv2.db")
@@ -62,29 +65,95 @@ func main() {
 
 	// 6. 创建 CLI 应用并运行
 	app := cmd.NewApp(Version, Build, connectSvc, serverSvc)
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
+// expandCombinedFlags 将组合短参数展开为独立参数。
+// 例如：-qnt -> -q -n -t
+// 只对已知的 bool 类型短参数进行展开。
+func expandCombinedFlags(args []string) []string {
+	if len(args) < 2 {
+		return args
+	}
+
+	// Known bool flags that can be combined
+	knownBoolFlags := map[string]bool{
+		"v": true, // verbose
+		"q": true, // quiet
+		"V": true, // version
+		// Note: -e (resume) is also a bool, but we need to handle it carefully
+	}
+
+	var result []string
+	result = append(result, args[0]) // program name
+
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+
+		// Skip non-flag arguments (like server names, commands, etc.)
+		if !strings.HasPrefix(arg, "-") || strings.HasPrefix(arg, "--") {
+			result = append(result, arg)
+			continue
+		}
+
+		// Skip single dash "-" or already single-char flags
+		if len(arg) == 2 {
+			result = append(result, arg)
+			continue
+		}
+
+		// Try to expand combined flags like -qnt
+		flagPart := arg[1:] // Remove leading "-"
+		allBool := true
+		for _, ch := range flagPart {
+			if !knownBoolFlags[string(ch)] {
+				allBool = false
+				break
+			}
+		}
+
+		if allBool {
+			// Expand: -qnt -> -q -n -t
+			for _, ch := range flagPart {
+				result = append(result, "-"+string(ch))
+			}
+		} else {
+			// Keep original (will cause error by urfave/cli)
+			result = append(result, arg)
+		}
+	}
+
+	return result
+}
+
 // resolveConfigDir 从命令行参数或环境变量中解析配置目录路径。
 // 优先级：命令行 -F/--config 参数 > ASSH_CONFIG_DIR 环境变量。
 // 如果 -F 指定的是文件路径而非目录，返回其所在目录。
-func resolveConfigDir() string {
-	for i := 1; i < len(os.Args); i++ {
-		arg := os.Args[i]
+func resolveConfigDir(args []string) string {
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
 		if arg == "-F" || arg == "--config" {
-			if i+1 < len(os.Args) {
-				p := os.Args[i+1]
+			if i+1 < len(args) {
+				p := args[i+1]
 				if info, err := os.Stat(p); err == nil && !info.IsDir() {
 					return filepath.Dir(p)
 				}
 				return p
 			}
 		}
+		// Stop at first non-flag argument (after all flags have been processed)
+		// This handles cases like: -q -v servername or -qv servername
 		if !strings.HasPrefix(arg, "-") {
 			break
+		}
+		// Skip values that follow flags (for -F/--config with values)
+		// These are already handled above, but we need to skip them to avoid breaking
+		if arg == "-F" || arg == "--config" {
+			i++ // Skip the next arg (the value)
+			continue
 		}
 	}
 	return os.Getenv("ASSH_CONFIG_DIR")

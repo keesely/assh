@@ -109,6 +109,79 @@ func (s *TransferService) PushFile(ctx context.Context, name, localPath, remoteP
 	return nil
 }
 
+// PushFileDirect pushes a file using a pre-constructed server (for direct connections).
+// This bypasses the server name lookup and uses the provided server config directly.
+func (s *TransferService) PushFileDirect(ctx context.Context, server *domain.Server, localPath, remotePath string, opts TransferOptions) error {
+	localPath, err := filepath.Abs(localPath)
+	if err != nil {
+		return fmt.Errorf("invalid local path: %w", err)
+	}
+
+	if !s.localExists(localPath) {
+		return fmt.Errorf("local file does not exist: %s", localPath)
+	}
+
+	isDir := s.localIsDir(localPath)
+	if isDir && !opts.Recursive {
+		return fmt.Errorf("omitting directory, use -r to upload directory")
+	}
+
+	remotePath = s.ensureRemoteSlash(remotePath)
+	if isDir {
+		baseName := filepath.Base(localPath)
+		if !strings.HasSuffix(remotePath, "/") {
+			remotePath += "/"
+		}
+		remotePath += baseName
+	}
+
+	if !s.transfer.IsDir(server, s.remoteDir(remotePath)) {
+		fmt.Printf("remote directory %s does not exist, create? ", s.remoteDir(remotePath))
+		var answer string
+		fmt.Scanln(&answer)
+		if answer == "y" || answer == "Y" || answer == "yes" {
+			if err := s.transfer.Mkdir(server, s.remoteDir(remotePath)); err != nil {
+				return fmt.Errorf("create remote directory failed: %w", err)
+			}
+		} else {
+			return fmt.Errorf("aborted")
+		}
+	}
+
+	var progress port.TransferProgress
+	if opts.Progress {
+		progress = func(info port.TransferInfo) {
+			rate := info.Rate
+			if rate == "" {
+				rate = "0B/s"
+			}
+			eta := info.ETA
+			if eta == "" {
+				eta = "ETA ?"
+			}
+			percent := int(info.Progress * 100)
+			fmt.Printf("\r[%s] %3d%% %s %s", info.FileName, percent, rate, eta)
+			if info.Progress >= 1 {
+				fmt.Println()
+			}
+		}
+	}
+
+	if err := s.transfer.Push(ctx, server, localPath, remotePath, progress); err != nil {
+		return fmt.Errorf("push failed: %w", err)
+	}
+
+	if opts.VerifyChecksum {
+		fmt.Printf("\nverifying: %s\n", filepath.Base(localPath))
+		if err := s.transfer.VerifyUpload(server, localPath, remotePath, true); err != nil {
+			return fmt.Errorf("verification failed: %w", err)
+		}
+		fmt.Printf("  size match\n")
+	}
+
+	return nil
+}
+
 func (s *TransferService) PullFile(ctx context.Context, name, remotePath, localPath string, opts TransferOptions) error {
 	server, err := s.getServer(name)
 	if err != nil {
@@ -146,6 +219,63 @@ func (s *TransferService) PullFile(ctx context.Context, name, remotePath, localP
 	if s.transfer.IsDir(server, remotePath) {
 		baseName := s.remoteBaseName(remotePath)
 		localPath = filepath.Join(localPath, baseName)
+	}
+
+	var progress port.TransferProgress
+	if opts.Progress {
+		progress = func(info port.TransferInfo) {
+			rate := info.Rate
+			if rate == "" {
+				rate = "0B/s"
+			}
+			eta := info.ETA
+			if eta == "" {
+				eta = "ETA ?"
+			}
+			percent := int(info.Progress * 100)
+			fmt.Printf("\r[%s] %3d%% %s %s", info.FileName, percent, rate, eta)
+			if info.Progress >= 1 {
+				fmt.Println()
+			}
+		}
+	}
+
+	if err := s.transfer.Pull(ctx, server, remotePath, localPath, progress); err != nil {
+		return fmt.Errorf("pull failed: %w", err)
+	}
+
+	fmt.Println()
+	return nil
+}
+
+// PullFileDirect pulls a file using a pre-constructed server (for direct connections).
+func (s *TransferService) PullFileDirect(ctx context.Context, server *domain.Server, remotePath, localPath string, opts TransferOptions) error {
+	remotePath = s.normalizeRemotePath(remotePath)
+
+	if localPath == "" {
+		localPath = "."
+	}
+
+	localPath, err := filepath.Abs(localPath)
+	if err != nil {
+		return fmt.Errorf("invalid local path: %w", err)
+	}
+
+	isDir := s.transfer.IsDir(server, remotePath)
+	if isDir && !opts.Recursive {
+		return fmt.Errorf("omitting directory, use -r to download directory")
+	}
+
+	if isDir {
+		baseName := filepath.Base(remotePath)
+		localPath = filepath.Join(localPath, baseName)
+	}
+
+	localDir := filepath.Dir(localPath)
+	if !s.localExists(localDir) {
+		if err := os.MkdirAll(localDir, 0755); err != nil {
+			return fmt.Errorf("create local directory failed: %w", err)
+		}
 	}
 
 	var progress port.TransferProgress
