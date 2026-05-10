@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// registerConnectCommands 注册连接相关命令（login/run/bc）。
 func (a *App) registerConnectCommands() {
 	a.cli.Commands = append(a.cli.Commands, []cli.Command{
 		{
@@ -65,7 +66,12 @@ func (a *App) registerConnectCommands() {
 	}...)
 }
 
-func (a *App) loginAction(c *cli.Context) error {
+// loginCore 执行登录逻辑，返回已连接的 SSH 客户端。
+// 三种目标识别方式：
+//   - 已保存的服务器名称（从数据库中读取配置）
+//   - user@host 格式（直接指定）
+//   - -H host 参数（直接指定）
+func (a *App) loginCore(c *cli.Context) (*ssh.Client, error) {
 	target := c.Args().Get(0)
 	host := c.String("host")
 	port := c.Int("port")
@@ -74,14 +80,11 @@ func (a *App) loginAction(c *cli.Context) error {
 	keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
 
 	if target == "" && host == "" {
-		return fmt.Errorf("no target specified: use <name>, <user@host>, or -H <host>")
+		return nil, fmt.Errorf("no target specified: use <name>, <user@host>, or -H <host>")
 	}
 	if target != "" && host != "" {
-		return fmt.Errorf("cannot specify both target and -H/--host")
+		return nil, fmt.Errorf("cannot specify both target and -H/--host")
 	}
-
-	var client *ssh.Client
-	var err error
 
 	switch {
 	case strings.Contains(target, "@"):
@@ -93,7 +96,7 @@ func (a *App) loginAction(c *cli.Context) error {
 		if port <= 0 {
 			port = 22
 		}
-		client, err = a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
+		return a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
 
 	case host != "":
 		if user == "" {
@@ -102,12 +105,16 @@ func (a *App) loginAction(c *cli.Context) error {
 		if port <= 0 {
 			port = 22
 		}
-		client, err = a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
+		return a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
 
 	default:
-		client, err = a.connectSvc.ConnectByName(target)
+		return a.connectSvc.ConnectByName(target)
 	}
+}
 
+// loginAction 处理 login 命令（显式登录）。
+func (a *App) loginAction(c *cli.Context) error {
+	client, err := a.loginCore(c)
 	if err != nil {
 		return err
 	}
@@ -116,6 +123,7 @@ func (a *App) loginAction(c *cli.Context) error {
 	return a.connectSvc.Shell(client)
 }
 
+// runAction 处理 run 命令，在指定服务器上执行单条命令。
 func (a *App) runAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
@@ -136,25 +144,30 @@ func (a *App) runAction(c *cli.Context) error {
 	return a.connectSvc.Run(client, cmd)
 }
 
+// bcServerResult 记录批处理命令在单台服务器上的执行结果。
 type bcServerResult struct {
-	Name    string `json:"name"`
-	Host    string `json:"host"`
-	Port    int    `json:"port"`
-	User    string `json:"user"`
-	Stdout  string `json:"stdout"`
-	Stderr  string `json:"stderr"`
-	Error   string `json:"error"`
+	Name   string `json:"name"`   // 服务器名称
+	Host   string `json:"host"`   // 主机地址
+	Port   int    `json:"port"`   // 端口号
+	User   string `json:"user"`   // 用户名
+	Stdout string `json:"stdout"` // 标准输出内容
+	Stderr string `json:"stderr"` // 错误输出内容
+	Error  string `json:"error"`  // 错误信息（执行失败时）
 }
 
+// bcSummary 批处理命令的整体执行摘要。
 type bcSummary struct {
-	Command   string            `json:"command"`
-	Timestamp string            `json:"timestamp"`
-	Total     int               `json:"total"`
-	Success   int               `json:"success"`
-	Failed    int               `json:"failed"`
-	Servers   []bcServerResult  `json:"servers"`
+	Command   string           `json:"command"`   // 执行的命令
+	Timestamp string           `json:"timestamp"` // 执行时间戳
+	Total     int              `json:"total"`     // 总服务器数
+	Success   int              `json:"success"`   // 成功数
+	Failed    int              `json:"failed"`    // 失败数
+	Servers   []bcServerResult `json:"servers"`   // 各服务器结果明细
 }
 
+// bcAction 处理 bc 命令，在多台服务器上并发执行同一命令。
+// 支持通过 --servers（逗号分隔）和 --group（服务器分组）指定目标服务器列表。
+// 结果输出到 JSON 文件，同时实时打印到标准输出。
 func (a *App) bcAction(c *cli.Context) error {
 	cmd := c.Args().Get(0)
 	if cmd == "" {
@@ -202,6 +215,7 @@ func (a *App) bcAction(c *cli.Context) error {
 		allResults []bcServerResult
 	)
 
+	// 并发对每台服务器执行命令
 	for _, name := range names {
 		wg.Add(1)
 		go func(n string) {
@@ -291,6 +305,7 @@ func (a *App) bcAction(c *cli.Context) error {
 	return nil
 }
 
+// writeLogFile 将内容追加写入日志文件，文件不存在时自动创建。
 func writeLogFile(filePath, content string) {
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {

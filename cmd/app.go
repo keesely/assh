@@ -1,3 +1,7 @@
+// Package cmd 实现 CLI 命令层，基于 urfave/cli 框架。
+//
+// 本层负责命令注册、参数解析、全局标志处理和用户交互。
+// 命令处理逻辑委托给 service 层，遵循"瘦 handler + 胖 service"模式。
 package cmd
 
 import (
@@ -11,14 +15,17 @@ import (
 	"github.com/urfave/cli"
 )
 
+// App 封装 CLI 应用的核心结构，持有 service 依赖并通过 urfave/cli 框架注册命令。
 type App struct {
-	cli        *cli.App
-	version    string
-	build      string
-	connectSvc *service.ConnectService
-	serverSvc  *service.ServerService
+	cli        *cli.App                   // urfave/cli 应用实例
+	version    string                     // 版本号（编译时注入）
+	build      string                     // 构建信息（编译时注入）
+	connectSvc *service.ConnectService    // SSH 连接服务
+	serverSvc  *service.ServerService     // 服务器配置管理服务
 }
 
+// NewApp 创建 CLI 应用，注入所有 service 依赖。
+// 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc）。
 func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
@@ -35,23 +42,32 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
+	app.Action = a.defaultAction
 	a.registerCommands()
 	return a
 }
 
+// Run 启动 CLI 应用，解析参数并执行对应命令。
 func (a *App) Run(args []string) error {
 	return a.cli.Run(args)
 }
 
+// setupGlobalFlags 注册全局标志，在所有命令执行前由 beforeAction 处理。
+//   - -v/--verbose：开启详细日志输出
+//   - -q/--quiet：关闭日志输出
+//   - -F/--config：指定配置文件路径
+//   - -V/--version：打印版本号
 func (a *App) setupGlobalFlags() {
 	a.cli.Flags = []cli.Flag{
 		cli.BoolFlag{Name: "v, verbose", Usage: "verbose output"},
 		cli.BoolFlag{Name: "q, quiet", Usage: "quiet mode"},
 		cli.StringFlag{Name: "F, config", Usage: "config file path (default: ~/.assh/v2/assh.yml)"},
 		cli.BoolFlag{Name: "V, version", Usage: "print version information"},
+		cli.StringFlag{Name: "c, command", Usage: "run command on remote server"},
 	}
 }
 
+// registerCommands 注册所有子命令，包括内置的 version 命令以及通过扩展方法注册的命令。
 func (a *App) registerCommands() {
 	a.cli.Commands = []cli.Command{
 		{
@@ -64,6 +80,8 @@ func (a *App) registerCommands() {
 	a.registerConnectCommands()
 }
 
+// beforeAction 是全局 Before 钩子，在每次命令执行前调用。
+// 处理全局标志：-V（打印版本退出）、-v（设置 DEBUG 级别）、-q（关闭日志）。
 func (a *App) beforeAction(c *cli.Context) error {
 	if c.Bool("version") {
 		fmt.Println(a.version)
@@ -78,11 +96,37 @@ func (a *App) beforeAction(c *cli.Context) error {
 	return nil
 }
 
+// versionAction 打印版本号并退出。
 func (a *App) versionAction(c *cli.Context) error {
 	fmt.Println(a.version)
 	return nil
 }
 
+// defaultAction 是默认 Action，当输入不匹配任何命令时触发。
+// 行为与 v1 兼容：自动识别目标（name / user@host / -H host），
+// 支持 -c/--command 参数执行远程命令。
+func (a *App) defaultAction(c *cli.Context) error {
+	target := c.Args().Get(0)
+	host := c.String("host")
+
+	if target == "" && host == "" {
+		return cli.ShowAppHelp(c)
+	}
+
+	client, err := a.loginCore(c)
+	if err != nil {
+		return err
+	}
+	defer a.connectSvc.Close(client)
+
+	if cmd := c.String("command"); cmd != "" {
+		return a.connectSvc.Run(client, cmd)
+	}
+	return a.connectSvc.Shell(client)
+}
+
+// firstNonEmpty 返回参数列表中第一个非空字符串。
+// 用于处理 --user/--login 等互为别名的标志。
 func firstNonEmpty(strs ...string) string {
 	for _, s := range strs {
 		if s != "" {
@@ -92,6 +136,8 @@ func firstNonEmpty(strs ...string) string {
 	return ""
 }
 
+// init 初始化 CLI 帮助模板和环境目录。
+// 在帮助文本末尾添加环境变量说明，并确保数据目录存在。
 func init() {
 	cli.AppHelpTemplate = fmt.Sprintf(`%s
 
