@@ -684,9 +684,9 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 | F14 | Glob 平铺 | `assh-fs push t "*.log" /tmp/logs/` | 匹配多个文件，平铺到 /tmp/logs/ | ✅ |
 | F15 | Server 不存在 | `assh-fs push nonexist ./a.txt /tmp/` | 报错提示 | ✅ |
 | F16 | SHA256 校验 | `assh-fs push -S t ./file /tmp/` | 传输后校验 checksum 并显示结果 | ✅ |
-| F17 | 验证失败检测 | 模拟传输后大小不匹配 | 输出验证失败错误，保留文件 | ⚠️ 未测试 |
-| F18 | 批量续传 | 中断后 `assh-fs push --resume -r t ./dir/ /remote/` | 从断点继续批量传输 | ⚠️ 未测试 |
-| F19 | 断点边界：远程>本地 | `assh-fs push --resume t ./small /remote/big` | 报错"远程文件比本地大，续传不可用" | ⚠️ 未测试 |
+| F17 | 验证失败检测 | 模拟传输后大小不匹配 | 输出验证失败错误，保留文件 | ❌ 未实现 |
+| F18 | 批量续传 | 中断后 `assh-fs push --resume -r t ./dir/ /remote/` | 从断点继续批量传输 | ❌ 未实现 |
+| F19 | 断点边界：远程>本地 | `assh-fs push --resume t ./small /remote/big` | 报错"远程文件比本地大，续传不可用" | ✅ |
 | F20 | Glob pull 平铺 | `assh-fs pull t "/var/log/*.log" ./logs/` | 平铺到 ./logs/ | ✅ |
 | F21 | 交互会话：完整命令 | `assh-fs t` 内执行 ls/cd/get/put/chmod/rename/ln/df/umask/lls/lcd/lpwd | 全命令可用 | ✅ |
 | F22 | RQ-001: 两个 bool 组合 | `assh -qv root@host` | 等价于 `-q -v` | ✅ |
