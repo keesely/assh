@@ -278,10 +278,11 @@ cd asshv2 && go test ./... -v -count=1   # 全量测试 ✅ (6 包全部通过)
 
 目标：组装完整 CLI，实现 MVP
 补充（2026-05-09）：set(upsert) + rollback + 版本管理/changelog
+补充（2026-05-10）：ADR-014 server 命令组扁平化，add/set/ls/info/rm/mv/rollback 上移为顶层命令
 
 依赖：Phase 2 + Phase 3 + 全局参数对齐 ssh（ADR-012）
 设计文档：[Phase4-Design.md](Phase4-Design.md)
-架构决策：ADR-012（CLI 参数对齐与命令架构）, ADR-013（配置版本管理与回滚）
+架构决策：ADR-012（CLI 参数对齐与命令架构）, ADR-013（配置版本管理与回滚）, ADR-014（server 命令扁平化）
 
 ---
 
@@ -418,6 +419,29 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 | F17 | rollback 版本号 | `assh server rollback t 1` | 回滚到 v1 | ✅ |
 | F18 | ls 显示版本 | `assh server ls` | 有 Version 列 | ✅ |
 | F19 | info 显示版本 | `assh server info t` | 有 Version 行 | ✅ |
+| F20 | info 模糊建议 | `assh info case.bbp` → 建议 `case.bbp2` | 智能提示 | ✅ |
+| F21 | 默认 Action 建议 | `assh case.bbp` → 建议 `case.bbp2` | 智能提示 | ✅ |
+| F22 | ls 自适应列宽 | `assh ls` → 紧凑表格，Group 右对齐 | 美观紧凑 | ✅ |
+
+---
+#### Phase 4 细化与体验优化（2026-05-10）
+
+在本轮对 Phase 4 已完成的命令做了用户体验和输出格式的精细化调整：
+
+| 任务 | 说明 | 状态 |
+|------|------|------|
+| P4.4-a info 格式重构 | 居中标题+对齐加号、Auth Type 区分、标签首字母大写+Server前缀 | ✅ |
+| P4.4-b info 模糊建议 | 服务器不存在时前缀匹配+Levenshtein 给出建议名称 | ✅ |
+| P4.4-c ls 自适应列宽 | Group/Name/Host 按最长内容自适应，Group 右对齐 | ✅ |
+| P4.4-d 默认 Action 模糊建议 | `assh \<target\>` 找不到服务器时也给出近似提示 | ✅ |
+| P4.4-e Shell 补全支持 | info/rm/mv/rollback/login/run/bc 命令的服务器名 Tab 补全 | ✅ |
+| P4.4-f add/set 确认流程 | 新增/修改前预览信息 → 确认保存 → 显示结果 | ✅ |
+| P4.4-e 自动编译检查 | 每次代码变更后自动 `go build ./...` 验证 | ✅ |
+
+**相关文件**: `cmd/server.go`, `cmd/app.go`, `asshc/service/server.go`
+**验证**: `go build ./... && go test ./... -count=1` ✅ (7 包通过)
+
+---
 
 ### 📝 Phase 5: SFTP 文件传输
 
@@ -433,36 +457,115 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 | P5.4 传输命令 | `cmd/sftp.go` | push/pull 命令 |
 | **验证**: `go test ./asshc/... -v` | |
 
-### 📝 Phase 6: 云同步 (Qiniu)
+### 📝 Phase 6: 代理 & 隧道
 
-目标：实现七牛云数据备份同步
-
-依赖：Phase 2 (storage)
-
-| 任务 | 文件 | 来源 |
-|------|------|------|
-| P6.1 Syncer 接口 | `asshc/port/syncer.go` | 新写 |
-| P6.2 Qiniu 同步 | `asshc/infra/sync/qiniu/` | 从 `asshv2/lib/qiniu/` 移植重构 |
-| P6.3 同步服务 | `asshc/service/sync.go` | SyncService |
-| P6.4 同步命令 | `cmd/sync.go` | sync push/pull/account |
-| P6.5 清理旧代码 | 移除 `asshv2/lib/qiniu/` | |
-| **验证**: `go test ./asshc/... -v` | |
-
-### 📝 Phase 7: 代理 & 隧道
-
-目标：实现 SOCKS5 代理、端口转发、SSH 隧道
+目标：实现 SOCKS5 代理、端口转发、SSH 隧道（由原 Phase 7 调换顺序）
 
 依赖：Phase 3 (ssh)
 
 | 任务 | 文件 | 说明 |
 |------|------|------|
-| P7.1 Proxy 接口 | `asshc/port/proxy.go` | Proxy 接口 |
-| P7.2 SOCKS5 | `asshc/infra/proxy/socks5.go` | SOCKS5 代理 |
-| P7.3 端口转发 | `asshc/infra/proxy/port.go` | 本地/远程端口转发 |
-| P7.4 SSH 隧道 | `asshc/infra/tunnel/tunnel.go` | 隧道管理 |
-| P7.5 代理服务 | `asshc/service/proxy.go` | ProxyService |
-| P7.6 代理命令 | `cmd/proxy.go` | proxy/hostproxy/localproxy |
+| P6.1 Proxy 接口 | `asshc/port/proxy.go` | Proxy 接口 |
+| P6.2 SOCKS5 | `asshc/infra/proxy/socks5.go` | SOCKS5 代理 |
+| P6.3 端口转发 | `asshc/infra/proxy/port.go` | 本地/远程端口转发 |
+| P6.4 SSH 隧道 | `asshc/infra/tunnel/tunnel.go` | 隧道管理 |
+| P6.5 代理服务 | `asshc/service/proxy.go` | ProxyService |
+| P6.6 代理命令 | `cmd/proxy.go` | proxy/hostproxy/localproxy |
 | **验证**: `go test ./asshc/... -v` | |
+
+### 📝 Phase 7: 云同步 (Qiniu)
+
+目标：实现七牛云数据备份同步（由原 Phase 6 调换顺序）
+
+依赖：Phase 2 (storage)
+
+| 任务 | 文件 | 来源 |
+|------|------|------|
+| P7.1 Syncer 接口 | `asshc/port/syncer.go` | 新写 |
+| P7.2 Qiniu 同步 | `asshc/infra/sync/qiniu/` | 从 `asshv2/lib/qiniu/` 移植重构 |
+| P7.3 同步服务 | `asshc/service/sync.go` | SyncService |
+| P7.4 同步命令 | `cmd/sync.go` | sync push/pull/account |
+| P7.5 清理旧代码 | 移除 `asshv2/lib/qiniu/` | |
+| **验证**: `go test ./asshc/... -v` | |
+
+### 📝 Phase 8: 服务器健康检查
+
+目标：实现服务器批量健康检查和单一检查功能
+
+依赖：Phase 3 (ssh) + Phase 4 (CLI)
+
+| 任务 | 说明 |
+|------|------|
+| P8.1 健康检查接口 | `asshc/port/health.go` — HealthChecker 接口 |
+| P8.2 SSH 健康检查 | `asshc/infra/ssh/health.go` — 连接检测、延迟检测 |
+| P8.3 健康检查服务 | `asshc/service/health.go` — HealthService |
+| P8.4 检查命令 | `cmd/health.go` — health check/list 命令 |
+| P8.5 列表检查 | 批量检查服务器组，支持并发 |
+| P8.6 单一检查 | 指定单个服务器检查并输出详细结果 |
+| **验证**: `go test ./asshc/... -v` |
+
+### 📝 Phase 9: 跳板机/堡垒机支持
+
+目标：实现 SSH 跳板机（Jump Server/Bastion）配置和连接
+
+依赖：Phase 3 (ssh)
+
+| 任务 | 说明 |
+|------|------|
+| P9.1 跳板机配置 | Server 结构增加 `JumpHost`/`Bastion` 字段 |
+| P9.2 跳板机连接 | `ConnectService` 支持多跳连接（ssh -A 转发） |
+| P9.3 跳板机命令 | `assh jump` 或在 server 配置中指定 jump host |
+| P9.4 连接穿透 | 通过跳板机访问内网服务器 |
+| **验证**: `go test ./asshc/... -v` |
+
+### 📝 Phase 10: 远程服务器挂载
+
+目标：使用 sshfs/webdav/samba 挂载远程服务器文件系统到本地
+
+依赖： Phase 3 (ssh)
+
+| 任务 | 说明 |
+|------|------|
+| P10.1 挂载接口 | `asshc/port/mounter.go` — FileMounter 接口 |
+| P10.2 SSHFS 挂载 | `asshc/infra/mount/sshfs.go` — sshfs 封装 |
+| P10.3 WebDAV 挂载 | `asshc/infra/mount/webdav.go` — WebDAV 客户端 |
+| P10.4 SMB 挂载 | `asshc/infra/mount/smb.go` — SMB/CIFS 客户端 |
+| P10.5 挂载服务 | `asshc/service/mount.go` — MountService |
+| P10.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
+| **验证**: `go test ./asshc/... -v` |
+
+### 📝 Phase 11: 自动更新/升级
+
+目标：实现版本检查、手动/自动升级、强制更新
+
+依赖： Phase 4 (CLI)
+
+| 任务 | 说明 |
+|------|------|
+| P11.1 版本检查接口 | `asshc/port/updater.go` — VersionChecker 接口 |
+| P11.2 更新检查命令 | `assh version --check` 或 `assh upgrade --check` |
+| P11.3 升级命令 | `assh upgrade` — 下载并安装新版本 |
+| P11.4 强制更新 | `assh upgrade --force` — 强制更新到指定版本 |
+| P11.5 更新源配置 | 支持自定义更新源（URL/GitHub Release） |
+| P11.6 回滚支持 | 升级失败时回滚到上一版本 |
+| **验证**: `go test ./asshc/... -v` |
+
+### 📝 实验阶段: 虚拟命令投放与执行测试
+
+目标：实验性功能，测试虚拟命令（模拟命令）的投放和执行机制
+
+依赖： Phase 4 (CLI) + 实验性设计
+
+> 本阶段为探索性实验，用于验证概念和用户需求，不保证最终实现。
+
+| 任务 | 说明 |
+|------|------|
+| X.1 虚拟命令定义 | 定义什么是虚拟命令（不实际执行，仅记录） |
+| X.2 命令投放系统 | 通过配置或远程下发虚拟命令到客户端 |
+| X.3 命令执行跟踪 | 记录虚拟命令的执行状态（pending/running/completed） |
+| X.4 结果收集 | 收集虚拟命令的执行结果并上报 |
+| X.5 实验命令 | `cmd/experiment.go` — 投放、执行、结果查看 |
+| **验证**: 手动测试 |
 
 ## 依赖顺序
 
@@ -473,8 +576,13 @@ Phase 0 (骨架)
               └── Phase 3 (SSH 连接)
                     ├── Phase 4 (CLI 组装) ← MVP
                     ├── Phase 5 (SFTP 传输)
-                    ├── Phase 6 (云同步)
-                    └── Phase 7 (代理/隧道)
+                    ├── Phase 6 (代理/隧道)
+                    ├── Phase 7 (云同步)
+                    ├── Phase 8 (健康检查)
+                    ├── Phase 9 (跳板机)
+                    ├── Phase 10 (远程挂载)
+                    ├── Phase 11 (自动更新)
+                    └── 实验阶段 (虚拟命令)
 ```
 
 ## 验证策略

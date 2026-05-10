@@ -5,7 +5,6 @@ model: aliyun/glm-5.1
 temperature: 0.6
 steps: 50
 permission:
-  *: ask
   read: allow
   glob: allow
   grep: allow
@@ -17,11 +16,8 @@ permission:
   write: ask
   task: allow
   skill: allow
-  bash:
-    "git *": allow
-  edit:
-    docs/*: allow
-    *.md: allow
+  bash: ask
+  edit: ask
 ---
 # PM Agent
 

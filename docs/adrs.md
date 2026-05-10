@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 13 |
+| accepted | 16 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -22,12 +22,15 @@
 | ADR-005 | 日志 Fatal/Panic 处理方式（exit 函数分离） | accepted | 2026-05-08 |
 | ADR-006 | 日志系统简化：移除双日志输出和级别限制 | accepted | 2026-05-08 |
 | ADR-007 | CLI 日志参数简化：移除日志级别参数 | accepted | 2026-05-08 |
-| **ADR-008** | **废弃加密 JSON 文件，改用 SQLite 数据库** | **accepted** | **2026-05-09** |
-| **ADR-009** | **服务器密码采用 AES-256-GCM 静态密钥加密** | **accepted** | **2026-05-09** |
-| **ADR-010** | **AuthService 延后至 Phase 6** | **accepted** | **2026-05-09** |
-| **ADR-011** | **SSH 连接层架构设计：接口分离 + 可配置 HostKey + Keepalive** | **accepted** | **2026-05-09** |
-| **ADR-012** | **CLI 参数对齐与命令架构：与 ssh 兼容 + 自动识别 + bc 三通道** | **accepted** | **2026-05-09** |
-| **ADR-013** | **配置版本管理与回滚机制：快照式 changelog + rollback** | **accepted** | **2026-05-09** |
+| ADR-008 | 废弃加密 JSON 文件，改用 SQLite 数据库 | accepted | 2026-05-09 |
+| ADR-009 | 服务器密码采用 AES-256-GCM 静态密钥加密 | accepted | 2026-05-09 |
+| ADR-010 | AuthService 延后至 Phase 6 | accepted | 2026-05-09 |
+| ADR-011 | SSH 连接层架构设计：接口分离 + 可配置 HostKey + Keepalive | accepted | 2026-05-09 |
+| ADR-012 | CLI 参数对齐与命令架构：与 ssh 兼容 + 自动识别 + bc 三通道 | accepted | 2026-05-09 |
+| ADR-013 | 配置版本管理与回滚机制：快照式 changelog + rollback | accepted | 2026-05-09 |
+| ADR-014 | server 命令组扁平化上移顶层 | accepted | 2026-05-10 |
+| ADR-015 | ls 命令输出格式优化（Remark列/合并Host列/颜色样式） | accepted | 2026-05-10 |
+| ADR-016 | 顶层默认登录行为（v1 兼容）：assh \<target\> 直连 | accepted | 2026-05-10 |
 
 ## 新增 ADR
 
@@ -90,5 +93,10 @@ YYYY-MM-DD
 |-----|------|------|
 | ADR-012 | CLI 参数与 ssh 对齐 + 自动识别直连 + bc 三通道输出 | 参数命名规范、命令层级、login 自动识别策略、bc 输出架构 |
 | ADR-013 | 配置版本管理与回滚机制：快照式 changelog + rollback | store.Set() 版本递增 + 快照、store.RollbackTo()、service.SetServer() upsert |
+| ADR-014 | server 命令组扁平化上移顶层 | server 子命令（add/set/ls/info/rm/mv/rollback）上移为顶层扁平命令 |
+| ADR-015 | ls 输出格式优化（Remark 列、合并 Host 列、颜色方案） | ls 6 列输出（Group/Name/Host/Ver/Auth/Remark） |
+| ADR-016 | 顶层默认登录行为（v1 兼容） | `assh \<target\>` 直连，不再需要显式 `login` 命令 |
+
+**Phase 4 细化（2026-05-10）**：info 格式重构（居中标题 + Auth Type + 首字母大写标签）、ls 自适应列宽、info/默认 Action 模糊建议（前缀匹配 + Levenshtein）。以上为 UX 增强，未涉及架构变更，无需新增 ADR。
 
 详细内容见对应 ADR 文件。
