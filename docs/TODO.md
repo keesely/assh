@@ -684,7 +684,7 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 | F9 | 并发传输 | `assh-fs push t ./dir/ /tmp/ -r` | 多文件并发 | ✅ |
 | F10 | 进度显示 | `assh-fs push t ./bigfile /tmp/` | 显示进度条/速率/ETA | ✅ |
 | F11 | 远程路径检查 | push/pull 前检测目标路径是否存在 | 路径不存在时询问是否创建 | ✅ |
-| F12 | 直连推送 | `assh-fs push -H host -u root -P pass ./a.txt /tmp/` | 未保存服务器也可用 | ❌ 未实现 |
+| F12 | 直连推送 | `assh-fs push -H host -u root -P pass ./a.txt /tmp/` | 未保存服务器也可用 | ✅ |
 | F13 | 交互式 FS 会话 | `assh-fs t` | 进入 SFTP 交互模式 | ✅ |
 | F14 | Glob 平铺 | `assh-fs push t "*.log" /tmp/logs/` | 匹配多个文件，平铺到 /tmp/logs/ | ⚠️ 未测试 |
 | F15 | Server 不存在 | `assh-fs push nonexist ./a.txt /tmp/` | 报错提示 | ⚠️ 未测试 |
@@ -694,13 +694,13 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 | F19 | 断点边界：远程>本地 | `assh-fs push --resume t ./small /remote/big` | 报错"远程文件比本地大，续传不可用" | ⚠️ 未测试 |
 | F20 | Glob pull 平铺 | `assh-fs pull t "/var/log/*.log" ./logs/` | 平铺到 ./logs/ | ⚠️ 未测试 |
 | F21 | 交互会话：完整命令 | `assh-fs t` 内执行 ls/cd/get/put/chmod/rename/ln/df/umask/lls/lcd/lpwd | 全命令可用 | ✅ |
-| F22 | RQ-001: 两个 bool 组合 | `assh -qv root@host` | 等价于 `-q -v` | ❌ 未实现 |
-| F23 | RQ-001: 三个 bool 组合 | `assh -qVv root@host` | 等价于 `-q -V -v` | ❌ 未实现 |
-| F24 | RQ-001: 单个 bool 不变 | `assh -q root@host` | 行为不变 | ❌ 未实现 |
-| F25 | RQ-001: 组合+带值参数混用 | `assh -qv root@host -c "uptime"` | bool 组合正常，带值参数正常 | ❌ 未实现 |
-| F26 | RQ-001: 长参数不受影响 | `assh --quiet --verbose root@host` | 行为不变 | ❌ 未实现 |
-| F27 | RQ-001: 组合中含未知 flag | `assh -qx root@host` | 报错未知 flag `-x` | ❌ 未实现 |
-| F28 | RQ-001: 混入带值短参不展开 | `assh -qp root@host` | 报错未知 flag（urflags原始行为） | ❌ 未实现 |
+| F22 | RQ-001: 两个 bool 组合 | `assh -qv root@host` | 等价于 `-q -v` | ✅ |
+| F23 | RQ-001: 三个 bool 组合 | `assh -qVv root@host` | 等价于 `-q -V -v` | ✅ |
+| F24 | RQ-001: 单个 bool 不变 | `assh -q root@host` | 行为不变 | ✅ |
+| F25 | RQ-001: 组合+带值参数混用 | `assh -qv root@host -c "uptime"` | bool 组合正常，带值参数正常 | ✅ |
+| F26 | RQ-001: 长参数不受影响 | `assh --quiet --verbose root@host` | 行为不变 | ✅ |
+| F27 | RQ-001: 组合中含未知 flag | `assh -qx root@host` | 报错未知 flag `-x` | ✅ |
+| F28 | RQ-001: 混入带值短参不展开 | `assh -qp root@host` | 报错未知 flag（urflags原始行为） | ✅ |
 | **验证**: `go build ./... && go test ./... -v -count=1` | | | ✅ |
 
 ### 📝 Phase 6: 密钥管理 (Key Management)
