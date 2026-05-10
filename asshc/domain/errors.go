@@ -2,12 +2,20 @@ package domain
 
 import "errors"
 
+// 领域层通用错误定义，用于在整个应用层传递明确的错误语义。
 var (
-	ErrNotFound        = errors.New("server not found")
-	ErrExists          = errors.New("server already exists")
-	ErrInvalidName     = errors.New("invalid server name")
-	ErrInvalidPort     = errors.New("invalid port number")
-	ErrEmptyField      = errors.New("empty field not allowed")
+	// ErrNotFound 表示请求的服务器不存在。
+	ErrNotFound = errors.New("server not found")
+	// ErrExists 表示尝试创建的服务器已存在。
+	ErrExists = errors.New("server already exists")
+	// ErrInvalidName 表示服务器名称为空或格式无效。
+	ErrInvalidName = errors.New("invalid server name")
+	// ErrInvalidPort 表示端口号超出有效范围（1-65535）。
+	ErrInvalidPort = errors.New("invalid port number")
+	// ErrEmptyField 表示必填字段为空。
+	ErrEmptyField = errors.New("empty field not allowed")
+	// ErrVersionNotFound 表示变更日志中未找到指定版本。
 	ErrVersionNotFound = errors.New("version not found in changelog")
-	ErrInvalidVersion  = errors.New("invalid version number")
+	// ErrInvalidVersion 表示版本号无效（小于 1）。
+	ErrInvalidVersion = errors.New("invalid version number")
 )

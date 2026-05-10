@@ -9,6 +9,8 @@ import (
 	"io"
 )
 
+// GenerateAESKey 生成指定长度的 AES 密钥。
+// 支持的密钥长度：128（16 字节）、192（24 字节）、256（32 字节）。
 func GenerateAESKey(bits int) ([]byte, error) {
 	switch bits {
 	case 128:
@@ -22,6 +24,7 @@ func GenerateAESKey(bits int) ([]byte, error) {
 	}
 }
 
+// generateRandomBytes 生成指定位数的密码学安全随机字节。
 func generateRandomBytes(size int) ([]byte, error) {
 	key := make([]byte, size)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
@@ -30,6 +33,9 @@ func generateRandomBytes(size int) ([]byte, error) {
 	return key, nil
 }
 
+// AESEncrypt 使用指定的模式加密数据。
+// 支持的加密模式：CBC、CTR、GCM、ECB。
+// key 长度必须与所选模式匹配（128/192/256 位）。
 func AESEncrypt(plaintext []byte, key []byte, mode string) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -50,6 +56,8 @@ func AESEncrypt(plaintext []byte, key []byte, mode string) ([]byte, error) {
 	}
 }
 
+// AESDecrypt 使用指定的模式解密数据。
+// mode 必须与加密时使用的模式一致。
 func AESDecrypt(ciphertext []byte, key []byte, mode string) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -70,6 +78,8 @@ func AESDecrypt(ciphertext []byte, key []byte, mode string) ([]byte, error) {
 	}
 }
 
+// aesEncryptCBC 使用 AES-CBC 模式加密，返回 IV + 密文。
+// 自动生成随机 IV 并添加 PKCS#7 填充。
 func aesEncryptCBC(plain []byte, block cipher.Block) ([]byte, error) {
 	iv := make([]byte, block.BlockSize())
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
@@ -85,6 +95,7 @@ func aesEncryptCBC(plain []byte, block cipher.Block) ([]byte, error) {
 	return append(iv, ciphertext...), nil
 }
 
+// aesDecryptCBC 使用 AES-CBC 模式解密（IV 从密文头部提取）。
 func aesDecryptCBC(ciphertext []byte, block cipher.Block) ([]byte, error) {
 	blockSize := block.BlockSize()
 	if len(ciphertext) < blockSize {
@@ -105,6 +116,8 @@ func aesDecryptCBC(ciphertext []byte, block cipher.Block) ([]byte, error) {
 	return pkcs7Unpad(plaintext)
 }
 
+// aesEncryptCTR 使用 AES-CTR 模式加密，返回 IV + 密文。
+// CTR 模式不需要填充。
 func aesEncryptCTR(plain []byte, block cipher.Block) ([]byte, error) {
 	iv := make([]byte, block.BlockSize())
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
@@ -118,6 +131,7 @@ func aesEncryptCTR(plain []byte, block cipher.Block) ([]byte, error) {
 	return append(iv, ciphertext...), nil
 }
 
+// aesDecryptCTR 使用 AES-CTR 模式解密（IV 从密文头部提取）。
 func aesDecryptCTR(ciphertext []byte, block cipher.Block) ([]byte, error) {
 	blockSize := block.BlockSize()
 	if len(ciphertext) < blockSize {
@@ -134,6 +148,8 @@ func aesDecryptCTR(ciphertext []byte, block cipher.Block) ([]byte, error) {
 	return plaintext, nil
 }
 
+// aesEncryptGCM 使用 AES-GCM 模式加密，返回 nonce + 密文 + 认证标签。
+// GCM 模式提供认证加密（Authenticated Encryption），同时保证机密性和完整性。
 func aesEncryptGCM(plain []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -154,6 +170,7 @@ func aesEncryptGCM(plain []byte, key []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
+// aesDecryptGCM 使用 AES-GCM 模式解密，验证密文完整性和认证标签。
 func aesDecryptGCM(ciphertext []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -179,6 +196,8 @@ func aesDecryptGCM(ciphertext []byte, key []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+// aesEncryptECB 使用 AES-ECB 模式加密（不安全，仅用于兼容旧系统）。
+// 警告：ECB 模式不隐藏明文模式，不应在新系统中使用。
 func aesEncryptECB(plain []byte, block cipher.Block) ([]byte, error) {
 	plaintext := pkcs7Pad(plain, block.BlockSize())
 	ciphertext := make([]byte, len(plaintext))
@@ -190,6 +209,7 @@ func aesEncryptECB(plain []byte, block cipher.Block) ([]byte, error) {
 	return ciphertext, nil
 }
 
+// aesDecryptECB 使用 AES-ECB 模式解密。
 func aesDecryptECB(cipher []byte, block cipher.Block) ([]byte, error) {
 	if len(cipher)%block.BlockSize() != 0 {
 		return nil, errors.New("ciphertext is not a multiple of block size")
@@ -203,6 +223,7 @@ func aesDecryptECB(cipher []byte, block cipher.Block) ([]byte, error) {
 	return pkcs7Unpad(plaintext)
 }
 
+// pkcs7Pad 对数据进行 PKCS#7 填充，使长度为 blockSize 的整数倍。
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - len(data)%blockSize
 	padtext := make([]byte, padding)
@@ -212,6 +233,7 @@ func pkcs7Pad(data []byte, blockSize int) []byte {
 	return append(data, padtext...)
 }
 
+// pkcs7Unpad 移除 PKCS#7 填充，返回原始数据。
 func pkcs7Unpad(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, errors.New("empty data")

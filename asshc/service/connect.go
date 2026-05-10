@@ -8,12 +8,16 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// ConnectService 封装 SSH 连接和会话管理的业务逻辑。
+// 支持通过已保存的服务器名称连接和直接指定连接参数两种方式。
+// 依赖 SSHConnector（建立连接）和 SSHSession（执行命令）两个接口。
 type ConnectService struct {
 	connector port.SSHConnector
 	session   port.SSHSession
 	repo      port.ServerRepository
 }
 
+// NewConnectService 创建 ConnectService 实例，注入所有依赖。
 func NewConnectService(
 	connector port.SSHConnector,
 	session port.SSHSession,
@@ -26,6 +30,8 @@ func NewConnectService(
 	}
 }
 
+// ConnectByName 根据已保存的服务器名称建立 SSH 连接。
+// 从存储中查询服务器配置，然后使用配置信息建立连接。
 func (s *ConnectService) ConnectByName(name string) (*ssh.Client, error) {
 	if name == "" {
 		return nil, domain.ErrInvalidName
@@ -42,6 +48,8 @@ func (s *ConnectService) ConnectByName(name string) (*ssh.Client, error) {
 	return s.connector.Connect(server)
 }
 
+// ConnectDirect 使用直接指定的参数建立 SSH 连接，不依赖已保存的配置。
+// 支持 host、port、user、password、keyFile 等参数。
 func (s *ConnectService) ConnectDirect(host string, port int, user, password, keyFile string) (*ssh.Client, error) {
 	if host == "" {
 		return nil, fmt.Errorf("host is required")
@@ -67,6 +75,7 @@ func (s *ConnectService) ConnectDirect(host string, port int, user, password, ke
 	return s.connector.Connect(server)
 }
 
+// Shell 在已建立的 SSH 连接上启动交互式 Shell 会话。
 func (s *ConnectService) Shell(client *ssh.Client) error {
 	if client == nil {
 		return fmt.Errorf("ssh client is nil")
@@ -74,6 +83,7 @@ func (s *ConnectService) Shell(client *ssh.Client) error {
 	return s.session.Shell(client)
 }
 
+// Run 在已建立的 SSH 连接上执行命令，输出写入标准输出。
 func (s *ConnectService) Run(client *ssh.Client, cmd string) error {
 	if client == nil {
 		return fmt.Errorf("ssh client is nil")
@@ -84,6 +94,7 @@ func (s *ConnectService) Run(client *ssh.Client, cmd string) error {
 	return s.session.Run(client, cmd)
 }
 
+// RunWithOutput 在已建立的 SSH 连接上执行命令，将完整输出作为字符串返回。
 func (s *ConnectService) RunWithOutput(client *ssh.Client, cmd string) (string, error) {
 	if client == nil {
 		return "", fmt.Errorf("ssh client is nil")
@@ -94,6 +105,7 @@ func (s *ConnectService) RunWithOutput(client *ssh.Client, cmd string) (string, 
 	return s.session.RunWithOutput(client, cmd)
 }
 
+// Close 安全关闭 SSH 连接，如果连接已为 nil 则不做操作。
 func (s *ConnectService) Close(client *ssh.Client) error {
 	if client == nil {
 		return nil

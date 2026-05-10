@@ -12,11 +12,14 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// Ed25519Key 封装 Ed25519 密钥对。
+// Ed25519 是 Edwards 曲线的数字签名算法，密钥短且性能高。
 type Ed25519Key struct {
-	PrivateKey ed25519.PrivateKey
-	PublicKey  ed25519.PublicKey
+	PrivateKey ed25519.PrivateKey // Ed25519 私钥（64 字节）
+	PublicKey  ed25519.PublicKey  // Ed25519 公钥（32 字节）
 }
 
+// GenerateEd25519 生成 Ed25519 密钥对。
 func GenerateEd25519() (*Ed25519Key, error) {
 	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -29,6 +32,7 @@ func GenerateEd25519() (*Ed25519Key, error) {
 	}, nil
 }
 
+// ToPEMPrivateKey 将 Ed25519 私钥编码为 PKCS#8 PEM 格式。
 func (k *Ed25519Key) ToPEMPrivateKey() []byte {
 	privBytes, _ := x509.MarshalPKCS8PrivateKey(k.PrivateKey)
 	return pem.EncodeToMemory(&pem.Block{
@@ -37,6 +41,7 @@ func (k *Ed25519Key) ToPEMPrivateKey() []byte {
 	})
 }
 
+// ToPEMPublicKey 将 Ed25519 公钥编码为 PKIX PEM 格式。
 func (k *Ed25519Key) ToPEMPublicKey() []byte {
 	pubBytes, _ := x509.MarshalPKIXPublicKey(k.PublicKey)
 	return pem.EncodeToMemory(&pem.Block{
@@ -45,6 +50,7 @@ func (k *Ed25519Key) ToPEMPublicKey() []byte {
 	})
 }
 
+// ToOpenSSHPrivateKey 将 Ed25519 私钥编码为 OpenSSH 格式 PEM。
 func (k *Ed25519Key) ToOpenSSHPrivateKey() ([]byte, error) {
 	block, err := ssh.MarshalPrivateKey(k.PrivateKey, "")
 	if err != nil {
@@ -56,6 +62,7 @@ func (k *Ed25519Key) ToOpenSSHPrivateKey() ([]byte, error) {
 	return pem.EncodeToMemory(block), nil
 }
 
+// ToOpenSSHPublicKey 将 Ed25519 公钥编码为 OpenSSH authorized_keys 格式。
 func (k *Ed25519Key) ToOpenSSHPublicKey() ([]byte, error) {
 	pubKey, err := ssh.NewPublicKey(k.PublicKey)
 	if err != nil {
@@ -67,6 +74,7 @@ func (k *Ed25519Key) ToOpenSSHPublicKey() ([]byte, error) {
 	return ssh.Marshal(pubKey), nil
 }
 
+// WriteToFile 将 Ed25519 密钥对写入文件（私钥 0600，公钥 0644）。
 func (k *Ed25519Key) WriteToFile(privatePath, publicPath string) error {
 	privatePEM := k.ToPEMPrivateKey()
 	err := os.WriteFile(privatePath, privatePEM, 0600)
@@ -83,6 +91,7 @@ func (k *Ed25519Key) WriteToFile(privatePath, publicPath string) error {
 	return nil
 }
 
+// ReadEd25519KeyFromFile 从文件读取 Ed25519 密钥对。
 func ReadEd25519KeyFromFile(privatePath, publicPath string) (*Ed25519Key, error) {
 	privatePEM, err := os.ReadFile(privatePath)
 	if err != nil {
@@ -97,6 +106,7 @@ func ReadEd25519KeyFromFile(privatePath, publicPath string) (*Ed25519Key, error)
 	return Ed25519KeyFromPEM(privatePEM, publicPEM)
 }
 
+// Ed25519KeyFromPEM 从 PEM 数据解析 Ed25519 密钥对。
 func Ed25519KeyFromPEM(privatePEM, publicPEM []byte) (*Ed25519Key, error) {
 	privateKey, err := ParseEd25519PrivateKey(privatePEM)
 	if err != nil {
@@ -114,6 +124,7 @@ func Ed25519KeyFromPEM(privatePEM, publicPEM []byte) (*Ed25519Key, error) {
 	}, nil
 }
 
+// ParseEd25519PrivateKey 从 PEM 数据解析 Ed25519 私钥（PKCS#8 格式）。
 func ParseEd25519PrivateKey(data []byte) (ed25519.PrivateKey, error) {
 	block, _ := pem.Decode(data)
 	if block == nil {
@@ -135,6 +146,7 @@ func ParseEd25519PrivateKey(data []byte) (ed25519.PrivateKey, error) {
 	return nil, fmt.Errorf("unsupported PEM type: %s", block.Type)
 }
 
+// ParseEd25519PublicKey 从 PEM 数据解析 Ed25519 公钥（PKIX 格式）。
 func ParseEd25519PublicKey(data []byte) (ed25519.PublicKey, error) {
 	block, _ := pem.Decode(data)
 	if block == nil {

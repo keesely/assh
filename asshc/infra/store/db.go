@@ -1,3 +1,8 @@
+// Package store 提供基于 SQLite 的数据持久化实现。
+//
+// 实现 port.ServerRepository 接口，使用 modernc.org/sqlite（纯 Go，
+// 无 CGO 依赖）作为存储引擎。密码使用 AES-GCM 加密后存储，
+// 加密密钥自动生成并保存在 config 表中。
 package store
 
 import (
@@ -8,13 +13,17 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Store 是 SQLite 存储的核心结构，实现 ServerRepository 接口。
+// 管理数据库连接、读写锁、以及 AES 加密密钥。
 type Store struct {
-	dbPath    string
-	db        *sql.DB
-	mu        sync.RWMutex
-	cryptoKey []byte
+	dbPath    string      // 数据库文件路径
+	db        *sql.DB     // SQLite 数据库连接
+	mu        sync.RWMutex // 读写锁，保证并发安全
+	cryptoKey []byte      // AES-GCM 加密密钥，首次使用时自动生成
 }
 
+// NewStore 创建并初始化 SQLite 存储实例。
+// 自动执行数据库迁移（建表），并从 config 表中加载加密密钥。
 func NewStore(dbPath string) (*Store, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -40,6 +49,9 @@ func NewStore(dbPath string) (*Store, error) {
 	return store, nil
 }
 
+// migrate 执行数据库结构初始化与迁移。
+// 自动创建 servers（服务器表）、config（配置表）和 server_changelog（变更日志表），
+// 并对旧版本数据库执行字段补充（如 version 列）。
 func (s *Store) migrate() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -86,7 +98,7 @@ func (s *Store) migrate() error {
 		return err
 	}
 
-	// Migration: add version column for databases created before v2.0.0-phase-4+
+	// 旧版本兼容迁移：为 v2.0.0-phase-4 前创建的数据库添加 version 列
 	if colExists, _ := s.columnExists("servers", "version"); !colExists {
 		if _, err := s.db.Exec(`ALTER TABLE servers ADD COLUMN version INTEGER NOT NULL DEFAULT 1`); err != nil {
 			return fmt.Errorf("add version column: %w", err)
@@ -96,6 +108,8 @@ func (s *Store) migrate() error {
 	return nil
 }
 
+// columnExists 检查指定表中是否存在指定列。
+// 使用 PRAGMA table_info 查询表结构信息。
 func (s *Store) columnExists(table, column string) (bool, error) {
 	rows, err := s.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
@@ -119,6 +133,7 @@ func (s *Store) columnExists(table, column string) (bool, error) {
 	return false, rows.Err()
 }
 
+// Close 关闭数据库连接，释放资源。
 func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
