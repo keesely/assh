@@ -742,7 +742,7 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 |------|------|--------|------|--------|
 | P6.1 | KeyManager 接口 | `asshc/port/keymanager.go` | Generate/DeployPublicKey/Backup/Lookup 接口 | ✅ |
 | P6.2-a | 密钥生成 | `asshc/infra/keymgr/generate.go` | RSA/Ed25519/ECDSA 生成，OpenSSH 格式，指纹计算 | ⭐⭐⭐ |
-| P6.2-b | 公钥部署 | `asshc/infra/keymgr/deploy.go` | SSH 登录→检测 authorized_keys→追加公钥(幂等) | ⭐⭐ |
+| P6.2-b | 公钥部署 | `asshc/infra/keymgr/deploy.go` | SSH 登录→检测 authorized_keys→追加公钥(幂等) | ⭐⭐ 暂缓 |
 | P6.2-c | 密钥备份 | `asshc/infra/keymgr/backup.go` | 指纹命名→复制→data/keys/索引维护 | ⭐⭐ |
 | P6.3 | KeyService | `asshc/service/key.go` | GenerateAndDeploy / HandleKeyFlag 用例编排 | ⭐⭐⭐ |
 | P6.4 | keygen 命令 | `cmd/keygen.go` | `assh keygen <server> [--type] [--bits]` 命令 | ⭐⭐ |

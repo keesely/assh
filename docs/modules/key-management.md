@@ -113,29 +113,48 @@ type KeyManager interface {
 
 ### P6.2 基础设施层 — `asshc/infra/keymgr/`
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.2-a 密钥生成 | `generate.go` | 包装 crypto.RSA/Ed25519/ECDSA，OpenSSH 格式输出，指纹计算 |
-| P6.2-b 公钥部署 | `deploy.go` | SSH 登录 → 检测 authorized_keys → 追加公钥（幂等：指纹去重） |
-| P6.2-c 密钥备份 | `backup.go` | 指纹命名 + 复制 + data/keys/ 索引维护；按原始路径查找备份 |
-| P6.2-d 单元测试 | `*_test.go` | Mock SSH + 文件系统测试 |
-| **验证** | `go test ./asshc/infra/keymgr/... -v` | |
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P6.2-a 密钥生成 | `generate.go` | 包装 crypto.RSA/Ed25519/ECDSA，OpenSSH 格式输出，指纹计算 | ⏳ |
+| P6.2-b 公钥部署 | `deploy.go` | SSH 登录→检测 authorized_keys→追加公钥（幂等：指纹去重） | ⏳ 暂缓 |
+| P6.2-c 密钥备份 | `backup.go` | 指纹命名 + 复制 + data/keys/ 索引维护；按原始路径查找备份 | ⏳ |
+| P6.2-d 单元测试 | `*_test.go` | Mock SSH + 文件系统测试 | ⏳ |
+| **验证** | `go test ./asshc/infra/keymgr/... -v` | | |
+
+**P6.2-a 密钥生成设计**：
+- 包装 `crypto.GenerateRSA` / `GenerateEd25519` / `GenerateECDSA`
+- 使用 `ssh.MarshalPrivateKey(key, passphrase)` 输出 OpenSSH 格式 PEM
+- `passphrase` 类型为 `[]byte`（接口契约已更新），便于使用后清零
+- 保存路径：`data/keys/{fingerprint}.pem`
+- 返回：(privPath, pubKey[], fingerprint)
+- 指纹计算：`SHA256(privKeyContent)`（非 SSH fingerprint，用于文件名）
+
+**P6.2-b 公钥部署设计（暂缓）**：
+- **待确认细节**：
+  - 部署前确认：交互式提示 `Deploy public key to <server>? [Y/n]`
+  - 幂等策略：指纹相同则跳过
+  - 失败处理：部署失败 → 保留私钥文件，记录警告（不删除私钥）
+- **幂等流程**：
+  ```
+  1. SSH 登录服务器
+  2. 读取 ~/.ssh/authorized_keys
+  3. 解析每行公钥指纹
+  4. 指纹已存在 → 跳过（幂等）
+  5. 指纹不存在 → 追加公钥
+  6. authorized_keys 不存在 → 创建（mkdir -p ~/.ssh + touch）
+  ```
+
+**P6.2-c 密钥备份设计**：
+- **源文件权限检查**：权限 > 0600 → 自动 `chmod 0600` 后复制，同时输出警告
+- **幂等策略**：相同指纹文件已存在 → 跳过，返回已存在的路径
+- **索引维护**：在 `data/keys/` 目录中按指纹命名文件，无需额外索引文件
+- **LookupByPath**：通过原始路径 → 绝对路径 → 查找对应备份（通过已知服务器表或文件系统扫描）
 
 **密钥存储安全**：
 - 生成的私钥使用 **account password** 作为 passphrase 加密（`ssh.MarshalPrivateKey(key, accountPass)`）
 - account password 存储在 SQLite `config` 表中（AES-GCM 加密），运行时解密可用
 - 连接时 `tryKeyFile` 使用 `ssh.ParsePrivateKeyWithPassphrase(key, accountPass)` 解析
 - 如果未设置 account password，则使用空密码（兼容模式）
-
-**公钥部署幂等策略**：
-```
-1. SSH 登录服务器
-2. 读取 ~/.ssh/authorized_keys
-3. 解析每行的公钥指纹
-4. 如果目标公钥指纹已存在 → 跳过（幂等）
-5. 如果不存在 → 追加
-6. 如果 authorized_keys 不存在 → 创建（mkdir -p ~/.ssh + touch）
-```
 
 ### P6.3 服务层
 
