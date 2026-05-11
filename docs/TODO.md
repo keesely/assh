@@ -443,7 +443,9 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 
 ---
 
-### 📝 Phase 5: SFTP 文件传输（开发中）
+### ✅ Phase 5: SFTP 文件传输（已完成）
+
+验收：F1-F28 全部通过 | 完成时间：2026-05-11
 
 目标：支持文件推送和拉取，包含递归传输、断点续传、并发传输、进度显示、通配符匹配
 
@@ -685,8 +687,8 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 | F14 | Glob 平铺 | `assh-fs push t "*.log" /tmp/logs/` | 匹配多个文件，平铺到 /tmp/logs/ | ✅ |
 | F15 | Server 不存在 | `assh-fs push nonexist ./a.txt /tmp/` | 报错提示 | ✅ |
 | F16 | SHA256 校验 | `assh-fs push -S t ./file /tmp/` | 传输后校验 checksum 并显示结果 | ✅ |
-| F17 | 验证失败检测 | 模拟传输后大小不匹配 | 输出验证失败错误，保留文件 | ❌ 未实现 |
-| F18 | 批量续传 | 中断后 `assh-fs push --resume -r t ./dir/ /remote/` | 从断点继续批量传输 | ❌ 未实现 |
+| F17 | 验证失败检测 | 模拟传输后大小不匹配 | 输出验证失败错误，保留文件 | ✅ |
+| F18 | 批量续传 | 中断后 `assh-fs push --resume -r t ./dir/ /remote/` | 从断点继续批量传输 | ✅ |
 | F19 | 断点边界：远程>本地 | `assh-fs push --resume t ./small /remote/big` | 报错"远程文件比本地大，续传不可用" | ✅ |
 | F20 | Glob pull 平铺 | `assh-fs pull t "/var/log/*.log" ./logs/` | 平铺到 ./logs/ | ✅ |
 | F21 | 交互会话：完整命令 | `assh-fs t` 内执行 ls/cd/get/put/chmod/rename/ln/df/umask/lls/lcd/lpwd | 全命令可用 | ✅ |
