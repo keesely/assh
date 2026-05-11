@@ -85,7 +85,9 @@ func pushSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Cli
 	}
 
 	// Handle Overwrite option (BUG-007)
-	if remoteExists {
+	// Skip interactive prompt when in resume mode (user explicitly wants to continue)
+	shouldAsk := !opts.Resume
+	if remoteExists && shouldAsk {
 		switch opts.Overwrite {
 		case "skip":
 			fmt.Printf("remote file %s exists, skipping\n", remotePath)
@@ -107,13 +109,23 @@ func pushSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Cli
 		if remoteInfo.Size() >= localSize {
 			existingHash, _ := computeLocalHashAtOffset(localFile, 0, remoteInfo.Size())
 			remoteHash, _ := computeRemoteHash(sshClient, remotePath)
+			// computeLocalHashAtOffset changed localFile position; seek back to 0
+			localFile.Seek(0, io.SeekStart)
 			if existingHash == remoteHash {
 				return nil
 			}
+			// Hash mismatch: remote has different content, fall through to truncate + full upload
+		} else {
+			// 远程文件不完整，续传：resumeOffset = remoteInfo.Size()
+			resumeOffset = remoteInfo.Size()
+			remoteFile, err = client.OpenFile(remotePath, os.O_WRONLY|os.O_APPEND)
+			if err != nil {
+				return fmt.Errorf("open remote file for resume failed: %w", err)
+			}
 		}
+	}
 
-		remoteFile, err = client.OpenFile(remotePath, os.O_WRONLY|os.O_APPEND)
-	} else {
+	if remoteFile == nil {
 		remoteFile, err = client.OpenFile(remotePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 	}
 
