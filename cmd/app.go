@@ -26,6 +26,30 @@ import (
 	"github.com/urfave/cli"
 )
 
+// recordDirectConnectAsync 异步记录直连操作到 known_servers 表。
+// 传入预计算的 authFingerprint 避免明文密码在 goroutine 中传播。
+// 封装为包级函数，使 fsPushAction / fsPullAction 可直接调用。
+func recordDirectConnectAsync(kr transferport.KnownServerRecorder, host string, port int, user, password, keyFile string) {
+	if kr == nil {
+		return
+	}
+	authFingerprint := domain.ComputeAuthFingerprint(password, keyFile)
+	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
+	ks := &domain.KnownServer{
+		ID:              id,
+		Host:            host,
+		Port:            port,
+		User:            user,
+		AuthFingerprint: authFingerprint,
+	}
+	recorder := kr
+	go func() {
+		if err := recorder.RecordDirectConnect(ks); err != nil {
+			log.Debugf("failed to record direct connect: %v", err)
+		}
+	}()
+}
+
 // App 封装 CLI 应用的核心结构，持有 service 依赖并通过 urfave/cli 框架注册命令。
 type App struct {
 	cli            *cli.App                      // urfave/cli 应用实例
@@ -88,6 +112,7 @@ func NewFSApp(version, build string, transferSvc *service.TransferService, serve
 
 // registerFSCommands registers file transfer commands.
 func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc *service.ServerService) {
+	kr := a.knownRecorder
 	a.cli.Commands = []cli.Command{
 		{
 			Name:   "version",
@@ -97,7 +122,7 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 		{
 			Name:   "push",
 			Usage:  "Push local file to remote server",
-			Action: fsPushAction(transferSvc, serverSvc),
+			Action: fsPushAction(transferSvc, serverSvc, kr),
 			Flags: []cli.Flag{
 				cli.BoolFlag{Name: "r, recursive", Usage: "upload directory recursively"},
 				cli.BoolFlag{Name: "e, resume", Usage: "resume interrupted transfer"},
@@ -117,7 +142,7 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 		{
 			Name:   "pull",
 			Usage:  "Pull remote file to local",
-			Action: fsPullAction(transferSvc, serverSvc),
+			Action: fsPullAction(transferSvc, serverSvc, kr),
 			Flags: []cli.Flag{
 				cli.BoolFlag{Name: "r, recursive", Usage: "download directory recursively"},
 				cli.BoolFlag{Name: "e, resume", Usage: "resume interrupted transfer"},
@@ -245,7 +270,28 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 	}
 }
 
-func fsPushAction(transferSvc *service.TransferService, serverSvc *service.ServerService) func(*cli.Context) error {
+// recordDirectConnectForApp 是给 assh-fs 使用的小写别名，逻辑与 connect.go 一致。
+func (a *App) recordDirectConnectForApp(host string, port int, user, authFingerprint string) {
+	if a.knownRecorder == nil {
+		return
+	}
+	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
+	ks := &domain.KnownServer{
+		ID:              id,
+		Host:            host,
+		Port:            port,
+		User:            user,
+		AuthFingerprint: authFingerprint,
+	}
+	recorder := a.knownRecorder
+	go func() {
+		if err := recorder.RecordDirectConnect(ks); err != nil {
+			log.Debugf("failed to record direct connect: %v", err)
+		}
+	}()
+}
+
+func fsPushAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder) func(*cli.Context) error {
 	return func(c *cli.Context) error {
 		if c.NArg() < 3 {
 			return cli.ShowSubcommandHelp(c)
@@ -355,6 +401,10 @@ ctx := context.Background()
 			if err := transferSvc.PushFileDirect(ctx, server, localPath, remotePath, opts); err != nil {
 				return fmt.Errorf("push failed: %w", err)
 			}
+			// 记录直连到 known_servers 表
+			if kr != nil {
+				recordDirectConnectAsync(kr, host, port, user, password, identityFile)
+			}
 		} else {
 			// Normal mode - use server name lookup
 			if err := transferSvc.PushFile(ctx, name, localPath, remotePath, opts); err != nil {
@@ -367,7 +417,7 @@ ctx := context.Background()
 	}
 }
 
-func fsPullAction(transferSvc *service.TransferService, serverSvc *service.ServerService) func(*cli.Context) error {
+func fsPullAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder) func(*cli.Context) error {
 	return func(c *cli.Context) error {
 		if c.NArg() < 2 {
 			return cli.ShowSubcommandHelp(c)
@@ -516,7 +566,11 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 			if err := transferSvc.PullFileDirect(ctx, server, remotePath, localPath, opts); err != nil {
 				return fmt.Errorf("pull failed: %w", err)
 			}
-} else {
+			// 记录直连到 known_servers 表
+			if kr != nil {
+				recordDirectConnectAsync(kr, host, port, user, password, identityFile)
+			}
+		} else {
 			if err := transferSvc.PullFile(ctx, name, remotePath, localPath, opts); err != nil {
 				return fmt.Errorf("pull failed: %w", err)
 			}
@@ -653,7 +707,7 @@ func (a *App) defaultAction(c *cli.Context) error {
 	defer a.connectSvc.Close(client)
 
 	if directInfo != nil {
-		a.recordDirectConnect(directInfo.host, directInfo.port, directInfo.user, directInfo.password, directInfo.keyFile)
+		a.recordDirectConnect(directInfo.host, directInfo.port, directInfo.user, directInfo.authFingerprint)
 	}
 
 	if cmd := c.String("command"); cmd != "" {

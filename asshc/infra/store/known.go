@@ -7,31 +7,22 @@ import (
 )
 
 // RecordDirectConnect 记录或更新一次直连操作。
+// 使用 SQLite ON CONFLICT 原子 upsert，避免 SELECT+INSERT 的 TOCTOU 问题。
 // 如果同一 ID 已存在，递增 connect_count 并更新 last_connected_at；
 // 如果不存在，创建新记录。
 func (s *Store) RecordDirectConnect(ks *domain.KnownServer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var existingCount int
-	err := s.db.QueryRow("SELECT connect_count FROM known_servers WHERE id = ?", ks.ID).Scan(&existingCount)
-
-	if err == sql.ErrNoRows {
-		_, err = s.db.Exec(`
-			INSERT INTO known_servers (id, host, port, user_name, auth_fingerprint, key_backup_path, last_connected_at, connect_count, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 1, datetime('now'), datetime('now'))
-		`, ks.ID, ks.Host, ks.Port, ks.User, ks.AuthFingerprint, ks.KeyBackupPath)
-		return err
-	}
-	if err != nil {
-		return err
-	}
-
-	newCount := existingCount + 1
-	_, err = s.db.Exec(`
-		UPDATE known_servers SET connect_count = ?, last_connected_at = datetime('now'), updated_at = datetime('now'), key_backup_path = ?
-		WHERE id = ?
-	`, newCount, ks.KeyBackupPath, ks.ID)
+	_, err := s.db.Exec(`
+		INSERT INTO known_servers (id, host, port, user_name, auth_fingerprint, key_backup_path, last_connected_at, connect_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 1, datetime('now'), datetime('now'))
+		ON CONFLICT(id) DO UPDATE SET
+			connect_count = connect_count + 1,
+			last_connected_at = datetime('now'),
+			updated_at = datetime('now'),
+			key_backup_path = COALESCE(excluded.key_backup_path, key_backup_path)
+	`, ks.ID, ks.Host, ks.Port, ks.User, ks.AuthFingerprint, ks.KeyBackupPath)
 	return err
 }
 

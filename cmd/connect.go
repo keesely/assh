@@ -70,11 +70,10 @@ func (a *App) registerConnectCommands() {
 
 // directConnectInfo 记录直连模式的连接参数，用于异步写入 known_servers 表。
 type directConnectInfo struct {
-	host     string
-	port     int
-	user     string
-	password string
-	keyFile  string
+	host            string
+	port            int
+	user            string
+	authFingerprint string // 预计算的认证指纹，避免在 async goroutine 中传播明文密码
 }
 
 // loginCore 执行登录逻辑，返回已连接的 SSH 客户端和直连信息。
@@ -114,7 +113,7 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error)
 		if err != nil {
 			return nil, nil, err
 		}
-		return client, &directConnectInfo{host: host, port: port, user: user, password: password, keyFile: keyFile}, nil
+		return client, &directConnectInfo{host: host, port: port, user: user, authFingerprint: domain.ComputeAuthFingerprint(password, keyFile)}, nil
 
 	case host != "":
 		if user == "" {
@@ -127,7 +126,7 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error)
 		if err != nil {
 			return nil, nil, err
 		}
-		return client, &directConnectInfo{host: host, port: port, user: user, password: password, keyFile: keyFile}, nil
+		return client, &directConnectInfo{host: host, port: port, user: user, authFingerprint: domain.ComputeAuthFingerprint(password, keyFile)}, nil
 
 	default:
 		client, err := a.connectSvc.ConnectByName(target)
@@ -137,15 +136,13 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error)
 
 // recordDirectConnect 记录直连操作到 known_servers 表。
 // 仅在直连模式（user@host / -H host）时触发，按名连接不触发。
-// 异步执行，不阻塞主流程。
-func (a *App) recordDirectConnect(host string, port int, user, password, keyFile string) {
+// 异步执行，不阻塞主流程。传入预计算的 authFingerprint 避免明文密码在 goroutine 中传播。
+func (a *App) recordDirectConnect(host string, port int, user, authFingerprint string) {
 	if a.knownRecorder == nil {
 		return
 	}
 
-	authFingerprint := domain.ComputeAuthFingerprint(password, keyFile)
 	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
-
 	ks := &domain.KnownServer{
 		ID:              id,
 		Host:            host,
@@ -154,8 +151,9 @@ func (a *App) recordDirectConnect(host string, port int, user, password, keyFile
 		AuthFingerprint: authFingerprint,
 	}
 
+	recorder := a.knownRecorder // 本地变量捕获，防止后续 knownRecorder 被动态修改导致数据竞争
 	go func() {
-		if err := a.knownRecorder.RecordDirectConnect(ks); err != nil {
+		if err := recorder.RecordDirectConnect(ks); err != nil {
 			log.Debugf("failed to record direct connect: %v", err)
 		}
 	}()
@@ -170,7 +168,7 @@ func (a *App) loginAction(c *cli.Context) error {
 	defer a.connectSvc.Close(client)
 
 	if directInfo != nil {
-		a.recordDirectConnect(directInfo.host, directInfo.port, directInfo.user, directInfo.password, directInfo.keyFile)
+		a.recordDirectConnect(directInfo.host, directInfo.port, directInfo.user, directInfo.authFingerprint)
 	}
 
 	return a.connectSvc.Shell(client)
