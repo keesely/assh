@@ -6,8 +6,8 @@
 
 | 状态 | 数量 |
 |------|------|
-| fixed | 6 |
-| known | 3 |
+| fixed | 7 |
+| known | 2 |
 | in-progress | 0 |
 
 ## 列表
@@ -20,9 +20,10 @@
 | BUG-004 | 顶层默认 Action 短参数（-p/-P/-u 等）未解析 | fixed | 2026-05-10 |
 | BUG-005 | assh info 不显示 Password 和 KeyFile 详情 | fixed | 2026-05-10 |
 | BUG-006 | assh-fs sftp 连接后立即退出，无法进入交互模式 | fixed | 2026-05-10 |
-| BUG-007 | -f/--skip 覆盖控制参数未传递到 infra 层 | known | 2026-05-11 |
+| BUG-007 | -f/--skip 覆盖控制参数未传递到 infra 层 | fixed | 2026-05-11 |
 | BUG-008 | --resume 参数未从 service 层传递到 infra 层 | known | 2026-05-11 |
 | BUG-009 | ComputeRemoteSHA256 是 stub，-S 校验总是失败 | known | 2026-05-11 |
+| BUG-010 | SSH 密钥认证失败后未回退到密码认证 | fixed | 2026-05-11 |
 
 ## 新增 Bug
 

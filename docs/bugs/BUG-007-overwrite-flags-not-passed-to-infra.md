@@ -1,10 +1,10 @@
 # BUG-007: -f/--skip 覆盖控制参数未传递到 infra 层
 
 ## Status
-known
+fixed
 
 ## Date
-2026-05-11
+2026-05-11 (fixed)
 
 ## Description
 
