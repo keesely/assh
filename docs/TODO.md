@@ -746,11 +746,11 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 | P6.2-c | 密钥备份 | `asshc/infra/keymgr/backup.go` | 指纹命名→复制→data/keys/索引维护 | ⭐⭐ |
 | P6.3 | KeyService | `asshc/service/key.go` | GenerateAndDeploy / HandleKeyFlag 用例编排 | ⭐⭐⭐ |
 | P6.4 | keygen 命令 | `cmd/keygen.go` | `assh keygen <server> [--type] [--bits]` 命令 | ⭐⭐ |
-| P6.5-a | known-servers 接口扩展 | `asshc/port/repository.go` | 新增 KnownServerRecorder 接口 | ⭐⭐⭐⭐ |
-| P6.5-b | known-servers 数据库迁移 | `asshc/infra/store/db.go` | migrate() 新增 known_servers 建表 | ⭐⭐⭐⭐ |
-| P6.5-c | known-servers 存储实现 | `asshc/infra/store/known.go` | 新建文件：upsert/lookup 实现 | ⭐⭐⭐⭐ |
-| P6.5-d | 直连接入点 | `cmd/connect.go` + `cmd/app.go` | 直连成功后 RecordDirectConnect() | ⭐⭐⭐⭐ |
-| P6.5-e | keygen 关联 known-servers | `asshc/infra/keymgr/deploy.go` | 直连 keygen 后更新 key_backup_path | ⭐⭐ |
+| P6.5-a | known-servers 接口扩展 | `asshc/port/repository.go` | 新增 KnownServerRecorder 接口 | ✅ |
+| P6.5-b | known-servers 数据库迁移 | `asshc/infra/store/db.go` | migrate() 新增 known_servers 建表 | ✅ |
+| P6.5-c | known-servers 存储实现 | `asshc/infra/store/known.go` | 新建文件：upsert/lookup 实现 | ✅ |
+| P6.5-d | 直连接入点 | `cmd/connect.go` + `cmd/app.go` | 直连成功后 RecordDirectConnect() | ✅ |
+| P6.5-e | keygen 关联 known-servers | `asshc/infra/keymgr/deploy.go` | 直连 keygen 后更新 key_backup_path | ⏳ |
 | P6.6-a | SSH 备份优先策略 | `asshc/infra/ssh/client.go` | tryKeyFile 优先查 data/keys/ 备份 | ⭐⭐ |
 | P6.6-b | known-servers 密钥查找 | `asshc/infra/ssh/client.go` | 直连时查 known_servers 的 key_backup_path | ⭐⭐ |
 | P6.7-a | KeysDir 路径 | `config/path.go` | 新增 KeysDir 常量 | ⭐⭐ |
