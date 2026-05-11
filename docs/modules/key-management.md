@@ -3,7 +3,7 @@
 **计划阶段**: Phase 6 (Key Management)
 **依赖**: Phase 1 (crypto) ✅ + Phase 3 (ssh) ✅ + Phase 4 (CLI) ✅
 **架构决策**: ADR-018 (known-servers 隐性表)
-**状态**: ⏳ 规划中
+**状态**: 🔄 开发中 (2026-05-11 起)
 
 ---
 

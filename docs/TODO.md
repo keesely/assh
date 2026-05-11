@@ -728,25 +728,40 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 
 ---
 
-### 📝 Phase 6: 密钥管理 (Key Management)
+### 🔄 Phase 6: 密钥管理 (Key Management)
 
 目标：实现 SSH 密钥自动生成、加密存储、轮换管理，支持 `-K`/`--keygen` 快捷生成
 
 详情：参见 [docs/modules/key-management.md](modules/key-management.md)
 
-依赖：Phase 2 (SQLite) + Phase 3 (SSH AuthMethod)
+依赖：Phase 2 (SQLite) + Phase 3 (SSH) + Phase 4 (CLI) — 不依赖 Phase 5 (SFTP)
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| K.1 KeyManager 接口 | `asshc/port/keymgr.go` | 密钥生成/读取/存储接口 |
-| K.2 RSA/Ed25519 生成 | `asshc/infra/keymgr/generate.go` | `ssh.MarshalPrivateKey` 生成密钥对 |
-| K.3 加密存储 | `asshc/infra/keymgr/encrypted.go` | 用账号密码作为 passphrase 加密 |
-| K.4 KeyService | `asshc/service/key.go` | 密钥管理用例编排 |
-| K.5 known-servers 表 | `asshc/infra/store/known.go` | ADR-018: 记录直接连接+密钥路径 |
-| K.6 SSH 客户端修改 | `asshc/infra/ssh/dial.go` | 自动检测已存密钥并注入 |
-| K.7 keygen 命令 | `cmd/keygen.go` | `-K`/`--keygen` 标记 + `assh keygen` 子命令 |
-| K.8 密钥轮换 | `asshc/service/key.go` | 重新生成并替换已知服务器密钥 |
-| **验证**: `go test ./asshc/... -v` | | |
+**阶段优先级**: 先 known-servers 表 → KeyManager 接口 → infra 层 → service 层 → CLI 命令 → 集成
+
+| 编号 | 任务 | 文件名 | 说明 | 优先级 |
+|------|------|--------|------|--------|
+| P6.1 | KeyManager 接口 | `asshc/port/keymanager.go` | Generate/DeployPublicKey/Backup/Lookup 接口 | ⭐⭐⭐ |
+| P6.2-a | 密钥生成 | `asshc/infra/keymgr/generate.go` | RSA/Ed25519/ECDSA 生成，OpenSSH 格式，指纹计算 | ⭐⭐⭐ |
+| P6.2-b | 公钥部署 | `asshc/infra/keymgr/deploy.go` | SSH 登录→检测 authorized_keys→追加公钥(幂等) | ⭐⭐ |
+| P6.2-c | 密钥备份 | `asshc/infra/keymgr/backup.go` | 指纹命名→复制→data/keys/索引维护 | ⭐⭐ |
+| P6.3 | KeyService | `asshc/service/key.go` | GenerateAndDeploy / HandleKeyFlag 用例编排 | ⭐⭐⭐ |
+| P6.4 | keygen 命令 | `cmd/keygen.go` | `assh keygen <server> [--type] [--bits]` 命令 | ⭐⭐ |
+| P6.5-a | known-servers 接口扩展 | `asshc/port/repository.go` | 新增 KnownServerRecorder 接口 | ⭐⭐⭐⭐ |
+| P6.5-b | known-servers 数据库迁移 | `asshc/infra/store/db.go` | migrate() 新增 known_servers 建表 | ⭐⭐⭐⭐ |
+| P6.5-c | known-servers 存储实现 | `asshc/infra/store/known.go` | 新建文件：upsert/lookup 实现 | ⭐⭐⭐⭐ |
+| P6.5-d | 直连接入点 | `cmd/connect.go` + `cmd/app.go` | 直连成功后 RecordDirectConnect() | ⭐⭐⭐⭐ |
+| P6.5-e | keygen 关联 known-servers | `asshc/infra/keymgr/deploy.go` | 直连 keygen 后更新 key_backup_path | ⭐⭐ |
+| P6.6-a | SSH 备份优先策略 | `asshc/infra/ssh/client.go` | tryKeyFile 优先查 data/keys/ 备份 | ⭐⭐ |
+| P6.6-b | known-servers 密钥查找 | `asshc/infra/ssh/client.go` | 直连时查 known_servers 的 key_backup_path | ⭐⭐ |
+| P6.7-a | KeysDir 路径 | `config/path.go` | 新增 KeysDir 常量 | ⭐⭐ |
+| P6.7-b | DI 注入 | `main.go` | 创建 KeyManager/KeyService/KnownServerRecorder | ⭐⭐ |
+| P6.7-c | App 签名变更 | `cmd/app.go` | NewApp 增加 `*service.KeyService` 参数 | ⭐⭐ |
+| **P1** | **验证** | `go build ./... && go test ./... -v` | **编译+测试全部通过** | **必选** |
+
+**first step — known-servers 表 (P6.5):**
+根据用户指定，优先实现 known_servers 表相关任务（P6.5-a 到 P6.5-d），为直连登录记录和密钥关联打好基础。
+
+详细设计见 [modules/key-management.md](modules/key-management.md)。
 
 ### 📝 Phase 7: 代理 & 隧道
 
