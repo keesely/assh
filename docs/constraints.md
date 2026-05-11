@@ -1,6 +1,6 @@
 # Constraints
 
-- **Go 版本**: 1.22.0+
+- **Go 版本**: 1.25.0+
 - **平台**: 不支持 Windows 编译
 - **工作目录**: 所有开发在 `asshv2/` 内进行（git worktree）
 

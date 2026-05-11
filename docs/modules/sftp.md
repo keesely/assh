@@ -7,19 +7,30 @@
 ## 接口定义 — `asshc/port/transfer.go`（已有，需更新）
 
 ```go
-type ProgressInfo struct {
-    Index    int     // 当前文件序号（1-based）
-    Total    int     // 总文件数
-    FileName string  // 当前文件名
-    Progress float64 // 0.0 ~ 1.0
-    Rate     string  // 已格式化速率，如 "2.1MB/s"
-    ETA      string  // 已格式化剩余时间，如 "4s"
+// TransferOptions 定义文件传输选项。
+type TransferOptions struct {
+    Resume         bool
+    Overwrite      string // "force", "skip", "ask", or "" (ask on conflict)
+    VerifyChecksum bool
+    Concurrency    int
 }
-type TransferProgress func(info ProgressInfo)
+
+// TransferInfo 定义进度回调信息。
+type TransferInfo struct {
+    Index      int     // 当前文件序号（1-based）
+    Total      int     // 总文件数
+    FileName   string  // 当前文件名
+    Progress   float64 // 0.0 ~ 1.0
+    Rate       string  // 已格式化速率，如 "2.1MB/s"
+    ETA        string  // 已格式化剩余时间，如 "4s"
+    Bytes      int64   // 已传输字节数
+    TotalBytes int64   // 总字节数
+}
+type TransferProgress func(info TransferInfo)
 
 type FileTransfer interface {
-    Push(ctx context.Context, server *domain.Server, localPath, remotePath string, progress TransferProgress) error
-    Pull(ctx context.Context, server *domain.Server, remotePath, localPath string, progress TransferProgress) error
+    Push(ctx context.Context, server *domain.Server, localPath, remotePath string, opts TransferOptions, progress TransferProgress) error
+    Pull(ctx context.Context, server *domain.Server, remotePath, localPath string, opts TransferOptions, progress TransferProgress) error
     List(server *domain.Server, remotePath string) ([]FileInfo, error)
     Remove(server *domain.Server, remotePath string) error
     Mkdir(server *domain.Server, remotePath string) error
