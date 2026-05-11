@@ -14,6 +14,14 @@ func (s *Store) RecordDirectConnect(ks *domain.KnownServer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 基本输入验证：Host 非空，Port 在有效范围
+	if ks.Host == "" {
+		return domain.ErrEmptyField
+	}
+	if ks.Port < 1 || ks.Port > 65535 {
+		return domain.ErrInvalidPort
+	}
+
 	_, err := s.db.Exec(`
 		INSERT INTO known_servers (id, host, port, user_name, auth_fingerprint, key_backup_path, last_connected_at, connect_count, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 1, datetime('now'), datetime('now'))

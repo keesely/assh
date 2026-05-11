@@ -29,11 +29,10 @@ import (
 // recordDirectConnectAsync 异步记录直连操作到 known_servers 表。
 // 传入预计算的 authFingerprint 避免明文密码在 goroutine 中传播。
 // 封装为包级函数，使 fsPushAction / fsPullAction 可直接调用。
-func recordDirectConnectAsync(kr transferport.KnownServerRecorder, host string, port int, user, password, keyFile string) {
+func recordDirectConnectAsync(kr transferport.KnownServerRecorder, host string, port int, user, authFingerprint string) {
 	if kr == nil {
 		return
 	}
-	authFingerprint := domain.ComputeAuthFingerprint(password, keyFile)
 	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
 	ks := &domain.KnownServer{
 		ID:              id,
@@ -401,9 +400,9 @@ ctx := context.Background()
 			if err := transferSvc.PushFileDirect(ctx, server, localPath, remotePath, opts); err != nil {
 				return fmt.Errorf("push failed: %w", err)
 			}
-			// 记录直连到 known_servers 表
+			// 记录直连到 known_servers 表（预计算 authFingerprint 避免明文密码传播）
 			if kr != nil {
-				recordDirectConnectAsync(kr, host, port, user, password, identityFile)
+				recordDirectConnectAsync(kr, host, port, user, domain.ComputeAuthFingerprint(password, identityFile))
 			}
 		} else {
 			// Normal mode - use server name lookup
@@ -566,9 +565,9 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 			if err := transferSvc.PullFileDirect(ctx, server, remotePath, localPath, opts); err != nil {
 				return fmt.Errorf("pull failed: %w", err)
 			}
-			// 记录直连到 known_servers 表
+			// 记录直连到 known_servers 表（预计算 authFingerprint 避免明文密码传播）
 			if kr != nil {
-				recordDirectConnectAsync(kr, host, port, user, password, identityFile)
+				recordDirectConnectAsync(kr, host, port, user, domain.ComputeAuthFingerprint(password, identityFile))
 			}
 		} else {
 			if err := transferSvc.PullFile(ctx, name, remotePath, localPath, opts); err != nil {
