@@ -641,6 +641,7 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 | 任务 | 说明 | 状态 |
 |------|------|:----:|
 | P5.5-a 集成测试 | 使用 embed 测试服务器或容器化 SFTP server 测试全链路 push/pull | ⬜ |
+| P5.5-b **认证回退** | `asshc/infra/ssh/client.go` — key 失败后回退 password | ✅ BUG-010 |
 | **验证** | `go test ./... -v -count=1` | |
 
 ---
@@ -649,10 +650,10 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P5.6-a go.mod 更新 | `go.mod` | 添加 `github.com/pkg/sftp` | ⬜ |
-| P5.6-b DI 注入 | `main.go` | 注入 `FileTransfer` + `TransferService` 到 `cmd.NewApp()` | ⬜ |
-| P5.6-c App 签名变更 | `cmd/app.go` | `NewApp` 增加 `transferSvc` 参数 | ⬜ |
-| **验证** | `go build ./... && go vet ./...` | |
+| P5.6-a go.mod 更新 | `go.mod` | 添加 `github.com/pkg/sftp` | ✅ |
+| P5.6-b DI 注入 | `main.go` | 注入 `FileTransfer` + `TransferService` 到 `cmd.NewApp()` | ✅ |
+| P5.6-c App 签名变更 | `cmd/app.go` | `NewApp` 增加 `transferSvc` 参数 | ✅ |
+| **验证** | `go build ./... && go vet ./...` | | ✅ |
 
 ---
 
@@ -662,10 +663,10 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P5.7-a expandCombinedFlags | `main.go` | 实现 `os.Args` 预处理：`-qnt` → `-q -n -t` | ⬜ |
-| P5.7-b bool flag 白名单 | `main.go` | 定义已知 bool 短参集合 `{"v","q","V"}`，预留 `-e`(resume) | ⬜ |
-| P5.7-c 边界处理 | `main.go` | `-p22` 保持原样、未知 flag 报错、`--` 分隔符、混入带值 flag 不展开 | ⬜ |
-| **验证** | `go build ./... && go test ./... -v -count=1` | | |
+| P5.7-a expandCombinedFlags | `main.go` | 实现 `os.Args` 预处理：`-qnt` → `-q -n -t` | ✅ |
+| P5.7-b bool flag 白名单 | `main.go` | 定义已知 bool 短参集合 `{"v","q","V"}`，预留 `-e`(resume) | ✅ |
+| P5.7-c 边界处理 | `main.go` | `-p22` 保持原样、未知 flag 报错、`--` 分隔符、混入带值 flag 不展开 | ✅ |
+| **验证** | `go build ./... && go test ./... -v -count=1` | | ✅ | |
 
 ---
 
@@ -697,6 +698,33 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 | F27 | RQ-001: 组合中含未知 flag | `assh -qx root@host` | 报错未知 flag `-x` | ✅ |
 | F28 | RQ-001: 混入带值短参不展开 | `assh -qp root@host` | 报错未知 flag（urflags原始行为） | ✅ |
 | **验证**: `go build ./... && go test ./... -v -count=1` | | | ✅ |
+
+---
+
+#### P5.8 v1→v2 配置导入
+
+参见：[ADR-024](adrs/024-v1-to-v2-migration.md) | [设计文档](worklogs/2026-05-11-auth-fallback-and-v1-import.md)
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.8-a v1 解密核心 | `asshc/service/importer.go` | RSA PKCS1v15 + AES-CBC 解密 v1 servers.db | ⬜ |
+| P5.8-b import 命令 | `cmd/import.go` | `assh import v1` 子命令 + 交互式确认 | ⬜ |
+| P5.8-c 密钥复制 | `asshc/service/importer.go` | 扫描 v1 data/ 目录复制密钥到 v2 credentials/ | ⬜ |
+| P5.8-d 写入 v2 SQLite | `asshc/service/importer.go` | 通过 Store API 写入 v2 数据库 | ⬜ |
+| **验证** | `go build ./... && go test ./... -v -count=1` | | |
+
+---
+
+#### P5.9 认证回退 (BUG-010)
+
+参见：[BUG-010](bugs/BUG-010-密钥认证失败后未回退到密码认证.md)
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.9-a 两轮认证 | `asshc/infra/ssh/client.go` | key 失败后 Password-only 回退 | ✅ |
+| **验证** | `go build ./... && go test ./... -v -count=1` | | ✅ |
+
+---
 
 ### 📝 Phase 6: 密钥管理 (Key Management)
 

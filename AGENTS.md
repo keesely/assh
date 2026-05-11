@@ -4,7 +4,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 4 完成, Phase 5 SFTP 开发中 2026/05/10)
+- **Version**: v2.0.0 (Phase 4 完成, Phase 5 SFTP 功能冻结·验收中 2026/05/11)
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.22.0+
@@ -77,7 +77,7 @@ asshv2/
 | 2 | 数据持久化层 (SQLite + AES-GCM) | ✅ 完成 |
 | 3 | SSH 连接层 | ✅ 完成 |
 | **4** | **CLI 命令组装** | **✅ 完成 (2026-05-10)** |
-| **5** | **SFTP 文件传输** | **⏳ 开发中 (2026-05-10)** |
+| **5** | **SFTP 文件传输** | **✅ 功能冻结·验收中 (2026-05-11)** |
 | **6** | **密钥管理 (Key Management)** | **⏳ 规划中** |
 | 7 | 代理 & 隧道 (SOCKS5/端口转发/SSH隧道) | ⏳ |
 | 8 | 云同步 (Qiniu) | ⏳ |
@@ -120,6 +120,14 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `cmd/app.go` — 全局参数 `-v/-q/-F` 注册 + 子命令注册
 - [x] `asshc/domain/changelog.go` — ChangelogEntry 类型、变更类型常量
 - [x] `asshc/infra/store/` — 版本管理 + server_changelog 表 + 快照回滚
+- [x] `asshc/port/transfer.go` — FileTransfer 接口（Push/Pull/List/Remove/Mkdir）
+- [x] `asshc/infra/sftp/` — SFTP 传输实现（client/upload/download/header/ops/progress/verify/transfer）
+- [x] `asshc/service/transfer.go` — TransferService（PushFile/PullFile/GlobLocal/PushGlob/ListRemote）
+- [x] `cmd/sftp_cmd.go` — push/pull/sftp 命令定义（assh + assh-fs 共享）
+- [x] `cmd/fs/main.go` — assh-fs 独立入口（DI 组合根）
+- [x] `cmd/bootstrap.go` — NewAppComponents() 共享初始化
+- [x] `main.go` — expandCombinedFlags() RQ-001 组合短参数预处理
+- [x] `asshc/infra/ssh/client.go` — 认证回退（key→password 两轮尝试）
 
 ## 开发命令
 

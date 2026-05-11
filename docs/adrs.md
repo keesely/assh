@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 19 |
+| accepted | 20 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -34,6 +34,11 @@
 | ADR-017 | SFTP 文件传输架构设计：基于 pkg/sftp 实现文件传输 | accepted | 2026-05-10 |
 | ADR-018 | known-servers 隐性表：未具名服务器直连记录 | accepted | 2026-05-10 |
 | ADR-019 | 传输文件 Hash Header：断点续传安全验证 | accepted | 2026-05-10 |
+| ADR-020 | 阶段编号调整：插入Phase 6密钥管理 | accepted | 2026-05-10 |
+| ADR-021 | RQ-001: 短参数合并展开 | accepted | 2026-05-10 |
+| ADR-022 | Phase 5 SFTP 功能拆分为F1-F28验收标准 | accepted | 2026-05-10 |
+| ADR-023 | 文件名规范：xxx → BUG-XXX-标题.md | accepted | 2026-05-10 |
+| ADR-024 | v1→v2 配置导入指令 | accepted | 2026-05-10 |
 
 ## 新增 ADR
 

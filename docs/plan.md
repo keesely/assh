@@ -42,6 +42,7 @@ asshv2/
 │   ├── fs/
 │   │   └── main.go            # assh-fs 入口（DI 组合根）NEW
 │   ├── bootstrap.go           # 公共初始化逻辑 NEW
+│   ├── import.go              # v1→v2 配置导入命令 NEW
 │   ├── proxy.go               # 代理命令
 │   ├── sync.go                # 云同步命令
 │   ├── keygen.go              # 密钥生成命令
