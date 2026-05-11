@@ -31,15 +31,19 @@ func NewSFTPTransfer(sshConnector func(server *domain.Server) (*ssh.Client, erro
 	}
 }
 
-func (t *SFTPTransfer) Push(ctx context.Context, server *domain.Server, localPath, remotePath string, progress port.TransferProgress) error {
+func (t *SFTPTransfer) Push(ctx context.Context, server *domain.Server, localPath, remotePath string, opts port.TransferOptions, progress port.TransferProgress) error {
 	sshClient, err := t.sshConnector(server)
 	if err != nil {
 		return err
 	}
 	defer sshClient.Close()
 
-	opts := UploadOptions{
-		Progress: progress != nil,
+	uploadOpts := UploadOptions{
+		Resume:         opts.Resume,
+		Progress:       progress != nil,
+		VerifyChecksum: opts.VerifyChecksum,
+		Concurrency:    opts.Concurrency,
+		Overwrite:      opts.Overwrite,
 	}
 
 	progressAdapter := func(info ProgressInfo) {
@@ -57,18 +61,21 @@ func (t *SFTPTransfer) Push(ctx context.Context, server *domain.Server, localPat
 		}
 	}
 
-	return PushFile(ctx, sshClient, localPath, remotePath, opts, progressAdapter)
+	return PushFile(ctx, sshClient, localPath, remotePath, uploadOpts, progressAdapter)
 }
 
-func (t *SFTPTransfer) Pull(ctx context.Context, server *domain.Server, remotePath, localPath string, progress port.TransferProgress) error {
+func (t *SFTPTransfer) Pull(ctx context.Context, server *domain.Server, remotePath, localPath string, tfOpts port.TransferOptions, progress port.TransferProgress) error {
 	sshClient, err := t.sshConnector(server)
 	if err != nil {
 		return err
 	}
 	defer sshClient.Close()
 
-	opts := DownloadOptions{
-		Progress: progress != nil,
+	dlOpts := DownloadOptions{
+		Resume:         tfOpts.Resume,
+		Progress:       progress != nil,
+		VerifyChecksum: tfOpts.VerifyChecksum,
+		Concurrency:    tfOpts.Concurrency,
 	}
 
 	progressAdapter := func(info ProgressInfo) {
@@ -86,7 +93,7 @@ func (t *SFTPTransfer) Pull(ctx context.Context, server *domain.Server, remotePa
 		}
 	}
 
-	return PullFile(ctx, sshClient, remotePath, localPath, opts, progressAdapter)
+	return PullFile(ctx, sshClient, remotePath, localPath, dlOpts, progressAdapter)
 }
 
 func (t *SFTPTransfer) List(server *domain.Server, remotePath string) ([]port.FileInfo, error) {
@@ -272,7 +279,7 @@ func (t *SFTPTransfer) VerifyUpload(server *domain.Server, localPath, remotePath
 	}
 	defer client.Close()
 
-	result := VerifyUpload(client, localPath, remotePath, verifyChecksum)
+	result := VerifyUpload(client, sshClient, localPath, remotePath, verifyChecksum)
 	if result.Error != nil {
 		return result.Error
 	}

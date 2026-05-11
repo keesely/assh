@@ -19,6 +19,7 @@ type UploadOptions struct {
 	Progress       bool
 	VerifyChecksum bool
 	Concurrency    int
+	Overwrite      string // "force", "skip", "ask", or "" (ask on conflict)
 }
 
 type UploadResult struct {
@@ -46,13 +47,13 @@ func PushFile(ctx context.Context, sshClient *ssh.Client, localPath, remotePath 
 	}
 
 	if info.IsDir() {
-		return pushDirectory(ctx, client, localPath, remotePath, opts, progress)
+		return pushDirectory(ctx, client, sshClient, localPath, remotePath, opts, progress)
 	}
 
-	return pushSingleFile(ctx, client, localPath, remotePath, opts, progress)
+	return pushSingleFile(ctx, client, sshClient, localPath, remotePath, opts, progress)
 }
 
-func pushSingleFile(ctx context.Context, client *sftp.Client, localPath, remotePath string, opts UploadOptions, progress TransferProgress) error {
+func pushSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Client, localPath, remotePath string, opts UploadOptions, progress TransferProgress) error {
 	localFile, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("open local file failed: %w", err)
@@ -77,15 +78,35 @@ func pushSingleFile(ctx context.Context, client *sftp.Client, localPath, remoteP
 	remoteInfo, err := client.Stat(remotePath)
 	if err == nil {
 		remoteExists = true
-		if remoteInfo.Size() > localSize+int64(HeaderSize) {
+		// Size check: prevent overwriting larger remote file (unless -f force)
+		if opts.Overwrite != "force" && remoteInfo.Size() > localSize+int64(HeaderSize) {
 			return fmt.Errorf("remote file is larger than local file, resume not available")
+		}
+	}
+
+	// Handle Overwrite option (BUG-007)
+	if remoteExists {
+		switch opts.Overwrite {
+		case "skip":
+			fmt.Printf("remote file %s exists, skipping\n", remotePath)
+			return nil
+		case "force":
+			// proceed with overwrite
+		case "":
+			// Default: ask interactively
+			fmt.Printf("remote file %s exists, overwrite? (y/N) ", remotePath)
+			var answer string
+			fmt.Scanln(&answer)
+			if answer != "y" && answer != "Y" && answer != "yes" {
+				return fmt.Errorf("aborted")
+			}
 		}
 	}
 
 	if opts.Resume && remoteExists {
 		if remoteInfo.Size() >= localSize {
 			existingHash, _ := computeLocalHashAtOffset(localFile, 0, remoteInfo.Size())
-			remoteHash, _ := computeRemoteHash(client, remotePath)
+			remoteHash, _ := computeRemoteHash(sshClient, remotePath)
 			if existingHash == remoteHash {
 				return nil
 			}
@@ -163,7 +184,7 @@ func pushSingleFile(ctx context.Context, client *sftp.Client, localPath, remoteP
 	return nil
 }
 
-func pushDirectory(ctx context.Context, client *sftp.Client, localDir, remoteDir string, opts UploadOptions, progress TransferProgress) error {
+func pushDirectory(ctx context.Context, client *sftp.Client, sshClient *ssh.Client, localDir, remoteDir string, opts UploadOptions, progress TransferProgress) error {
 	files, err := collectLocalFiles(localDir, localDir)
 	if err != nil {
 		return err
@@ -188,7 +209,7 @@ func pushDirectory(ctx context.Context, client *sftp.Client, localDir, remoteDir
 			}
 		}
 
-		if err := pushSingleFile(ctx, client, localPath, remotePath, opts, progressFile); err != nil {
+		if err := pushSingleFile(ctx, client, sshClient, localPath, remotePath, opts, progressFile); err != nil {
 			return fmt.Errorf("push %s failed: %w", localPath, err)
 		}
 	}
@@ -262,8 +283,24 @@ func computeLocalHashAtOffset(f *os.File, offset, length int64) (string, error) 
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-func computeRemoteHash(client *sftp.Client, remotePath string) (string, error) {
-	return "", fmt.Errorf("not implemented: use ssh exec")
+func computeRemoteHash(sshClient *ssh.Client, remotePath string) (string, error) {
+	session, err := sshClient.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("ssh session failed: %w", err)
+	}
+	defer session.Close()
+
+	out, err := session.Output("sha256sum " + remotePath)
+	if err != nil {
+		return "", fmt.Errorf("remote sha256sum failed: %w", err)
+	}
+
+	// Output: "d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2  /path/to/file"
+	parts := strings.Fields(string(out))
+	if len(parts) > 0 {
+		return parts[0], nil
+	}
+	return "", fmt.Errorf("unexpected sha256sum output: %s", out)
 }
 
 func GlobLocal(pattern string) ([]string, error) {

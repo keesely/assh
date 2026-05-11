@@ -97,7 +97,7 @@ func (s *TransferService) PushFile(ctx context.Context, name, localPath, remoteP
 		}
 	}
 
-	if err := s.transfer.Push(ctx, server, localPath, remotePath, progress); err != nil {
+	if err := s.transfer.Push(ctx, server, localPath, remotePath, s.toPortOpts(opts), progress); err != nil {
 		return fmt.Errorf("push failed: %w", err)
 	}
 
@@ -173,7 +173,7 @@ func (s *TransferService) PushFileDirect(ctx context.Context, server *domain.Ser
 		}
 	}
 
-	if err := s.transfer.Push(ctx, server, localPath, remotePath, progress); err != nil {
+	if err := s.transfer.Push(ctx, server, localPath, remotePath, s.toPortOpts(opts), progress); err != nil {
 		return fmt.Errorf("push failed: %w", err)
 	}
 
@@ -255,7 +255,7 @@ func (s *TransferService) PullFile(ctx context.Context, name, remotePath, localP
 		}
 	}
 
-	if err := s.transfer.Pull(ctx, server, remotePath, localPath, progress); err != nil {
+	if err := s.transfer.Pull(ctx, server, remotePath, localPath, s.toPortOpts(opts), progress); err != nil {
 		return fmt.Errorf("pull failed: %w", err)
 	}
 
@@ -315,7 +315,7 @@ func (s *TransferService) PullFileDirect(ctx context.Context, server *domain.Ser
 		}
 	}
 
-	if err := s.transfer.Pull(ctx, server, remotePath, localPath, progress); err != nil {
+	if err := s.transfer.Pull(ctx, server, remotePath, localPath, s.toPortOpts(opts), progress); err != nil {
 		return fmt.Errorf("pull failed: %w", err)
 	}
 
@@ -458,6 +458,16 @@ func (s *TransferService) ensureRemoteSlash(path string) string {
 		return path + "/"
 	}
 	return path
+}
+
+// toPortOpts converts service TransferOptions to port-level TransferOptions.
+func (s *TransferService) toPortOpts(opts TransferOptions) port.TransferOptions {
+	return port.TransferOptions{
+		Resume:         opts.Resume,
+		Overwrite:      opts.Overwrite,
+		VerifyChecksum: opts.VerifyChecksum,
+		Concurrency:    opts.Concurrency,
+	}
 }
 
 func (s *TransferService) localExists(path string) bool {

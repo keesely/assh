@@ -38,13 +38,13 @@ func PullFile(ctx context.Context, sshClient *ssh.Client, remotePath, localPath 
 	}
 
 	if info.IsDir() {
-		return pullDirectory(ctx, client, remotePath, localPath, opts, progress)
+		return pullDirectory(ctx, client, sshClient, remotePath, localPath, opts, progress)
 	}
 
-	return pullSingleFile(ctx, client, remotePath, localPath, opts, progress)
+	return pullSingleFile(ctx, client, sshClient, remotePath, localPath, opts, progress)
 }
 
-func pullSingleFile(ctx context.Context, client *sftp.Client, remotePath, localPath string, opts DownloadOptions, progress TransferProgress) error {
+func pullSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Client, remotePath, localPath string, opts DownloadOptions, progress TransferProgress) error {
 	remoteFile, err := client.Open(remotePath)
 	if err != nil {
 		return fmt.Errorf("open remote file failed: %w", err)
@@ -78,7 +78,7 @@ func pullSingleFile(ctx context.Context, client *sftp.Client, remotePath, localP
 		if headerData, err := readLocalHeader(localPath); err == nil {
 			if header, parseErr := ParseHashHeader(headerData); parseErr == nil {
 				if localInfo.Size() == header.OrigSize+int64(HeaderSize) {
-					remoteHash, hashErr := computeRemoteHash(client, remotePath)
+					remoteHash, hashErr := computeRemoteHash(sshClient, remotePath)
 					if hashErr == nil {
 						if bytesEqual(header.SHA256[:], remoteHash) {
 							resumeOffset = header.OrigSize
@@ -94,7 +94,7 @@ func pullSingleFile(ctx context.Context, client *sftp.Client, remotePath, localP
 
 		if resumeOffset == 0 && localInfo.Size() >= remoteSize {
 			localHash, _ := computeLocalHashAtFile(localPath, 0, localInfo.Size())
-			remoteHash, _ := computeRemoteHash(client, remotePath)
+			remoteHash, _ := computeRemoteHash(sshClient, remotePath)
 			if localHash == remoteHash {
 				return nil
 			}
@@ -169,7 +169,7 @@ func pullSingleFile(ctx context.Context, client *sftp.Client, remotePath, localP
 	return nil
 }
 
-func pullDirectory(ctx context.Context, client *sftp.Client, remoteDir, localDir string, opts DownloadOptions, progress TransferProgress) error {
+func pullDirectory(ctx context.Context, client *sftp.Client, sshClient *ssh.Client, remoteDir, localDir string, opts DownloadOptions, progress TransferProgress) error {
 	files, err := collectRemoteFiles(client, remoteDir, remoteDir)
 	if err != nil {
 		return err
@@ -194,7 +194,7 @@ func pullDirectory(ctx context.Context, client *sftp.Client, remoteDir, localDir
 			}
 		}
 
-		if err := pullSingleFile(ctx, client, remotePath, localPath, opts, progressFile); err != nil {
+		if err := pullSingleFile(ctx, client, sshClient, remotePath, localPath, opts, progressFile); err != nil {
 			return fmt.Errorf("pull %s failed: %w", remotePath, err)
 		}
 	}

@@ -13,10 +13,15 @@ var (
 	ErrSizeMismatch = errors.New("size mismatch")
 )
 
+// TransferOptions 定义文件传输选项。
+type TransferOptions struct {
+	Resume         bool
+	Overwrite      string // "force", "skip", "ask", or "" (ask on conflict)
+	VerifyChecksum bool
+	Concurrency    int
+}
+
 // TransferProgress 定义文件传输进度回调函数类型。
-// percent: 传输进度百分比 (0-100)
-// bytes: 已传输的字节数
-// total: 总字节数
 type TransferProgress func(info TransferInfo)
 
 type TransferInfo struct {
@@ -34,16 +39,10 @@ type TransferInfo struct {
 // 支持 SFTP 协议的文件上传、下载、列表和删除操作。
 type FileTransfer interface {
 	// Push 上传本地文件或目录到远程服务器。
-	// localPath: 本地文件或目录路径
-	// remotePath: 远程目标路径
-	// progress: 进度回调函数
-	Push(ctx context.Context, server *domain.Server, localPath, remotePath string, progress TransferProgress) error
+	Push(ctx context.Context, server *domain.Server, localPath, remotePath string, opts TransferOptions, progress TransferProgress) error
 
 	// Pull 从远程服务器下载文件或目录到本地。
-	// remotePath: 远程文件或目录路径
-	// localPath: 本地目标路径
-	// progress: 进度回调函数
-	Pull(ctx context.Context, server *domain.Server, remotePath, localPath string, progress TransferProgress) error
+	Pull(ctx context.Context, server *domain.Server, remotePath, localPath string, opts TransferOptions, progress TransferProgress) error
 
 	// List 列出远程目录内容。
 	List(server *domain.Server, remotePath string) ([]FileInfo, error)
@@ -75,11 +74,11 @@ type TransferResult struct {
 
 // PushBatch 批量上传文件。
 // 返回每个文件的传输结果。
-func PushBatch(ctx context.Context, transfer FileTransfer, server *domain.Server, files []string, remoteDir string, progress TransferProgress) []TransferResult {
+func PushBatch(ctx context.Context, transfer FileTransfer, server *domain.Server, files []string, remoteDir string, opts TransferOptions, progress TransferProgress) []TransferResult {
 	results := make([]TransferResult, 0, len(files))
 	for _, file := range files {
 		remotePath := remoteDir + "/" + file
-		err := transfer.Push(ctx, server, file, remotePath, progress)
+		err := transfer.Push(ctx, server, file, remotePath, opts, progress)
 		results = append(results, TransferResult{
 			Path:    remotePath,
 			Success: err == nil,
@@ -91,11 +90,11 @@ func PushBatch(ctx context.Context, transfer FileTransfer, server *domain.Server
 
 // PullBatch 批量下载文件。
 // 返回每个文件的传输结果。
-func PullBatch(ctx context.Context, transfer FileTransfer, server *domain.Server, remoteFiles []string, localDir string, progress TransferProgress) []TransferResult {
+func PullBatch(ctx context.Context, transfer FileTransfer, server *domain.Server, remoteFiles []string, localDir string, opts TransferOptions, progress TransferProgress) []TransferResult {
 	results := make([]TransferResult, 0, len(remoteFiles))
 	for _, file := range remoteFiles {
 		localPath := localDir + "/" + file
-		err := transfer.Pull(ctx, server, file, localPath, progress)
+		err := transfer.Pull(ctx, server, file, localPath, opts, progress)
 		results = append(results, TransferResult{
 			Path:    localPath,
 			Success: err == nil,

@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 )
 
 type VerifyResult struct {
-	Path       string
-	SizeMatch  bool
-	HashMatch  bool
-	SHA256Local string
+	Path        string
+	SizeMatch   bool
+	HashMatch   bool
+	SHA256Local  string
 	SHA256Remote string
-	Error      error
+	Error       error
 }
 
 func VerifyLocalSize(filePath string, expectedSize int64) (bool, error) {
@@ -82,7 +84,7 @@ func VerifyTransfer(client *sftp.Client, localPath, remotePath string, verifyChe
 	return result
 }
 
-func VerifyUpload(client *sftp.Client, localPath, remotePath string, verifyChecksum bool) *VerifyResult {
+func VerifyUpload(client *sftp.Client, sshClient *ssh.Client, localPath, remotePath string, verifyChecksum bool) *VerifyResult {
 	result := &VerifyResult{
 		Path: remotePath,
 	}
@@ -113,8 +115,8 @@ func VerifyUpload(client *sftp.Client, localPath, remotePath string, verifyCheck
 		}
 		result.SHA256Local = localHash
 
-		if client != nil {
-			remoteHash, err := ComputeRemoteSHA256(client, remotePath)
+		if sshClient != nil {
+			remoteHash, err := ComputeRemoteSHA256Exec(sshClient, remotePath)
 			if err != nil {
 				result.Error = err
 				return result
@@ -127,8 +129,25 @@ func VerifyUpload(client *sftp.Client, localPath, remotePath string, verifyCheck
 	return result
 }
 
-func ComputeRemoteSHA256(client *sftp.Client, remotePath string) (string, error) {
-	return "", fmt.Errorf("not implemented: use ssh exec to run sha256sum")
+// ComputeRemoteSHA256Exec runs sha256sum on the remote server via SSH and returns the hash.
+func ComputeRemoteSHA256Exec(sshClient *ssh.Client, remotePath string) (string, error) {
+	session, err := sshClient.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("ssh session failed: %w", err)
+	}
+	defer session.Close()
+
+	out, err := session.Output("sha256sum " + remotePath)
+	if err != nil {
+		return "", fmt.Errorf("remote sha256sum failed: %w", err)
+	}
+
+	// Output: "d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2  /path/to/file"
+	parts := strings.Fields(string(out))
+	if len(parts) > 0 {
+		return parts[0], nil
+	}
+	return "", fmt.Errorf("unexpected sha256sum output: %s", out)
 }
 
 func VerifyDownload(client *sftp.Client, localPath, remotePath string, verifyChecksum bool) *VerifyResult {
@@ -161,14 +180,6 @@ func VerifyDownload(client *sftp.Client, localPath, remotePath string, verifyChe
 			return result
 		}
 		result.SHA256Local = localHash
-
-		remoteHash, err := ComputeRemoteSHA256(client, remotePath)
-		if err != nil {
-			result.Error = err
-			return result
-		}
-		result.SHA256Remote = remoteHash
-		result.HashMatch = localHash == remoteHash
 	}
 
 	return result
@@ -217,4 +228,9 @@ func formatSize(path string) string {
 		return fmt.Sprintf("%.1fMB", size/1024/1024)
 	}
 	return fmt.Sprintf("%.1fGB", size/1024/1024/1024)
+}
+
+// ComputeRemoteSHA256 is kept for backward compatibility but deprecated.
+func ComputeRemoteSHA256(client *sftp.Client, remotePath string) (string, error) {
+	return "", fmt.Errorf("not implemented: use ComputeRemoteSHA256Exec with ssh.Client instead")
 }
