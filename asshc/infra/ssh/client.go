@@ -30,27 +30,56 @@ func NewConnector() *Connector {
 
 // Connect 根据服务器配置建立 SSH 连接。
 // 自动选择认证方式、配置 HostKey 校验和 Keepalive 心跳。
+// 认证策略：优先尝试 Agent/KeyFile/Password 的组合，如果 KeyFile 认证失败
+// 且 Password 可用，自动回退到 Password-only 重新连接。
 func (c *Connector) Connect(server *domain.Server) (*ssh.Client, error) {
 	addr := net.JoinHostPort(server.Host, fmt.Sprintf("%d", server.Port))
 
+	// First attempt: try all available auth methods
+	primaryMethods := c.authMethods(server)
 	sshCfg := &ssh.ClientConfig{
 		User:            server.User,
-		Auth:            c.authMethods(server),
+		Auth:            primaryMethods,
 		HostKeyCallback: c.getHostKeyCallback(server),
 		Timeout:         DefaultTimeout,
 	}
 
 	client, err := ssh.Dial("tcp", addr, sshCfg)
-	if err != nil {
-		return nil, fmt.Errorf("ssh dial failed: %w", err)
+	if err == nil {
+		c.setupKeepalive(client, server)
+		return client, nil
 	}
 
-	// 从 Options["keepalive"] 读取心跳间隔（秒），大于 0 时启动协程
+	// Fallback: if key auth was attempted and failed, and password is available,
+	// try a second connection with password-only auth.
+	if c.hasKeyAndPassword(server) {
+		fallbackCfg := &ssh.ClientConfig{
+			User:            server.User,
+			Auth:            []ssh.AuthMethod{ssh.Password(server.Auth.Password)},
+			HostKeyCallback: c.getHostKeyCallback(server),
+			Timeout:         DefaultTimeout,
+		}
+
+		client2, err2 := ssh.Dial("tcp", addr, fallbackCfg)
+		if err2 == nil {
+			c.setupKeepalive(client2, server)
+			return client2, nil
+		}
+	}
+
+	return nil, fmt.Errorf("ssh dial failed: %w", err)
+}
+
+// hasKeyAndPassword 检查服务器是否同时配置了密钥文件和密码。
+func (c *Connector) hasKeyAndPassword(server *domain.Server) bool {
+	return server.Auth != nil && server.Auth.KeyFile != "" && server.Auth.Password != ""
+}
+
+// setupKeepalive 从服务器配置中读取 Keepalive 心跳间隔（秒），大于 0 时启动协程。
+func (c *Connector) setupKeepalive(client *ssh.Client, server *domain.Server) {
 	if interval := c.getKeepalive(server); interval > 0 {
 		go c.keepAlive(client, time.Duration(interval)*time.Second)
 	}
-
-	return client, nil
 }
 
 // keepAlive 定期发送 SSH keepalive@openssh.com 请求，检测连接是否存活。
@@ -77,6 +106,8 @@ func (c *Connector) Close(client *ssh.Client) error {
 
 // authMethods 根据服务器配置，按优先级收集可用的认证方式。
 // 认证顺序：SSH Agent → 密钥文件 → 密码。
+// 如果密钥和密码同时配置，初始尝试使用全部方法；若密钥认证失败，
+// Connect 会自动进行 Password-only 回退（见 Connect 方法）。
 func (c *Connector) authMethods(server *domain.Server) []ssh.AuthMethod {
 	var methods []ssh.AuthMethod
 
@@ -98,7 +129,9 @@ func (c *Connector) authMethods(server *domain.Server) []ssh.AuthMethod {
 }
 
 // tryAgent 尝试使用 SSH Agent（通过 SSH_AUTH_SOCK 环境变量）进行认证。
-// 如果环境变量未设置或连接失败，返回 nil。
+// 如果环境变量未设置、连接失败、或 agent 中没有加载任何 identities，返回 nil。
+// 注意：返回空的 PublicKeysCallback 会干扰 Go SSH 的认证循环，导致后续的
+// keyfile 和 password 方法被跳过（所有 publickey 方法被认为是已尝试过的）。
 func (c *Connector) tryAgent() ssh.AuthMethod {
 	sock := os.Getenv("SSH_AUTH_SOCK")
 	if sock == "" {
@@ -108,7 +141,18 @@ func (c *Connector) tryAgent() ssh.AuthMethod {
 	if err != nil {
 		return nil
 	}
-	return ssh.PublicKeysCallback(agent.NewClient(conn).Signers)
+
+	agentClient := agent.NewClient(conn)
+
+	// 预检查 agent 是否加载了任何 identities。
+	// 空壳 PublicKeysCallback（0 个 signers）会导致 Go SSH 认证循环提前退出，
+	// 使后续的 keyfile 和 password 认证方法不会被尝试。
+	signers, err := agentClient.Signers()
+	if err != nil || len(signers) == 0 {
+		return nil
+	}
+
+	return ssh.PublicKeysCallback(agentClient.Signers)
 }
 
 // tryKeyFile 尝试使用指定路径的私钥文件进行认证。
