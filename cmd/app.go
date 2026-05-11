@@ -28,16 +28,17 @@ import (
 
 // App 封装 CLI 应用的核心结构，持有 service 依赖并通过 urfave/cli 框架注册命令。
 type App struct {
-	cli        *cli.App                   // urfave/cli 应用实例
-	version    string                     // 版本号（编译时注入）
-	build      string                     // 构建信息（编译时注入）
-	connectSvc *service.ConnectService    // SSH 连接服务
-	serverSvc  *service.ServerService     // 服务器配置管理服务
+	cli            *cli.App                      // urfave/cli 应用实例
+	version        string                        // 版本号（编译时注入）
+	build          string                        // 构建信息（编译时注入）
+	connectSvc     *service.ConnectService       // SSH 连接服务
+	serverSvc      *service.ServerService        // 服务器配置管理服务
+	knownRecorder  transferport.KnownServerRecorder // known-servers 隐性表记录器
 }
 
 // NewApp 创建 CLI 应用，注入所有 service 依赖。
 // 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc）。
-func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService) *App {
+func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
 	app.Usage = "An SSH Client"
@@ -45,11 +46,12 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 	app.HideVersion = true
 
 	a := &App{
-		cli:        app,
-		version:    version,
-		build:      build,
-		connectSvc: connectSvc,
-		serverSvc:  serverSvc,
+		cli:           app,
+		version:       version,
+		build:         build,
+		connectSvc:    connectSvc,
+		serverSvc:     serverSvc,
+		knownRecorder: knownRecorder,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -63,7 +65,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 }
 
 // NewFSApp creates CLI application for file transfer (assh-fs binary).
-func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService) *App {
+func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH-FS - SFTP File Transfer"
 	app.Usage = "SFTP File Transfer Client"
@@ -71,10 +73,11 @@ func NewFSApp(version, build string, transferSvc *service.TransferService, serve
 	app.HideVersion = true
 
 	a := &App{
-		cli:       app,
-		version:   version,
-		build:     build,
-		serverSvc: serverSvc,
+		cli:           app,
+		version:       version,
+		build:         build,
+		serverSvc:     serverSvc,
+		knownRecorder: knownRecorder,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -638,7 +641,7 @@ func (a *App) defaultAction(c *cli.Context) error {
 		return cli.ShowAppHelp(c)
 	}
 
-	client, err := a.loginCore(c)
+	client, directInfo, err := a.loginCore(c)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) && target != "" {
 			if suggestion, ok := a.serverSvc.SuggestServer(target); ok {
@@ -648,6 +651,10 @@ func (a *App) defaultAction(c *cli.Context) error {
 		return err
 	}
 	defer a.connectSvc.Close(client)
+
+	if directInfo != nil {
+		a.recordDirectConnect(directInfo.host, directInfo.port, directInfo.user, directInfo.password, directInfo.keyFile)
+	}
 
 	if cmd := c.String("command"); cmd != "" {
 		return a.connectSvc.Run(client, cmd)

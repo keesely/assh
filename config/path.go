@@ -16,6 +16,7 @@ import (
 var (
 	ConfigPath     = "~/.assh/v2"             // 配置目录
 	DataPath       = "~/.assh/v2/data"        // 数据目录
+	KeysDir        = "~/.assh/v2/data/keys"   // 密钥备份目录
 	PrivateKeyPath = "~/.assh/v2/.rsa"        // RSA 私钥文件路径
 	PublicKeyPath  = "~/.assh/v2/.rsa.pub"    // RSA 公钥文件路径
 	PasswordFile   = "~/.assh/v2/.account"    // 密码文件路径

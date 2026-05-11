@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"assh/asshc/domain"
+	"assh/log"
 
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh"
@@ -67,7 +68,16 @@ func (a *App) registerConnectCommands() {
 	}...)
 }
 
-// loginCore 执行登录逻辑，返回已连接的 SSH 客户端。
+// directConnectInfo 记录直连模式的连接参数，用于异步写入 known_servers 表。
+type directConnectInfo struct {
+	host     string
+	port     int
+	user     string
+	password string
+	keyFile  string
+}
+
+// loginCore 执行登录逻辑，返回已连接的 SSH 客户端和直连信息。
 // 三种目标识别方式：
 //   - 已保存的服务器名称（从数据库中读取配置）
 //   - user@host 格式（直接指定）
@@ -75,7 +85,7 @@ func (a *App) registerConnectCommands() {
 //
 // 注意：当通过默认 Action（assh <target> -p 9999）触发时，urfave/cli
 // 不会解析位置参数后的全局 flags，需要手动回落查找短参数（v1 兼容）。
-func (a *App) loginCore(c *cli.Context) (*ssh.Client, error) {
+func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error) {
 	target := c.Args().Get(0)
 	host := resolveFlag(c, "host", "H")
 	port := resolveIntFlag(c, "port", "p")
@@ -84,10 +94,10 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, error) {
 	keyFile := firstNonEmpty(resolveFlag(c, "identity-file", "i"), resolveFlag(c, "key", "k"))
 
 	if target == "" && host == "" {
-		return nil, fmt.Errorf("no target specified: use <name>, <user@host>, or -H <host>")
+		return nil, nil, fmt.Errorf("no target specified: use <name>, <user@host>, or -H <host>")
 	}
 	if target != "" && host != "" {
-		return nil, fmt.Errorf("cannot specify both target and -H/--host")
+		return nil, nil, fmt.Errorf("cannot specify both target and -H/--host")
 	}
 
 	switch {
@@ -100,7 +110,11 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, error) {
 		if port <= 0 {
 			port = 22
 		}
-		return a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
+		client, err := a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		return client, &directConnectInfo{host: host, port: port, user: user, password: password, keyFile: keyFile}, nil
 
 	case host != "":
 		if user == "" {
@@ -109,20 +123,55 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, error) {
 		if port <= 0 {
 			port = 22
 		}
-		return a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
+		client, err := a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		return client, &directConnectInfo{host: host, port: port, user: user, password: password, keyFile: keyFile}, nil
 
 	default:
-		return a.connectSvc.ConnectByName(target)
+		client, err := a.connectSvc.ConnectByName(target)
+		return client, nil, err
 	}
+}
+
+// recordDirectConnect 记录直连操作到 known_servers 表。
+// 仅在直连模式（user@host / -H host）时触发，按名连接不触发。
+// 异步执行，不阻塞主流程。
+func (a *App) recordDirectConnect(host string, port int, user, password, keyFile string) {
+	if a.knownRecorder == nil {
+		return
+	}
+
+	authFingerprint := domain.ComputeAuthFingerprint(password, keyFile)
+	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
+
+	ks := &domain.KnownServer{
+		ID:              id,
+		Host:            host,
+		Port:            port,
+		User:            user,
+		AuthFingerprint: authFingerprint,
+	}
+
+	go func() {
+		if err := a.knownRecorder.RecordDirectConnect(ks); err != nil {
+			log.Debugf("failed to record direct connect: %v", err)
+		}
+	}()
 }
 
 // loginAction 处理 login 命令（显式登录）。
 func (a *App) loginAction(c *cli.Context) error {
-	client, err := a.loginCore(c)
+	client, directInfo, err := a.loginCore(c)
 	if err != nil {
 		return err
 	}
 	defer a.connectSvc.Close(client)
+
+	if directInfo != nil {
+		a.recordDirectConnect(directInfo.host, directInfo.port, directInfo.user, directInfo.password, directInfo.keyFile)
+	}
 
 	return a.connectSvc.Shell(client)
 }

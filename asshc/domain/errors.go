@@ -18,4 +18,6 @@ var (
 	ErrVersionNotFound = errors.New("version not found in changelog")
 	// ErrInvalidVersion 表示版本号无效（小于 1）。
 	ErrInvalidVersion = errors.New("invalid version number")
+	// ErrKnownServerNotFound 表示 known_servers 表中未找到指定记录。
+	ErrKnownServerNotFound = errors.New("known server not found")
 )
