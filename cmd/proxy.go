@@ -37,12 +37,16 @@ func (a *App) registerProxyCommands() {
 		ArgsUsage: "[server]",
 		Description: `Start a proxy through SSH tunnel.
 
-   Forward mode (default): assh proxy <server> [--socks5 :1080] [--http :8080]
-   Reverse mode:           assh proxy <server> --reverse [--ports 80:3000]
-   Direct connect:         assh proxy -H 192.168.1.1 -u root -P pass
-   With rules/logging:     assh proxy <server> --autoproxy ./list.txt --log-dir ./logs
-
-   For detailed usage see: assh proxy --help
+Examples:
+  assh proxy myserver                          # SOCKS5 :1080 (default)
+  assh proxy myserver --socks5 :1080 --http :8080  # SOCKS5 + HTTP CONNECT
+  assh proxy myserver --auth user:pass         # with authentication
+  assh proxy myserver --daemon                 # background daemon
+  assh proxy myserver --auto-reconnect=3/5s    # with auto-reconnect
+  assh proxy -H 192.168.1.1 -u root -P pass   # direct connection
+  assh proxy myserver --autoproxy ./list.txt   # with AutoProxy rules
+  assh proxy myserver --reverse --ports 80:3000  # reverse proxy
+  assh proxy rule reload                       # hot-reload rules
 `,
 		Flags:  proxyFlags(),
 		Action: a.proxyAction,
