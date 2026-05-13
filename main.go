@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"assh/cmd"
+	"assh/asshc/infra/keymgr"
 	sshinfra "assh/asshc/infra/ssh"
 	"assh/asshc/infra/store"
 	"assh/asshc/service"
@@ -56,15 +57,24 @@ func main() {
 	defer repo.Close()
 
 	// 4. 创建基础设施实现（SSH 连接器和会话）
-	connector := sshinfra.NewConnector()
+	// passphrase 从 KeyManager 获取，用于解密 data/keys/ 中加密的备份密钥
+	km, err := keymgr.New(config.KeysDir, nil) // passphrase = nil (account password pending Phase 8)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: failed to initialize key manager: %v\n", err)
+		os.Exit(1)
+	}
+	connector := sshinfra.NewConnectorWithPassphrase(km.GetAccountPassphrase())
 	session := sshinfra.NewSession()
 
 	// 5. 创建 service 层（依赖注入）
 	serverSvc := service.NewServerService(repo)
 	connectSvc := service.NewConnectService(connector, session, repo)
 
-	// 6. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo)
+	// 6. 创建密钥管理器服务
+	keySvc := service.NewKeyService(km, repo, connector)
+
+	// 7. 创建 CLI 应用并运行
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

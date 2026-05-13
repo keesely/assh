@@ -109,7 +109,7 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error)
 		if port <= 0 {
 			port = 22
 		}
-		client, err := a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
+		client, err := a.connectSvc.ConnectDirect(host, port, user, password, keyFile, "")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -122,7 +122,7 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error)
 		if port <= 0 {
 			port = 22
 		}
-		client, err := a.connectSvc.ConnectDirect(host, port, user, password, keyFile)
+		client, err := a.connectSvc.ConnectDirect(host, port, user, password, keyFile, "")
 		if err != nil {
 			return nil, nil, err
 		}

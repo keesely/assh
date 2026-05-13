@@ -50,7 +50,8 @@ func (s *ConnectService) ConnectByName(name string) (*ssh.Client, error) {
 
 // ConnectDirect 使用直接指定的参数建立 SSH 连接，不依赖已保存的配置。
 // 支持 host、port、user、password、keyFile 等参数。
-func (s *ConnectService) ConnectDirect(host string, port int, user, password, keyFile string) (*ssh.Client, error) {
+// 如果 keyBackupPath 不为空，优先使用该路径的密钥文件（用于直连 keygen 后复用密钥）。
+func (s *ConnectService) ConnectDirect(host string, port int, user, password, keyFile string, keyBackupPath string) (*ssh.Client, error) {
 	if host == "" {
 		return nil, fmt.Errorf("host is required")
 	}
@@ -63,6 +64,11 @@ func (s *ConnectService) ConnectDirect(host string, port int, user, password, ke
 			Password: password,
 			KeyFile:  keyFile,
 		},
+	}
+
+	// P6.6-b: 如果有 known_servers 中的 key_backup_path，优先使用
+	if keyBackupPath != "" {
+		server.Auth.KeyFile = keyBackupPath
 	}
 
 	if server.Port <= 0 {
@@ -111,4 +117,9 @@ func (s *ConnectService) Close(client *ssh.Client) error {
 		return nil
 	}
 	return s.connector.Close(client)
+}
+
+// Connector 返回底层的 SSHConnector，用于 DeployService 等场景。
+func (s *ConnectService) Connector() port.SSHConnector {
+	return s.connector
 }

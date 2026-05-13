@@ -109,3 +109,41 @@ func pathExists(path string) (bool, error) {
 
 	return false, err
 }
+
+// keyTypeDefaultFilenames 映射密钥类型到 ssh-keygen 兼容的默认文件名。
+var keyTypeDefaultFilenames = map[string]string{
+	"rsa":     "id_rsa",
+	"ed25519": "id_ed25519",
+	"ecdsa":   "id_ecdsa",
+}
+
+// ResolveKeyOutputPath 解析 --output 参数为最终文件路径。
+// 如果 outputPath 是目录则追加默认密钥文件名，否则直接使用。
+// 与 keymgr.resolveKeyOutputPath 保持同步。
+func ResolveKeyOutputPath(outputPath, keyType string) (string, error) {
+	expanded, err := ExpandPath(outputPath)
+	if err != nil {
+		return "", err
+	}
+
+	// 检查是否以路径分隔符结尾（显式目录标记）
+	if strings.HasSuffix(expanded, "/") {
+		return filepath.Join(expanded, DefaultKeyName(keyType)), nil
+	}
+
+	// 检查是否已存在且为目录
+	if info, statErr := os.Stat(expanded); statErr == nil && info.IsDir() {
+		return filepath.Join(expanded, DefaultKeyName(keyType)), nil
+	}
+
+	// 作为文件路径使用
+	return expanded, nil
+}
+
+// DefaultKeyName 返回密钥类型对应的默认文件名。
+func DefaultKeyName(keyType string) string {
+	if name, ok := keyTypeDefaultFilenames[keyType]; ok {
+		return name
+	}
+	return "id_rsa" // fallback
+}

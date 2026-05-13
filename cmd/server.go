@@ -125,9 +125,16 @@ func (a *App) serverAddAction(c *cli.Context) error {
 		}
 	}
 
+	// 1) Handle -k flag before saving (P6.4-c enhancement)
+	// 先用原始路径构建 auth，创建服务器后备份并更新 Auth.KeyFile
+	keyFlag := c.String("key")
+	identityFileFlag := c.String("identity-file")
+	keyValue := firstNonEmpty(keyFlag, identityFileFlag)
+
+	// 构建 auth 对象（使用原始路径，备份逻辑在创建后执行）
 	auth := &domain.Auth{
 		Password: password,
-		KeyFile:  keyFile,
+		KeyFile:  keyValue,
 	}
 	if auth.Password == "" && auth.KeyFile == "" {
 		auth = nil
@@ -150,18 +157,28 @@ func (a *App) serverAddAction(c *cli.Context) error {
 		Options: options,
 	}
 
-	// 1) Preview
+	// 2) Preview
 	a.previewServer(server, name)
 
-	// 2) Confirm
+	// 3) Confirm
 	if !a.askConfirmation(fmt.Sprintf("Add server %q?", name)) {
 		fmt.Println("cancelled")
 		return nil
 	}
 
-	// 3) Execute
+	// 4) Execute (single save)
 	if err := a.serverSvc.AddServer(name, server); err != nil {
 		return err
+	}
+
+	// 5) Handle -k after server is created (备份/生成密钥)
+	if keyValue != "" && a.keySvc != nil {
+		updatedPath, err := a.keySvc.HandleKeyFlag(name, keyValue)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: key handling failed: %v\n", err)
+		} else if updatedPath != "" {
+			fmt.Printf("Key file: %s\n", updatedPath)
+		}
 	}
 
 	fmt.Printf("server %q added (v%d)\n", name, 1)
@@ -223,15 +240,7 @@ func (a *App) serverSetAction(c *cli.Context) error {
 		}
 
 		password := c.String("password")
-		keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
-
-		auth := &domain.Auth{
-			Password: password,
-			KeyFile:  keyFile,
-		}
-		if auth.Password == "" && auth.KeyFile == "" {
-			auth = nil
-		}
+		keyValue := firstNonEmpty(c.String("identity-file"), c.String("key"))
 
 		options := make(map[string]interface{})
 		for _, opt := range c.StringSlice("option") {
@@ -241,15 +250,51 @@ func (a *App) serverSetAction(c *cli.Context) error {
 			}
 		}
 
-		serverToSave = &domain.Server{
-			Host:    host,
-			Port:    port,
-			User:    user,
-			Auth:    auth,
-			Remark:  c.String("remark"),
-			Options: options,
+		auth := &domain.Auth{
+			Password: password,
 		}
-		action = "create"
+
+		// P6.4-c enhancement: 处理 -k 参数（生成/导入/备份）
+		if keyValue != "" && a.keySvc != nil {
+			// 先创建服务器，再处理密钥
+			serverToSave = &domain.Server{
+				Host:    host,
+				Port:    port,
+				User:    user,
+				Auth:    auth,
+				Remark:  c.String("remark"),
+				Options: options,
+			}
+
+			// 1) 创建服务器
+			if err := a.serverSvc.AddServer(name, serverToSave); err != nil {
+				return err
+			}
+
+			// 2) 处理密钥（生成/导入/备份）
+			keyFilePath, err := a.keySvc.HandleKeyFlag(name, keyValue)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: key handling failed: %v\n", err)
+			} else if keyFilePath != "" {
+				fmt.Printf("Key file: %s\n", keyFilePath)
+			}
+
+			// 3) 重新获取服务器信息（包含更新的密钥路径）
+			serverToSave, _ = a.serverSvc.GetServer(name)
+			action = "create"
+		} else {
+			// 无 -k 参数，直接设置密钥路径
+			auth.KeyFile = keyValue
+			serverToSave = &domain.Server{
+				Host:    host,
+				Port:    port,
+				User:    user,
+				Auth:    auth,
+				Remark:  c.String("remark"),
+				Options: options,
+			}
+			action = "create"
+		}
 	} else {
 		// --- 更新分支 ---
 		if !hasChanges {
@@ -293,11 +338,27 @@ func (a *App) serverSetAction(c *cli.Context) error {
 			updated.Auth.Password = c.String("password")
 		}
 		if c.IsSet("identity-file") || c.IsSet("key") {
-			keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
-			if updated.Auth == nil {
-				updated.Auth = &domain.Auth{}
+			// P6.4-c enhancement: 使用 HandleKeyFlag 处理密钥（生成/导入/备份）
+			keyFlag := c.String("key")
+			identityFileFlag := c.String("identity-file")
+			keyValue := firstNonEmpty(keyFlag, identityFileFlag)
+			if keyValue != "" && a.keySvc != nil {
+				keyFilePath, err := a.keySvc.HandleKeyFlag(name, keyValue)
+				if err != nil {
+					return fmt.Errorf("handle key: %w", err)
+				}
+				if updated.Auth == nil {
+					updated.Auth = &domain.Auth{}
+				}
+				updated.Auth.KeyFile = keyFilePath
+			} else {
+				// 空值或不带 KeyService 时，直接设置路径
+				keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
+				if updated.Auth == nil {
+					updated.Auth = &domain.Auth{}
+				}
+				updated.Auth.KeyFile = keyFile
 			}
-			updated.Auth.KeyFile = keyFile
 		}
 		if opts := c.StringSlice("option"); len(opts) > 0 {
 			for _, opt := range opts {

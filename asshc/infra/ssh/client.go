@@ -6,12 +6,15 @@
 package ssh
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"assh/asshc/domain"
+	"assh/config"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 )
@@ -21,11 +24,24 @@ const DefaultTimeout = 10 * time.Second
 
 // Connector 实现 port.SSHConnector 接口，负责 SSH 连接的建立和关闭。
 // 认证尝试顺序：SSH Agent → 密钥文件 → 密码。
-type Connector struct{}
+// 支持密钥备份优先策略（data/keys/）和加密密钥自动解密。
+type Connector struct {
+	accountPassphrase []byte // 用于解密 data/keys/ 中加密的备份密钥
+}
 
-// NewConnector 创建 Connector 实例。
+// NewConnector 创建 Connector 实例（不含 passphrase，用于向后兼容）。
+// 密钥备份优先策略不可用，备份密钥解密不可用。
 func NewConnector() *Connector {
 	return &Connector{}
+}
+
+// NewConnectorWithPassphrase 创建包含 account passphrase 的 Connector 实例。
+// 用于解密 data/keys/ 中使用 account password 加密的备份密钥。
+// passphrase 为 nil 时行为等同于 NewConnector()。
+func NewConnectorWithPassphrase(accountPassphrase []byte) *Connector {
+	return &Connector{
+		accountPassphrase: accountPassphrase,
+	}
 }
 
 // Connect 根据服务器配置建立 SSH 连接。
@@ -156,8 +172,22 @@ func (c *Connector) tryAgent() ssh.AuthMethod {
 }
 
 // tryKeyFile 尝试使用指定路径的私钥文件进行认证。
-// 如果文件读取失败或密钥解析失败，返回 nil。
+// 认证策略：
+//  1. 优先查找 data/keys/ 中的备份（由 BackupPath 计算路径）。
+//     如果备份存在且能解密，优先使用备份（防止原始密钥被篡改/删除）。
+//  2. 回退到原始路径。
+//
+// 如果设置了 accountPassphrase，会尝试用 passphrase 解密备份密钥。
+// 解密失败时回退到原始路径。
 func (c *Connector) tryKeyFile(keyFile string) ssh.AuthMethod {
+	// 1. 优先查找 data/keys/ 中的备份
+	if c.accountPassphrase != nil {
+		if m := c.tryBackupKey(keyFile); m != nil {
+			return m
+		}
+	}
+
+	// 2. 回退到原始路径
 	key, err := os.ReadFile(keyFile)
 	if err != nil {
 		return nil
@@ -167,6 +197,71 @@ func (c *Connector) tryKeyFile(keyFile string) ssh.AuthMethod {
 		return nil
 	}
 	return ssh.PublicKeys(signer)
+}
+
+// tryBackupKey 尝试从 data/keys/ 目录中加载备份密钥。
+// 计算 keyFile 对应的备份路径，检查文件是否存在，
+// 如果存在则尝试用 accountPassphrase 解密。
+func (c *Connector) tryBackupKey(keyFile string) ssh.AuthMethod {
+	// 计算备份路径（基于 keyFile 内容的 SHA256 哈希）
+	backupPath := computeKeyBackupPath(keyFile)
+	if backupPath == "" {
+		return nil
+	}
+
+	key, err := os.ReadFile(backupPath)
+	if err != nil {
+		return nil
+	}
+
+	// 优先尝试用 accountPassphrase 解密
+	signer, err := ssh.ParsePrivateKeyWithPassphrase(key, c.accountPassphrase)
+	if err != nil {
+		// 解密失败，可能是未加密的密钥，尝试无 passphrase 解析
+		signer, err = ssh.ParsePrivateKey(key)
+		if err != nil {
+			return nil
+		}
+	}
+
+	return ssh.PublicKeys(signer)
+}
+
+// computeKeyBackupPath 根据密钥文件路径计算对应的备份路径。
+// 使用三层嵌套目录结构：ab/cd/{sha256(keyFile)}.pem（前4字符拆分为两级目录）
+// 与 keymgr.BackupPath 保持相同的目录结构。
+func computeKeyBackupPath(keyFile string) string {
+	// 展开路径
+	expanded, err := config.ExpandPath(config.KeysDir)
+	if err != nil {
+		return ""
+	}
+
+	// 检查目录是否存在
+	if !config.FileExists(expanded) {
+		return ""
+	}
+
+	// 计算 SHA256 哈希
+	hash := sha256Hash(keyFile)
+
+	// 构建三层嵌套目录结构：ab/cd/{hash[4:]}.pem
+	fpDir1 := hash[:2]
+	fpDir2 := hash[2:4]
+	fpFile := hash[4:]
+	backupDir := filepath.Join(expanded, fpDir1, fpDir2)
+
+	if !config.FileExists(backupDir) {
+		return ""
+	}
+
+	return filepath.Join(backupDir, fpFile+".pem")
+}
+
+// sha256Hash 计算字符串的 SHA256 哈希（十六进制格式）。
+func sha256Hash(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return fmt.Sprintf("%x", h)
 }
 
 // getHostKeyCallback 返回 HostKey 校验回调函数。
