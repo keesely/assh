@@ -1,7 +1,7 @@
 # ADR-029: Smart Proxy 智能代理系统
 
 ## Status
-proposed
+accepted
 
 ## Date
 2026-05-13

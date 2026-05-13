@@ -231,37 +231,67 @@ PID 文件路径：`~/.assh/v2/tunnels/{id}.pid`
 
 #### 正向模式（默认）
 
+客户端本机监听，接收浏览器/应用请求，通过 SSH 转发到目标服务器。
+
 ```bash
 assh proxy myserver                                          # SOCKS5 :1080（默认）
 assh proxy myserver --socks5 :1080                           # 显式指定 SOCKS5 地址
 assh proxy myserver --http :8080                             # 叠加 HTTP CONNECT
 assh proxy myserver --auth user:pass                         # SOCKS5 用户名认证
 assh proxy myserver --daemon                                 # 后台守护模式
-assh proxy myserver --auto-reconnect=5/10s                   # 重连 5 次，间隔 10s
+assh proxy myserver --auto-reconnect=5/10s                   # 自动重连 5 次，间隔 10s
 
 # 直连模式（无需数据库）
 assh proxy -H 192.168.1.1 -u root -P mypass                  # 默认 :1080
 assh proxy -H example.com --daemon                           # 后台 + 直连
 
-# Smart Proxy 增强（规则+日志+多端口）
-assh proxy myserver --rule ./gfwlist.txt                     # 加载 AutoProxy 规则
+# AutoProxy 规则分流 + 透明日志
+assh proxy myserver --autoproxy ./gfwlist.txt                # 加载规则文件（智能路由）
 assh proxy myserver --log-dir ./proxy-logs                   # 启用透明日志
-assh proxy myserver --port-range 80-84:81-85                 # 多端口映射规则
-assh proxy myserver --port-range 443:443 \
-                    --port-range 80-84:81-85                 # 多组规则
 ```
+
+> `--ports` 在正向模式中无效，仅在反向模式中使用。
 
 #### 反向模式
 
+在远程服务器上监听端口，将入站连接通过 SSH 隧道转发回本地服务。
+
 ```bash
+# 基本反向代理
 assh proxy myserver --reverse                                # 反向代理模式
-assh proxy myserver --reverse \
-  --port-range 9090:localhost:3000                           # server:9090 → 本地:3000
-assh proxy myserver --reverse \
-  --port-range 80-84:81-85                                   # 多组反向映射
-assh proxy myserver --reverse \
-  --rule ./gfwlist.txt --log-dir ./logs                      # 反向+规则+日志
+assh proxy myserver --reverse --tcp                          # TCP 协议（默认）
+assh proxy myserver --reverse --http                         # HTTP 协议
+
+# 端口映射
+assh proxy myserver --reverse --ports 80:3000                # server:80 → local:3000
+assh proxy myserver --reverse --ports 80,443:80              # server:80,443 → local:80
+assh proxy myserver --reverse --ports 443:80,443             # server:443 → local:80,443
+assh proxy myserver --reverse --ports 80-85:80               # server:80-85 → local:80
+assh proxy myserver --reverse --ports 80-85:81-86            # 范围展开 1:1
+assh proxy myserver --reverse --ports 80-88:81-84            # 超出范围指向最后一个
+
+# 带认证
+assh proxy myserver --reverse --tcp \
+  --ports 80,443:80 --auth user:pass                         # TCP + SOCKS5 认证
+assh proxy myserver --reverse --http \
+  --ports 8080:3000 --auth user:pass                         # HTTP + Basic Auth
+
+# 混合
+assh proxy myserver --reverse --tcp \
+  --ports 80,443:80 --auth user:pass \
+  --autoproxy ./gfwlist.txt --log-dir ./logs                 # 反向+认证+规则+日志
 ```
+
+`--ports` 语法格式：`server_ports:local_ports`
+
+| 模式 | 语法 | 示例 | 说明 |
+|------|------|------|------|
+| 多对一 | `sp,...:lp` | `80,443:80` | 多个服务端端口映射到同一个本地端口 |
+| 一对多 | `sp:lp,...` | `443:80,443` | 单个服务端端口映射到多个本地端口 |
+| 范围多对一 | `s-s:lp` | `80-85:80` | 范围展开全部映射到同一个本地端口 |
+| 混合 | `sp,s-s:lp` | `443,80-85:80` | 混合端口+范围 |
+| 范围展开 | `s-s:l-l` | `80-85:81-86` | 等长范围 1:1 展开 |
+| 超出截断 | `s-s:l-l` | `80-88:81-84` | 服务端超出本地范围的部分指向最后一个本地端口 |
 
 #### 管理子命令
 
@@ -273,21 +303,25 @@ assh proxy log <id>                                          # 查看会话日�
 
 参数规格：
 
-| 参数 | 别名 | 类型 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `--socks5` | | string | `:1080` | SOCKS5 监听地址（空=不启用） |
-| `--http` | | string | - | HTTP CONNECT 监听地址（空=不启用） |
-| `--reverse` | | bool | false | 反向代理模式 |
-| `--port-range` | | string(s) | - | 端口映射规则，可多次指定 |
-| `--rule` | | string | - | AutoProxy 规则文件路径 |
-| `--log-dir` | | string | - | 代理日志目录 |
-| `--auth` | | string | - | 用户名密码认证（格式 `user:pass`） |
-| `--daemon` | `-d` | bool | false | 后台守护模式 |
-| `--auto-reconnect` | | string | - | 自动重连配置，格式 `[retries/]interval` |
-| `--host` | `-H` | string | - | 直连：服务器地址 |
-| `--user` | `-u`/`-l` | string | - | 直连：用户名 |
-| `--password` | `-P` | string | - | 直连：密码 |
-| `--identity-file` | `-i`/`-k` | string | - | 直连：密钥文件 |
+| 参数 | 别名 | 类型 | 默认值 | 适用模式 | 说明 |
+|------|------|------|--------|:--------:|------|
+| `--socks5` | | string | `:1080` | 正向 | SOCKS5 监听地址（空=不启用） |
+| `--http` | | string | - | 正向 | HTTP CONNECT 监听地址（空=不启用） |
+| `--reverse` | | bool | false | 反向 | 反向代理模式开关 |
+| `--tcp` | | bool | false | 反向 | 服务端 TCP 协议（认证用 SOCKS5 方法） |
+| `--http` | | bool | false | 反向 | 服务端 HTTP 协议（认证用 Basic Auth） |
+| `--ports` | | string | - | 反向 | 端口映射规则 `server:local` |
+| `--autoproxy` | | string | - | 正/反 | AutoProxy 规则文件路径 |
+| `--log-dir` | | string | - | 正/反 | 代理日志目录 |
+| `--auth` | | string | - | 正/反 | 认证（正向→SOCKS5，反向→详见协议） |
+| `--daemon` | `-d` | bool | false | 正/反 | 后台守护模式 |
+| `--auto-reconnect` | | string | - | 正/反 | 自动重连 `[次数/]间隔` |
+| `--host` | `-H` | string | - | 正向 | 直连：服务器地址 |
+| `--user` | `-u`/`-l` | string | - | 正向 | 直连：用户名 |
+| `--password` | `-P` | string | - | 正向 | 直连：密码 |
+| `--identity-file` | `-i`/`-k` | string | - | 正向 | 直连：密钥文件 |
+
+> 注：`--tcp` 和 `--http` 仅在 `--reverse` 模式下生效。正向模式中协议由 `--socks5`（SOCKS5）和 `--http`（HTTP CONNECT）决定。
 
 ### `tunnel` 命令组
 

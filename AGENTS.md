@@ -4,7 +4,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 7 代理 & 隧道初始化 2026/05/13)
+- **Version**: v2.0.0 (Phase 7 代理 & 隧道 完成 2026/05/13)
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.22.0+
@@ -79,7 +79,7 @@ asshv2/
 | **4** | **CLI 命令组装** | **✅ 完成 (2026-05-10)** |
 | **5** | **SFTP 文件传输** | **✅ 完成 (2026-05-11)** |
 | **6** | **密钥管理 (Key Management)** | **✅ 完成 (2026-05-13)** |
-| **7** | **代理 & 隧道 (SOCKS5/端口转发/SSH隧道)** | **⏳ 进行中** |
+| **7** | **代理 & 隧道 (SOCKS5/端口转发/SSH隧道)** | **✅ 完成 (2026-05-13)** |
 | 8 | 云同步 (Qiniu) | ⏳ |
 | 9 | 服务器健康检查 | ⏳ |
 | 10 | 跳板机/堡垒机支持 | ⏳ |
@@ -130,8 +130,19 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `main.go` — expandCombinedFlags() RQ-001 组合短参数预处理
 - [x] `asshc/infra/ssh/client.go` — 认证回退（key→password 两轮尝试）
 - [x] `asshc/port/proxy.go` — Proxy/PortForward/TunnelManager 接口定义（Phase 7）
-- [x] `asshc/infra/proxy/socks5.go` — SOCKS5 代理实现（RFC 1928 NO AUTH CONNECT）
-- [x] `asshc/infra/proxy/port.go` — LocalForward / RemoteForward 端口转发实现
+- [x] `asshc/port/rules.go` — RuleEngine 接口（AutoProxy 规则引擎）
+- [x] `asshc/port/logger.go` — ProxyLogger 接口（透明日志）
+- [x] `asshc/infra/proxy/socks5.go` — SOCKS5 代理（RFC 1928 NO AUTH + RFC 1929 USERNAME/PASSWORD）
+- [x] `asshc/infra/proxy/port.go` — LocalForward / RemoteForward 端口转发
+- [x] `asshc/infra/proxy/tunnel_manager.go` — TunnelManager（重连+daemon）
+- [x] `asshc/infra/proxy/http_connect.go` — HTTP CONNECT 代理（RFC 7231）
+- [x] `asshc/infra/proxy/rules.go` — AutoProxy 规则引擎（GFWList）
+- [x] `asshc/infra/proxy/logger.go` — 透明日志系统（JSONL）
+- [x] `asshc/infra/proxy/listener.go` — Smart Proxy 流水线编排
+- [x] `asshc/service/proxy.go` — ProxyService 编排层
+- [x] `asshc/service/proxy_ports.go` — ParsePorts 多端口规则解析
+- [x] `cmd/proxy.go` — proxy CLI 命令（Smart Proxy + 直连）
+- [x] `cmd/tunnel.go` — tunnel CLI 命令（start/stop/list）
 
 ## 开发命令
 
