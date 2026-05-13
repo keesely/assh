@@ -59,11 +59,12 @@ type App struct {
 	knownRecorder  transferport.KnownServerRecorder // known-servers 隐性表记录器
 	keySvc         *service.KeyService           // 密钥管理服务
 	keymgr         transferport.KeyManager       // 密钥管理器（直连 keygen 用）
+	proxySvc       *service.ProxyService         // 代理 & 隧道服务
 }
 
 // NewApp 创建 CLI 应用，注入所有 service 依赖。
 // 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc/keygen）。
-func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager) *App {
+func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
 	app.Usage = "An SSH Client"
@@ -79,6 +80,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 		knownRecorder: knownRecorder,
 		keySvc:        keySvc,
 		keymgr:        keymgr,
+		proxySvc:      proxySvc,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -587,7 +589,7 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 // registerCompletionHints 为各命令注册 shell 补全函数。
 // 为 info/rm/mv/rollback/login/run/bc 提供服务器名补全。
 func (a *App) registerCompletionHints() {
-	serverNameCommands := []string{"info", "rm", "mv", "rollback", "login", "run", "bc", "keygen"}
+	serverNameCommands := []string{"info", "rm", "mv", "rollback", "login", "run", "bc", "keygen", "proxy", "tunnel"}
 
 	for i := range a.cli.Commands {
 		cmd := &a.cli.Commands[i]
@@ -663,6 +665,8 @@ func (a *App) registerCommands() {
 	a.registerServerCommands()
 	a.registerConnectCommands()
 	a.registerKeygenCommands()
+	a.registerProxyCommands()
+	a.registerTunnelCommands()
 }
 
 // beforeAction 是全局 Before 钩子，在每次命令执行前调用。

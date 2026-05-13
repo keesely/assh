@@ -1,6 +1,41 @@
 # Changelog
 
-## v2.0.0-dev (2026-05-09)
+## v2.0.0-dev (2026-05-13)
+
+### Phase 7: 代理 & 隧道 (Smart Proxy 系统)
+
+#### 基础设施层 (`asshc/infra/proxy/`)
+- `socks5.go` — SOCKS5 代理 (RFC 1928 NO AUTH + RFC 1929 USERNAME/PASSWORD)
+- `http_connect.go` — HTTP CONNECT 代理 (RFC 7231, Basic Auth)
+- `port.go` — LocalForward / RemoteForward 端口转发
+- `tunnel_manager.go` — TunnelManager (Add/Remove/Get/List/StopAll + StartAll + 重连循环 + daemon)
+- `rules.go` — AutoProxy 规则引擎 (GFWList 兼容, CIDR/域名/正则/白名单)
+- `logger.go` — 透明日志系统 (JSONL 格式, 按日轮转, 批次写入)
+- `listener.go` — Smart Proxy 流水线编排 (SOCKS5+HTTP 统一监听, 规则引擎, 日志)
+
+#### 接口层 (`asshc/port/`)
+- `rules.go` — RuleEngine 接口 (Match/Load/Reload/DefaultAction)
+- `logger.go` — ProxyLogger 接口 (LogRequest/Close) + RequestLog 结构体
+
+#### 服务编排层 (`asshc/service/`)
+- `proxy.go` — ProxyService (StartProxy/StartDirectProxy/StopProxy/StartTunnel/StopTunnel/ListTunnels/ReloadRules)
+- `proxy_ports.go` — ParsePorts 多端口规则解析 (范围展开/截断/多对一/一对多)
+
+#### CLI 命令 (`cmd/`)
+- `proxy.go` — proxy 命令 (正向/反向/直连/AutoProxy/日志/daemon/reconnect)
+- `tunnel.go` — tunnel 命令 (start/stop/list, 多 -L/-R)
+
+#### DI 注入
+- `main.go` — TunnelManager + ProxyService 创建注入
+- `cmd/app.go` — App 新增 proxySvc 字段,注册 proxy/tunnel 命令
+
+#### 测试
+- 46 个新增单元测试 (RuleEngine × 12, ProxyLogger × 3, SmartProxy × 9, ParsePorts × 22)
+- 全部通过: `go build ./... && go test ./...`
+
+#### ADR
+- ADR-028: 代理&隧道基础架构 (accepted)
+- ADR-029: Smart Proxy 智能代理系统 (accepted)
 
 ### Phase 4: CLI 命令组装
 
