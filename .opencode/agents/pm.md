@@ -1,7 +1,7 @@
 ---
 description: 产品经理 - 负责需求收集/定义，业务分析，业务推进/进度管理，版本与分支管理，边界审计，产品验收，协调调度
 mode: primary
-model: aliyun/glm-5.1
+model: opencode/big-pickle
 temperature: 0.6
 steps: 50
 permission:
