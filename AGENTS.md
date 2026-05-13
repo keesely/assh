@@ -4,7 +4,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 6 密钥管理完成 2026/05/13)
+- **Version**: v2.0.0 (Phase 7 代理 & 隧道初始化 2026/05/13)
 - **上一稳定版本**: v2.0.0 (Phase 1 完成)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.22.0+
@@ -129,6 +129,9 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `cmd/bootstrap.go` — NewAppComponents() 共享初始化
 - [x] `main.go` — expandCombinedFlags() RQ-001 组合短参数预处理
 - [x] `asshc/infra/ssh/client.go` — 认证回退（key→password 两轮尝试）
+- [x] `asshc/port/proxy.go` — Proxy/PortForward/TunnelManager 接口定义（Phase 7）
+- [x] `asshc/infra/proxy/socks5.go` — SOCKS5 代理实现（RFC 1928 NO AUTH CONNECT）
+- [x] `asshc/infra/proxy/port.go` — LocalForward / RemoteForward 端口转发实现
 
 ## 开发命令
 

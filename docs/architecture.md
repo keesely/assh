@@ -19,11 +19,14 @@
 项目构建为两个独立的可执行命令，共享同一套核心模块：
 
 ```
-assh (main.go)                    assh-fs (cmd/fs/main.go)
-  SSH 连接/管理                     文件系统操作
-  ├── login/run/bc                ├── push
-  ├── server add/set/ls/...       ├── pull
-  ├── version                     └── <server> (交互式 FS)
+assh (main.go)                       assh-fs (cmd/fs/main.go)
+  SSH 连接/管理/SOCKS5代理/隧道        文件系统操作
+  ├── login/run/bc                   ├── push
+  ├── server add/set/ls/...          ├── pull
+  ├── proxy (SOCKS5)                 └── <server> (交互式 FS)
+  ├── tunnel start/stop/list
+  ├── keygen
+  └── version
        │                                    │
        └────────── 共用核心层 ──────────────┘
               ┌──────────────────┐
@@ -44,7 +47,9 @@ main.go
   ├── NewSSHConnector()     → asshc/infra/ssh
   ├── NewSSHSession()       → asshc/infra/ssh
   ├── NewConnectService()   → asshc/service
-  └── cmd.NewApp()          → cmd/ (SSH 命令 + 服务器管理)
+  ├── NewTunnelManager()    → asshc/infra/proxy (P7.4 待实现)
+  ├── NewProxyService()     → asshc/service (P7.5 待实现)
+  └── cmd.NewApp()          → cmd/ (SSH 命令 + 服务器管理 + proxy/tunnel)
 ```
 
 ### assh-fs (cmd/fs/main.go)
@@ -84,8 +89,7 @@ asshv2/
 │       ├── keymgr/      #   密钥管理（generate/backup/deploy）
 │       ├── ssh/         #   SSH 协议
 │       ├── sftp/        #   SFTP 协议
-│       ├── tunnel/      #   SSH 隧道
-│       ├── proxy/       #   代理协议
+│       ├── proxy/       #   代理协议（SOCKS5 + 端口转发 + 隧道管理器）
 │       └── sync/        #   云同步
 ├── config/              # 配置管理（共享）
 ├── log/                 # 日志模块（共享）

@@ -804,45 +804,112 @@ GenerateAndDeploy(name string, keyType string, bits int, comment string) error
 
 ### 🔄 Phase 7: 代理 & 隧道
 
-**目标**：实现 SOCKS5 代理、端口转发、SSH 隧道，支持安全翻墙和远程端口转发
+**阶段状态**: 核心接口与基础设施实现完成（P7.1/P7.2-a/P7.3），待完成 SOCKS5 认证扩展 + 隧道管理器 + Smart Proxy 系统 + CLI + 测试 + DI
+
+**目标**：实现 SOCKS5 代理、端口转发、SSH 隧道 + **Smart Proxy 智能代理系统**（正向代理 SOCKS5+HTTP、AutoProxy 规则引擎、透明日志、多端口规则）
 
 **依赖**：Phase 3 (SSH连接层)、Phase 4 (CLI命令组装)
+**ADR 记录**：[ADR-028: 代理&隧道基础架构](../adrs/028-proxy-tunnel-architecture.md)、[ADR-029: Smart Proxy 智能代理系统](../adrs/029-smart-proxy-system.md)
 
 **重要约束**：隧道功能运行中需要持续驻留进程，不能阻塞 CLI 正常退出。架构上需处理：
-- 后台任务管理（daemon/goroutine 生命周期）
-- 端口监听和转发中断恢复
+- 后台任务管理（Fork + PID 文件 daemon 模式 / 前台 Ctrl+C 阻塞模式）
+- SSH 断开重连（CLI 参数 `--auto-reconnect` + 服务器 options 配置）
 - 多隧道并发管理
+- SOCKS5 用户名密码认证（`--auth user:pass`）
+- 端口转发完整规格：`[bind_addr:]port:host:hostport`，支持多个 `-L`/`-R`
+- **AutoProxy 规则引擎**：GFWList 兼容格式，代理/直连路由决策
+- **透明日志**：代理全链路请求/响应数据记录
+- **HTTP CONNECT 正向代理**：与 SOCKS5 并列的代理入口
 
-**阶段优先级**：Proxy 接口 → SOCKS5 实现 → 本地端口转发 → 远程端口转发 → SSH 隧道管理 → 命令组装
+**阶段优先级**：
+1. ✅ P7.1-P7.3 接口+基础设施（已完成）
+2. 🔜 P7.2-a-2 SOCKS5 USERNAME/PASSWORD 认证扩展
+3. 🔜 P7.4 TunnelManager 实现（含重连逻辑 + daemon）
+4. 🔜 P7.9 Smart Proxy 基础设施（规则引擎 + HTTP CONNECT + 日志 + 多端口规则）
+5. 🔜 P7.5 ProxyService 增强编排（集成 Smart Proxy 全组件）
+6. 🔜 P7.2-b proxy CLI 命令 + P7.6 tunnel CLI 命令
+7. 🔜 P7.7 单元测试 + P7.8 DI 注入
 
 | 编号 | 任务 | 文件 | 说明 | 优先级 |
-|------|------|------|------|--------|
-| P7.1 | Proxy 接口定义 | `asshc/port/proxy.go` | Proxy/PortForward/Tunnel 接口定义 | ✅ |
-| P7.2-a | SOCKS5 服务端 | `asshc/infra/proxy/socks5.go` | SOCKS5 协议实现（RFC 1928） | ⏳ |
-| P7.2-b | SOCKS5 命令行 | `cmd/tunnel.go` | `assh proxy` / `assh tunnel` 命令 | ⏳ |
-| P7.3-a | 本地端口转发 | `asshc/infra/proxy/port.go` | -L 本地转发（ssh -L 等价） | ⏳ |
-| P7.3-b | 远程端口转发 | `asshc/infra/proxy/port.go` | -R 远程转发（ssh -R 等价） | ⏳ |
-| P7.4 | SSH 隧道管理 | `asshc/infra/tunnel/tunnel.go` | 隧道生命周期管理（启动/停止/会话保持/重连） | ⏳ |
-| P7.5 | 代理服务编排 | `asshc/service/proxy.go` | ProxyService 用例编排 | ⏳ |
-| P7.6 | 隧道命令 | `cmd/tunnel.go` | `assh tunnel [start\|stop\|list]` | ⏳ |
-| P7.7 | 单元测试 | `asshc/infra/proxy/*_test.go` + `asshc/service/proxy_test.go` | SOCKS5/端口转发/隧道测试 | ⏳ |
-| P7.8 | DI 注入 | `main.go` + `cmd/bootstrap.go` | 注册隧道命令 | ⏳ |
+|------|------|------|------|:------:|
+| **已完成** | | | | |
+| P7.1 | Proxy 接口定义 | `asshc/port/proxy.go` | Proxy/PortForward/TunnelManager 接口定义 | ✅ |
+| P7.2-a | SOCKS5 服务端（基础） | `asshc/infra/proxy/socks5.go` | SOCKS5 协议实现（RFC 1928 NO AUTH CONNECT） | ✅ |
+| P7.3-a | 本地端口转发 | `asshc/infra/proxy/port.go` | -L 本地转发（ssh -L 等价），LocalForward 实现 | ✅ |
+| P7.3-b | 远程端口转发 | `asshc/infra/proxy/port.go` | -R 远程转发（ssh -R 等价），RemoteForward 实现 | ✅ |
+| **待实现 — Phase 7 基础** | | | | |
+| P7.2-a-2 | SOCKS5 USERNAME/PASSWORD 认证 | `asshc/infra/proxy/socks5.go` | 扩展握手支持 0x02 认证（RFC 1929），`SOCKS5Proxy.authFunc` 回调 | 🔴 高 |
+| P7.4 | SSH 隧道管理 | `asshc/infra/proxy/tunnel_manager.go` | TunnelManager 实现（Add/Remove/Get/List/StopAll）+ 重连循环 + daemon 工具函数 | 🔴 高 |
+| **待实现 — Smart Proxy 系统** | | | | |
+| P7.9-a | AutoProxy 规则引擎 | `asshc/port/rules.go` + `asshc/infra/proxy/rules/` | RuleEngine 接口 + AutoProxy/GFWList 规则解析与匹配引擎 | 🔴 高 |
+| P7.9-b | HTTP CONNECT 正向代理 | `asshc/infra/proxy/http_connect.go` | HTTP CONNECT 处理器，RFC 7231，统一进入流水线 | 🔴 高 |
+| P7.9-c | 透明日志系统 | `asshc/port/logger.go` + `asshc/infra/proxy/logger.go` | ProxyLogger 接口 + JSON 日志写入（请求/会话/数据流） | 🔴 高 |
+| P7.9-d | 多端口规则解析 | `asshc/service/proxy.go` | ParsePortRule 解析 `80-84:81-85` 等批量端口规则 | 🟡 中 |
+| P7.9-e | 统一 Listener/集成层 | `asshc/infra/proxy/listener.go` + 流水线整合 | 统一管理 SOCKS5+HTTP 监听、规则引擎调用、日志写入的流水线编排 | 🔴 高 |
+| P7.5 | 代理服务编排（增强） | `asshc/service/proxy.go` | ProxyService 集成 Smart Proxy 全组件（StartSmartProxy/ReloadRules/StopProxy） | 🔴 高 |
+| **待实现 — CLI + 测试 + DI** | | | | |
+| P7.2-b | proxy 命令 | `cmd/proxy.go` | `assh proxy <server> [--socks5] [--http] [--reverse] [--port-range] [--rule] [--log-dir] [--auth] [--daemon] [--auto-reconnect] [-H/-u/-P/-i]` + `assh proxy rule reload/status` + `assh proxy log <id>` | 🔴 高 |
+| P7.6 | tunnel 命令 | `cmd/tunnel.go` | `assh tunnel start/stop/list`，支持多 -L/-R | 🔴 高 |
+| P7.7 | 单元测试 | `asshc/infra/proxy/*_test.go` + `asshc/service/proxy_test.go` | 规则引擎/HTTP CONNECT/日志/SOCKS5/端口转发/ProxyService 测试 | 🔴 高 |
+| P7.8 | DI 注入 | `main.go` + `cmd/bootstrap.go` + `cmd/app.go` | 创建 TunnelManager + RuleEngine + ProxyLogger + ProxyService，注册 proxy/tunnel 命令 | 🔴 高 |
 | **P1** | **验证** | `go build ./... && go test ./...` | | **必选** |
 
 **详细设计**：见 [modules/proxy-tunnel.md](modules/proxy-tunnel.md)
 
-**ADR 记录**：见 [docs/adrs.md](../adrs.md)（待创建 ADR-028）
+**ADR 记录**：[ADR-028: 代理&隧道基础架构](../adrs/028-proxy-tunnel-architecture.md)、[ADR-029: Smart Proxy 智能代理系统](../adrs/029-smart-proxy-system.md)
 
 #### 参数规格
 
 ```
-assh proxy <server>              # 启动 SOCKS5 代理（默认 :1080）
-assh proxy <server> -p 8080     # 指定端口
-assh tunnel start <server> -L local:remote  # 本地端口转发
-assh tunnel start <server> -R remote:local  # 远程端口转发
-assh tunnel stop <id>            # 停止隧道
-assh tunnel list                 # 列出活跃隧道
+# SOCKS5 代理（基础/正向模式）
+assh proxy myserver                          # SOCKS5 :1080（默认）
+assh proxy myserver --socks5 :1080           # 显式指定 SOCKS5 地址
+assh proxy myserver --http :8080             # 叠加 HTTP CONNECT
+assh proxy myserver --auth user:pass         # SOCKS5 用户名认证
+assh proxy myserver --daemon                 # 后台守护
+assh proxy myserver --auto-reconnect=5/10s   # 自动重连
+assh proxy -H host -u root -P pass           # 直连模式
+
+# Smart Proxy 增强（正向+规则+日志）
+assh proxy myserver --rule ./gfwlist.txt     # 加载 AutoProxy 规则（智能路由）
+assh proxy myserver --log-dir ./proxy-logs   # 启用透明日志
+assh proxy myserver --port-range 80-84:81-85 # 多端口映射规则
+assh proxy myserver --port-range 443:443 \
+                    --port-range 80-84:81-85 # 多组规则
+
+# 反向代理模式
+assh proxy myserver --reverse                # 反向代理模式
+assh proxy myserver --reverse \
+  --port-range 9090:localhost:3000           # server:9090 → 本地:3000
+assh proxy myserver --reverse \
+  --port-range 80-84:81-85                   # 多组反向映射
+assh proxy myserver --reverse \
+  --rule ./gfwlist.txt --log-dir ./logs      # 反向+规则+日志
+
+# 规则/日志管理
+assh proxy rule reload                       # 热重载规则
+assh proxy rule status                       # 查看规则状态
+assh proxy log <id>                          # 查看会话日志
+
+# 端口转发隧道
+assh tunnel start myserver -L 8080:localhost:80        # 本地转发
+assh tunnel start myserver -R 8080:localhost:3000      # 远程转发
+assh tunnel start myserver -L 8080:svc1:80 -L 9090:svc2:90  # 多转发
+assh tunnel start myserver -L 8080:web:80 --daemon     # 后台守护
+assh tunnel start myserver -L 8080:web:80 --auto-reconnect=3/5s  # 自动重连
+assh tunnel stop <id>                        # 停止隧道
+assh tunnel list                             # 列出活跃隧道
 ```
+
+#### 端口转发规格
+
+格式：`[bind_addr:]port:host:hostport`
+
+| 写法 | bind_addr | port | host | hostport |
+|------|-----------|------|------|----------|
+| `8080:localhost:80` | 127.0.0.1 | 8080 | localhost | 80 |
+| `0.0.0.0:8080:web:80` | 0.0.0.0 | 8080 | web | 80 |
+| `127.0.0.1:8443:svc:443` | 127.0.0.1 | 8443 | svc | 443 |
 
 ### 📝 Phase 8: 云同步 (Qiniu)
 

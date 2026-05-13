@@ -6,6 +6,7 @@
 - 配置文件：`~/.assh/v2/assh.yml`（RSA 加密，Phase 1 已实现）
 - 密钥文件：`~/.assh/v2/.rsa`, `~/.assh/v2/.rsa.pub`（RSA 密钥对）
 - 密码文件：`~/.assh/v2/.account`（Phase 8 云同步时实现）
+- 隧道 PID 文件：`~/.assh/v2/tunnels/{id}.pid`（Phase 7 后台守护模式）
 
 ## 数据库结构
 
