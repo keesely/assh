@@ -1,6 +1,6 @@
 # Constraints
 
-- **Go 版本**: 1.22.0+
+- **Go 版本**: 1.25.0+
 - **平台**: 不支持 Windows 编译
 - **工作目录**: 所有开发在 `asshv2/` 内进行（git worktree）
 
@@ -10,7 +10,7 @@
 |------|------|------|
 | `modernc.org/sqlite` | latest | SQLite 数据库驱动（纯 Go，无 CGO） |
 | `github.com/rs/zerolog` | v1.32.0 | 日志库 |
-| `github.com/pkg/sftp` | v1.10.1 | SFTP 客户端 |
+| `github.com/pkg/sftp` | v1.13.7+ | SFTP 客户端 |
 | `github.com/qiniu/api.v7/v7` | v7.4.0 | 七牛云 SDK |
 | `github.com/urfave/cli` | v1.22.2 | CLI 框架 |
 | `golang.org/x/crypto` | v0.25.0 | SSH 库 |

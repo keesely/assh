@@ -21,7 +21,7 @@ v2 当前将服务器管理命令组织为 `assh server <subcommand>` 的子命�
 
 ### 负面
 - 顶层命令从 5 个增加到 11 个，略微增加认知负担
-- 与未来 Phase 5-7 新增命令（push/pull/sync/proxy）可能产生命名冲突风险，需提前规划命名空间
+- 与未来 Phase 5-8 新增命令（push/pull/proxy/sync）可能产生命名冲突风险，需提前规划命名空间
 
 ## Related
 - 关联 ADR：ADR-012（CLI 参数对齐与命令架构）

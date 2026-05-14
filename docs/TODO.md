@@ -39,7 +39,7 @@
 架构变更（vs v1）：
 - ❌ 废弃：加密 JSON 文件 + 用户主密码（每次操作需验证）
 - ✅ 改用：SQLite 数据库 + AES-256-GCM 静态密钥（首次自动生成，密钥存入 config 表，可云同步共享）
-- ✅ 账号密码（account）延后至 Phase 6 云同步时实现
+- ✅ 账号密码（account）延后至 Phase 8 云同步时实现
 
 依赖：Phase 1 (config, crypto) + **新增** `modernc.org/sqlite`（纯 Go，无 CGO）
 
@@ -443,52 +443,343 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 
 ---
 
-### 📝 Phase 5: SFTP 文件传输
+### ✅ Phase 5: SFTP 文件传输（已完成）
 
-目标：支持文件推送和拉取
+验收：F1-F28 全部通过 | 完成时间：2026-05-11
+
+目标：支持文件推送和拉取，包含递归传输、断点续传、并发传输、进度显示、通配符匹配
+
+依赖：Phase 3 (ssh)
+设计文档：`docs/modules/sftp.md`
+架构决策：ADR-017（SFTP 文件传输架构设计）
+
+**新增依赖**：`github.com/pkg/sftp` v1.13.7+
+
+---
+
+#### P5.1 FileTransfer 接口 ✅（已实现）
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.1-a 接口定义 | `asshc/port/transfer.go` | FileTransfer (Push/Pull/List/Remove/Mkdir) + TransferProgress + FileInfo + TransferResult + PushBatch/PullBatch | ✅ |
+| **验证** | `go vet ./asshc/port/...` | | |
+
+---
+
+#### P5.2 SFTP 基础设施 — `asshc/infra/sftp/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.2-a 连接管理 | `asshc/infra/sftp/client.go` | SFTPSession 封装（创建 SFTP 客户端、关闭、重连） | ⬜ |
+| P5.2-b Hash Header | `asshc/infra/sftp/header.go` | 256B 固定头部构建/解析/剥离（ADR-019） | ⬜ |
+| P5.2-c 文件上传 | `asshc/infra/sftp/upload.go` | Push 实现：单文件/目录递归(-r)/断点续传(--resume)/hash header/进度回调/Glob匹配 | ⬜ |
+| P5.2-d 文件下载 | `asshc/infra/sftp/download.go` | Pull 实现：单文件/目录递归(-r)/断点续传(--resume)/hash header/进度回调/Glob匹配 | ⬜ |
+| P5.2-e 远程操作 | `asshc/infra/sftp/ops.go` | List/Remove/Mkdir 实现 | ⬜ |
+| P5.2-f 进度显示 | `asshc/infra/sftp/progress.go` | 进度条显示（百分比、速率、ETA、传输字节） | ⬜ |
+| P5.2-g 传输后验证 | `asshc/infra/sftp/verify.go` | 传输完成后比对文件大小，可选 SHA256 校验 | ⬜ |
+| P5.2-h 单元测试 | `asshc/infra/sftp/*_test.go` | mock/local SFTP server 测试 | ⬜ |
+| **验证** | `go test ./asshc/infra/sftp/... -v -count=1` | | |
+
+**进度显示格式：**
+```
+( 1/5) [project.tar.gz] .............. 58%  2.1MB/s  ETA 4s
+( 2/5) [config.json] ................. 100%  5.3MB/s  ETA 0s
+
+verifying: project.tar.gz
+  ✓ size match: 12.3MB / 12.3MB
+  ✓ sha256: a3f2c8d1... (--checksum 开启时)
+```
+
+**回调接口**：
+```go
+type ProgressInfo struct {
+    Index    int     // 当前文件序号（1-based）
+    Total    int     // 总文件数
+    FileName string  // 当前文件名
+    Progress float64 // 0.0 ~ 1.0
+    Rate     string  // 格式化速率，如 "2.1MB/s"
+    ETA      string  // 格式化剩余时间，如 "4s"
+}
+type TransferProgress func(info ProgressInfo)
+```
+
+**断点续传策略（ADR-017 + ADR-019）：**
+- **Hash Header 安全验证**：目标文件头部 256B 固定格式 header，记录源文件 SHA256
+  ```
+  [Magic:4B][Version:2B][HashType:2B][OrigSize:8B][SHA256:64B][Reserved:176B]
+  ```
+- **首次传输流程**：
+  1. 计算源文件 SHA256
+  2. 构建 256B header
+  3. 先发送 header → 再发送文件内容
+  4. 传输完成后 → 重写目标文件，剥离 header（恢复到原始格式）
+- **续传流程（hash header 优先）**：
+  1. 读取目标文件前 256B → 解析 hash header
+  2. 计算当前源文件 SHA256
+  3. hash 一致 → `Seek(256)` 从头部后继续传输
+  4. hash 不一致 → 文件被修改，询问是否覆盖
+  5. header 不存在或无法解析 → 回退到纯大小比对
+- **上传详细流程**：
+  1. `sftp.Stat(remotePath)` → 获取远程文件大小
+  2. 读取远程前 256B 解析 header（如有）
+  3. hash 验证通过 → `localFile.Seek(256 + offset)` → 续传剩余
+  4. 完成后重写远程文件剥离 header
+- **下载详细流程**：
+  1. `os.Stat(localPath)` → 获取本地文件大小
+  2. 读取本地前 256B 解析 header（如有）
+  3. hash 验证（通过 SSH exec `sha256sum` 获取远程 hash）
+  4. `remoteFile.Seek(256 + offset)` → 续传剩余
+  5. 完成后重写本地文件剥离 header
+- **SFTP 客户端配置**：
+  ```go
+  sftp.NewClient(sshClient,
+      sftp.UseConcurrentReads(true),       // 默认已开启
+      sftp.UseConcurrentWrites(true),      // 并发写入
+      sftp.MaxConcurrentRequestsPerFile(64),
+  )
+  ```
+
+**传输后验证：**
+- **大小比对（始终执行）**：传输完成后 `sftp.Stat()` vs `os.Stat()` 比对文件大小
+- **SHA256 校验（可选 --checksum）**：通过 SSH exec 在远程执行 `sha256sum` 或本地计算后比对
+- **验证失败处理**：输出详细错误信息，保留文件不自动删除
+
+---
+
+#### P5.3 传输服务 — `asshc/service/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.3-a TransferService | `asshc/service/transfer.go` | 传输用例编排（PushFile/PullFile/ListRemote/RemoveRemote/MkdirRemote） | ⬜ |
+| P5.3-b 覆盖策略 | `asshc/service/transfer.go` | 交互询问/--force强制覆盖/--skip跳过 | ⬜ |
+| P5.3-c 服务构造 | `asshc/service/transfer.go` | `NewTransferService(transfer, repo)` 注入 | ⬜ |
+| P5.3-d Mock 测试 | `asshc/service/transfer_test.go` | mock FileTransfer 覆盖 Push/Pull/List/Remove + 覆盖策略 | ⬜ |
+| **验证** | `go test ./asshc/service/... -v -count=1` | | |
+
+**TransferService 方法设计：**
+```go
+type TransferService struct {
+    transfer port.FileTransfer
+    repo     port.ServerRepository
+}
+
+// PushFile 从本地推送文件到远程服务器。
+// 支持递归目录 (-r)、断点续传 (--resume)、强制覆盖 (-f/--force)、跳过已存在 (--skip)
+func (s *TransferService) PushFile(ctx context.Context, name, localPath, remotePath string, opts TransferOptions) error
+
+// PullFile 从远程服务器拉取文件到本地。
+func (s *TransferService) PullFile(ctx context.Context, name, remotePath, localPath string, opts TransferOptions) error
+
+// ListRemote 列出远程目录内容。
+func (s *TransferService) ListRemote(name, remotePath string) ([]port.FileInfo, error)
+
+// RemoveRemote 删除远程文件或目录。
+func (s *TransferService) RemoveRemote(name, remotePath string) error
+
+// MkdirRemote 在远程服务器上创建目录。
+func (s *TransferService) MkdirRemote(name, remotePath string) error
+```
+
+**TransferOptions：**
+```go
+type TransferOptions struct {
+    Recursive      bool   // -r: 递归目录（保持目录结构；Glob 平铺到目标目录）
+    Resume         bool   // --resume/-e: 断点续传
+    Overwrite      string // ""=询问, "force"=--force/-f, "skip"=--skip
+    Concurrency    int    // 多文件 goroutine 池大小（默认 3，单文件内部由 pkg/sftp 控制 MaxConcurrentRequestsPerFile=64）
+    Progress       bool   // 显示进度条
+    VerifyChecksum bool   // --checksum/-S: 传输后 SHA256 校验
+}
+```
+
+**批量传输行为**：
+- 单个文件失败 → 继续传后续文件
+- 覆盖策略 ya/na → 本次会话有效
+- 远程/本地目录不存在 → 询问后创建（push/pull 一致）
+
+---
+
+#### P5.4 CLI 命令 — `cmd/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.4-a push 命令 | `cmd/sftp_cmd.go` + `cmd/fs/main.go` | `assh-fs push <server> <local> <remote>` 文件上传 | ⬜ |
+| P5.4-b pull 命令 | `cmd/sftp_cmd.go` + `cmd/fs/main.go` | `assh-fs pull <server> <remote> [local]` 文件下载 | ⬜ |
+| P5.4-c 交互命令 | `cmd/sftp_cmd.go` + `cmd/fs/main.go` | `assh-fs <server>` 交互式 SFTP 会话 | ⬜ |
+| P5.4-d 命令参数 | `cmd/sftp_cmd.go` | `-r`/`--resume`/`-e`/`-f/--force`/`--skip`/`--checksum`/并发数/进度开关 | ⬜ |
+| P5.4-e 直连参数 | `cmd/sftp_cmd.go` | `-H`/`-u`/`-p`/`-P`/`-i`/`-k` 直连支持 | ⬜ |
+| P5.4-f 入口集成 | `cmd/fs/main.go` | assh-fs 独立入口（DI 组合根 + 命令注册） | ⬜ |
+| P5.4-g 共享逻辑 | `cmd/bootstrap.go` | 提取公共初始化逻辑（DB/Service 创建），供 assh 和 assh-fs 共用 | ⬜ |
+| **验证** | `go build -o assh-fs ./cmd/fs/ && assh-fs help` | 显示 push/pull/交互命令 | |
+
+**用法示例：**
+```bash
+# 推送文件
+assh-fs push myserver ./local/file.txt /remote/path/
+assh-fs push -r myserver ./local/dir/ /remote/dir/       # 递归目录
+assh-fs push --resume myserver ./large.tar.gz /remote/    # 断点续传
+assh-fs push -e myserver ./large.tar.gz /remote/          # 断点续传（短参）
+assh-fs push --skip myserver ./file.txt /remote/          # 跳过已存在
+assh-fs push -f myserver ./file.txt /remote/              # 强制覆盖
+
+# 拉取文件
+assh-fs pull myserver /remote/file.txt ./local/
+assh-fs pull -r myserver /remote/dir/ ./local/
+
+# 交互式 FS 会话
+assh-fs myserver
+
+# 传输后 SHA256 校验
+assh-fs push --checksum myserver ./important.iso /remote/
+
+# 直连
+assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
+```
+
+---
+
+#### P5.5 集成测试
+
+| 任务 | 说明 | 状态 |
+|------|------|:----:|
+| P5.5-a 集成测试 | 使用 embed 测试服务器或容器化 SFTP server 测试全链路 push/pull | ⬜ |
+| P5.5-b **认证回退** | `asshc/infra/ssh/client.go` — key 失败后回退 password | ✅ BUG-010 |
+| **验证** | `go test ./... -v -count=1` | |
+
+---
+
+#### P5.6 依赖注入
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.6-a go.mod 更新 | `go.mod` | 添加 `github.com/pkg/sftp` | ✅ |
+| P5.6-b DI 注入 | `main.go` | 注入 `FileTransfer` + `TransferService` 到 `cmd.NewApp()` | ✅ |
+| P5.6-c App 签名变更 | `cmd/app.go` | `NewApp` 增加 `transferSvc` 参数 | ✅ |
+| **验证** | `go build ./... && go vet ./...` | | ✅ |
+
+---
+
+#### P5.7 CLI 组合短参数支持（RQ-001）
+
+参见：[RQ-001 详情](../requirements/RQ-001-combined-short-flags.md)
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.7-a expandCombinedFlags | `main.go` | 实现 `os.Args` 预处理：`-qnt` → `-q -n -t` | ✅ |
+| P5.7-b bool flag 白名单 | `main.go` | 定义已知 bool 短参集合 `{"v","q","V"}`，预留 `-e`(resume) | ✅ |
+| P5.7-c 边界处理 | `main.go` | `-p22` 保持原样、未知 flag 报错、`--` 分隔符、混入带值 flag 不展开 | ✅ |
+| **验证** | `go build ./... && go test ./... -v -count=1` | | ✅ | |
+
+---
+
+#### Phase 5 验收清单
+
+| # | 场景 | 操作 | 预期 | 状态 |
+|---|------|------|------|:----:|
+| F1 | 推送单文件 | `assh-fs push t ./a.txt /tmp/` | 文件传输成功 | ✅ |
+| F2 | 拉取单文件 | `assh-fs pull t /tmp/a.txt ./` | 文件下载成功 | ✅ |
+| F3 | 递归目录上传 | `assh-fs push -r t ./mydir/ /tmp/` | 目录递归传输 | ✅ |
+| F4 | 递归目录下载 | `assh-fs pull -r t /tmp/mydir/ ./` | 目录递归拉取 | ✅ |
+| F5 | 断点续传 | `assh-fs push --resume t ./large.iso /tmp/` | 中断后续传 | ✅ |
+| F6 | 强制覆盖 | `assh-fs push -f t ./a.txt /tmp/a.txt` | 已存在时覆盖 | ✅ |
+| F7 | 跳过已存在 | `assh-fs push --skip t ./a.txt /tmp/a.txt` | 已存在时跳过 | ✅ |
+| F8 | 默认询问 | `assh-fs push t ./a.txt /tmp/a.txt` | 交互式询问 | ✅ |
+| F14 | Glob 平铺 | `assh-fs push t "*.log" /tmp/logs/` | 匹配多个文件，平铺到 /tmp/logs/ | ✅ |
+| F15 | Server 不存在 | `assh-fs push nonexist ./a.txt /tmp/` | 报错提示 | ✅ |
+| F16 | SHA256 校验 | `assh-fs push -S t ./file /tmp/` | 传输后校验 checksum 并显示结果 | ✅ |
+| F17 | 验证失败检测 | 模拟传输后大小不匹配 | 输出验证失败错误，保留文件 | ✅ |
+| F18 | 批量续传 | 中断后 `assh-fs push --resume -r t ./dir/ /remote/` | 从断点继续批量传输 | ✅ |
+| F19 | 断点边界：远程>本地 | `assh-fs push --resume t ./small /remote/big` | 报错"远程文件比本地大，续传不可用" | ✅ |
+| F20 | Glob pull 平铺 | `assh-fs pull t "/var/log/*.log" ./logs/` | 平铺到 ./logs/ | ✅ |
+| F21 | 交互会话：完整命令 | `assh-fs t` 内执行 ls/cd/get/put/chmod/rename/ln/df/umask/lls/lcd/lpwd | 全命令可用 | ✅ |
+| F22 | RQ-001: 两个 bool 组合 | `assh -qv root@host` | 等价于 `-q -v` | ✅ |
+| F23 | RQ-001: 三个 bool 组合 | `assh -qVv root@host` | 等价于 `-q -V -v` | ✅ |
+| F24 | RQ-001: 单个 bool 不变 | `assh -q root@host` | 行为不变 | ✅ |
+| F25 | RQ-001: 组合+带值参数混用 | `assh -qv root@host -c "uptime"` | bool 组合正常，带值参数正常 | ✅ |
+| F26 | RQ-001: 长参数不受影响 | `assh --quiet --verbose root@host` | 行为不变 | ✅ |
+| F27 | RQ-001: 组合中含未知 flag | `assh -qx root@host` | 报错未知 flag `-x` | ✅ |
+| F28 | RQ-001: 混入带值短参不展开 | `assh -qp root@host` | 报错未知 flag（urflags原始行为） | ✅ |
+| **验证**: `go build ./... && go test ./... -v -count=1` | | | ✅ |
+
+---
+
+#### P5.8 v1→v2 配置导入
+
+参见：[ADR-024](adrs/024-v1-to-v2-migration.md) | [设计文档](worklogs/2026-05-11-auth-fallback-and-v1-import.md)
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.8-a v1 解密核心 | `asshc/service/importer.go` | RSA PKCS1v15 + AES-CBC 解密 v1 servers.db | ⬜ |
+| P5.8-b import 命令 | `cmd/import.go` | `assh import v1` 子命令 + 交互式确认 | ⬜ |
+| P5.8-c 密钥复制 | `asshc/service/importer.go` | 扫描 v1 data/ 目录复制密钥到 v2 credentials/ | ⬜ |
+| P5.8-d 写入 v2 SQLite | `asshc/service/importer.go` | 通过 Store API 写入 v2 数据库 | ⬜ |
+| **验证** | `go build ./... && go test ./... -v -count=1` | | |
+
+---
+
+#### P5.9 认证回退 (BUG-010)
+
+参见：[BUG-010](bugs/BUG-010-密钥认证失败后未回退到密码认证.md)
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P5.9-a 两轮认证 | `asshc/infra/ssh/client.go` | key 失败后 Password-only 回退 | ✅ |
+| **验证** | `go build ./... && go test ./... -v -count=1` | | ✅ |
+
+---
+
+### 📝 Phase 6: 密钥管理 (Key Management)
+
+目标：实现 SSH 密钥自动生成、加密存储、轮换管理，支持 `-K`/`--keygen` 快捷生成
+
+详情：参见 [docs/modules/key-management.md](modules/key-management.md)
+
+依赖：Phase 2 (SQLite) + Phase 3 (SSH AuthMethod)
+
+| 任务 | 文件 | 说明 |
+|------|------|------|
+| K.1 KeyManager 接口 | `asshc/port/keymgr.go` | 密钥生成/读取/存储接口 |
+| K.2 RSA/Ed25519 生成 | `asshc/infra/keymgr/generate.go` | `ssh.MarshalPrivateKey` 生成密钥对 |
+| K.3 加密存储 | `asshc/infra/keymgr/encrypted.go` | 用账号密码作为 passphrase 加密 |
+| K.4 KeyService | `asshc/service/key.go` | 密钥管理用例编排 |
+| K.5 known-servers 表 | `asshc/infra/store/known.go` | ADR-018: 记录直接连接+密钥路径 |
+| K.6 SSH 客户端修改 | `asshc/infra/ssh/dial.go` | 自动检测已存密钥并注入 |
+| K.7 keygen 命令 | `cmd/keygen.go` | `-K`/`--keygen` 标记 + `assh keygen` 子命令 |
+| K.8 密钥轮换 | `asshc/service/key.go` | 重新生成并替换已知服务器密钥 |
+| **验证**: `go test ./asshc/... -v` | | |
+
+### 📝 Phase 7: 代理 & 隧道
+
+目标：实现 SOCKS5 代理、端口转发、SSH 隧道
 
 依赖：Phase 3 (ssh)
 
 | 任务 | 文件 | 说明 |
 |------|------|------|
-| P5.1 Transfer 接口 | `asshc/port/transfer.go` | FileTransfer 接口 |
-| P5.2 SFTP 实现 | `asshc/infra/sftp/handler.go` | pkg/sftp 封装 |
-| P5.3 传输服务 | `asshc/service/transfer.go` | TransferService |
-| P5.4 传输命令 | `cmd/sftp.go` | push/pull 命令 |
+| P7.1 Proxy 接口 | `asshc/port/proxy.go` | Proxy 接口 |
+| P7.2 SOCKS5 | `asshc/infra/proxy/socks5.go` | SOCKS5 代理 |
+| P7.3 端口转发 | `asshc/infra/proxy/port.go` | 本地/远程端口转发 |
+| P7.4 SSH 隧道 | `asshc/infra/tunnel/tunnel.go` | 隧道管理 |
+| P7.5 代理服务 | `asshc/service/proxy.go` | ProxyService |
+| P7.6 代理命令 | `cmd/proxy.go` | proxy/hostproxy/localproxy |
 | **验证**: `go test ./asshc/... -v` | |
 
-### 📝 Phase 6: 代理 & 隧道
+### 📝 Phase 8: 云同步 (Qiniu)
 
-目标：实现 SOCKS5 代理、端口转发、SSH 隧道（由原 Phase 7 调换顺序）
-
-依赖：Phase 3 (ssh)
-
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.1 Proxy 接口 | `asshc/port/proxy.go` | Proxy 接口 |
-| P6.2 SOCKS5 | `asshc/infra/proxy/socks5.go` | SOCKS5 代理 |
-| P6.3 端口转发 | `asshc/infra/proxy/port.go` | 本地/远程端口转发 |
-| P6.4 SSH 隧道 | `asshc/infra/tunnel/tunnel.go` | 隧道管理 |
-| P6.5 代理服务 | `asshc/service/proxy.go` | ProxyService |
-| P6.6 代理命令 | `cmd/proxy.go` | proxy/hostproxy/localproxy |
-| **验证**: `go test ./asshc/... -v` | |
-
-### 📝 Phase 7: 云同步 (Qiniu)
-
-目标：实现七牛云数据备份同步（由原 Phase 6 调换顺序）
+目标：实现七牛云数据备份同步
 
 依赖：Phase 2 (storage)
 
 | 任务 | 文件 | 来源 |
 |------|------|------|
-| P7.1 Syncer 接口 | `asshc/port/syncer.go` | 新写 |
-| P7.2 Qiniu 同步 | `asshc/infra/sync/qiniu/` | 从 `asshv2/lib/qiniu/` 移植重构 |
-| P7.3 同步服务 | `asshc/service/sync.go` | SyncService |
-| P7.4 同步命令 | `cmd/sync.go` | sync push/pull/account |
-| P7.5 清理旧代码 | 移除 `asshv2/lib/qiniu/` | |
+| P8.1 Syncer 接口 | `asshc/port/syncer.go` | 新写 |
+| P8.2 Qiniu 同步 | `asshc/infra/sync/qiniu/` | 从 `asshv2/lib/qiniu/` 移植重构 |
+| P8.3 同步服务 | `asshc/service/sync.go` | SyncService |
+| P8.4 同步命令 | `cmd/sync.go` | sync push/pull/account |
+| P8.5 清理旧代码 | 移除 `asshv2/lib/qiniu/` | |
 | **验证**: `go test ./asshc/... -v` | |
 
-### 📝 Phase 8: 服务器健康检查
+### 📝 Phase 9: 服务器健康检查
 
 目标：实现服务器批量健康检查和单一检查功能
 
@@ -496,15 +787,15 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 
 | 任务 | 说明 |
 |------|------|
-| P8.1 健康检查接口 | `asshc/port/health.go` — HealthChecker 接口 |
-| P8.2 SSH 健康检查 | `asshc/infra/ssh/health.go` — 连接检测、延迟检测 |
-| P8.3 健康检查服务 | `asshc/service/health.go` — HealthService |
-| P8.4 检查命令 | `cmd/health.go` — health check/list 命令 |
-| P8.5 列表检查 | 批量检查服务器组，支持并发 |
-| P8.6 单一检查 | 指定单个服务器检查并输出详细结果 |
+| P9.1 健康检查接口 | `asshc/port/health.go` — HealthChecker 接口 |
+| P9.2 SSH 健康检查 | `asshc/infra/ssh/health.go` — 连接检测、延迟检测 |
+| P9.3 健康检查服务 | `asshc/service/health.go` — HealthService |
+| P9.4 检查命令 | `cmd/health.go` — health check/list 命令 |
+| P9.5 列表检查 | 批量检查服务器组，支持并发 |
+| P9.6 单一检查 | 指定单个服务器检查并输出详细结果 |
 | **验证**: `go test ./asshc/... -v` |
 
-### 📝 Phase 9: 跳板机/堡垒机支持
+### 📝 Phase 10: 跳板机/堡垒机支持
 
 目标：实现 SSH 跳板机（Jump Server/Bastion）配置和连接
 
@@ -512,13 +803,13 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 
 | 任务 | 说明 |
 |------|------|
-| P9.1 跳板机配置 | Server 结构增加 `JumpHost`/`Bastion` 字段 |
-| P9.2 跳板机连接 | `ConnectService` 支持多跳连接（ssh -A 转发） |
-| P9.3 跳板机命令 | `assh jump` 或在 server 配置中指定 jump host |
-| P9.4 连接穿透 | 通过跳板机访问内网服务器 |
+| P10.1 跳板机配置 | Server 结构增加 `JumpHost`/`Bastion` 字段 |
+| P10.2 跳板机连接 | `ConnectService` 支持多跳连接（ssh -A 转发） |
+| P10.3 跳板机命令 | `assh jump` 或在 server 配置中指定 jump host |
+| P10.4 连接穿透 | 通过跳板机访问内网服务器 |
 | **验证**: `go test ./asshc/... -v` |
 
-### 📝 Phase 10: 远程服务器挂载
+### 📝 Phase 11: 远程服务器挂载
 
 目标：使用 sshfs/webdav/samba 挂载远程服务器文件系统到本地
 
@@ -526,15 +817,15 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 
 | 任务 | 说明 |
 |------|------|
-| P10.1 挂载接口 | `asshc/port/mounter.go` — FileMounter 接口 |
-| P10.2 SSHFS 挂载 | `asshc/infra/mount/sshfs.go` — sshfs 封装 |
-| P10.3 WebDAV 挂载 | `asshc/infra/mount/webdav.go` — WebDAV 客户端 |
-| P10.4 SMB 挂载 | `asshc/infra/mount/smb.go` — SMB/CIFS 客户端 |
-| P10.5 挂载服务 | `asshc/service/mount.go` — MountService |
-| P10.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
+| P11.1 挂载接口 | `asshc/port/mounter.go` — FileMounter 接口 |
+| P11.2 SSHFS 挂载 | `asshc/infra/mount/sshfs.go` — sshfs 封装 |
+| P11.3 WebDAV 挂载 | `asshc/infra/mount/webdav.go` — WebDAV 客户端 |
+| P11.4 SMB 挂载 | `asshc/infra/mount/smb.go` — SMB/CIFS 客户端 |
+| P11.5 挂载服务 | `asshc/service/mount.go` — MountService |
+| P11.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
 | **验证**: `go test ./asshc/... -v` |
 
-### 📝 Phase 11: 自动更新/升级
+### 📝 Phase 12: 自动更新/升级
 
 目标：实现版本检查、手动/自动升级、强制更新
 
@@ -542,12 +833,12 @@ cd asshv2 && go run . version       # 版本输出 ✅ (v2.0.0)
 
 | 任务 | 说明 |
 |------|------|
-| P11.1 版本检查接口 | `asshc/port/updater.go` — VersionChecker 接口 |
-| P11.2 更新检查命令 | `assh version --check` 或 `assh upgrade --check` |
-| P11.3 升级命令 | `assh upgrade` — 下载并安装新版本 |
-| P11.4 强制更新 | `assh upgrade --force` — 强制更新到指定版本 |
-| P11.5 更新源配置 | 支持自定义更新源（URL/GitHub Release） |
-| P11.6 回滚支持 | 升级失败时回滚到上一版本 |
+| P12.1 版本检查接口 | `asshc/port/updater.go` — VersionChecker 接口 |
+| P12.2 更新检查命令 | `assh version --check` 或 `assh upgrade --check` |
+| P12.3 升级命令 | `assh upgrade` — 下载并安装新版本 |
+| P12.4 强制更新 | `assh upgrade --force` — 强制更新到指定版本 |
+| P12.5 更新源配置 | 支持自定义更新源（URL/GitHub Release） |
+| P12.6 回滚支持 | 升级失败时回滚到上一版本 |
 | **验证**: `go test ./asshc/... -v` |
 
 ### 📝 实验阶段: 虚拟命令投放与执行测试
@@ -576,12 +867,13 @@ Phase 0 (骨架)
               └── Phase 3 (SSH 连接)
                     ├── Phase 4 (CLI 组装) ← MVP
                     ├── Phase 5 (SFTP 传输)
-                    ├── Phase 6 (代理/隧道)
-                    ├── Phase 7 (云同步)
-                    ├── Phase 8 (健康检查)
-                    ├── Phase 9 (跳板机)
-                    ├── Phase 10 (远程挂载)
-                    ├── Phase 11 (自动更新)
+                    ├── Phase 6 (密钥管理)
+                    ├── Phase 7 (代理/隧道)
+                    ├── Phase 8 (云同步)
+                    ├── Phase 9 (健康检查)
+                    ├── Phase 10 (跳板机)
+                    ├── Phase 11 (远程挂载)
+                    ├── Phase 12 (自动更新)
                     └── 实验阶段 (虚拟命令)
 ```
 
