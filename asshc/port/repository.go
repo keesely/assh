@@ -32,3 +32,24 @@ type ServerRepository interface {
 	// Close 关闭存储连接，释放资源。
 	Close() error
 }
+
+// KnownServerRecorder 定义未具名服务器直连记录的存储接口。
+// 用于自动记录直连（user@host / -H host）的连接历史和密钥关联。
+// 实现 ADR-018 的 known-servers 隐性表设计。
+type KnownServerRecorder interface {
+	// RecordDirectConnect 记录或更新一次直连操作。
+	// 如果同一 ID 已存在，递增 connect_count 并更新 last_connected_at；
+	// 如果不存在，创建新记录。
+	RecordDirectConnect(ks *domain.KnownServer) error
+	// LookupKnownServer 根据 ID 查找已知服务器记录。
+	LookupKnownServer(id string) (*domain.KnownServer, error)
+	// LookupKnownServerByAuth 根据主机+端口+用户+认证指纹查找记录。
+	// 内部计算 ID 后调用 LookupKnownServer。
+	LookupKnownServerByAuth(user, host string, port int, authFingerprint string) (*domain.KnownServer, error)
+	// UpdateKeyBackupPath 更新已知服务器的密钥备份路径。
+	UpdateKeyBackupPath(id, keyBackupPath string) error
+	// DeleteKnownServer 删除指定 ID 的已知服务器记录。
+	DeleteKnownServer(id string) error
+	// ListKnownServers 返回所有已知服务器记录。
+	ListKnownServers() ([]*domain.KnownServer, error)
+}

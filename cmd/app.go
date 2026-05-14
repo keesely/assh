@@ -26,18 +26,44 @@ import (
 	"github.com/urfave/cli"
 )
 
+// recordDirectConnectAsync 异步记录直连操作到 known_servers 表。
+// 传入预计算的 authFingerprint 避免明文密码在 goroutine 中传播。
+// 封装为包级函数，使 fsPushAction / fsPullAction 可直接调用。
+func recordDirectConnectAsync(kr transferport.KnownServerRecorder, host string, port int, user, authFingerprint string) {
+	if kr == nil {
+		return
+	}
+	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
+	ks := &domain.KnownServer{
+		ID:              id,
+		Host:            host,
+		Port:            port,
+		User:            user,
+		AuthFingerprint: authFingerprint,
+	}
+	recorder := kr
+	go func() {
+		if err := recorder.RecordDirectConnect(ks); err != nil {
+			log.Debugf("failed to record direct connect: %v", err)
+		}
+	}()
+}
+
 // App 封装 CLI 应用的核心结构，持有 service 依赖并通过 urfave/cli 框架注册命令。
 type App struct {
-	cli        *cli.App                   // urfave/cli 应用实例
-	version    string                     // 版本号（编译时注入）
-	build      string                     // 构建信息（编译时注入）
-	connectSvc *service.ConnectService    // SSH 连接服务
-	serverSvc  *service.ServerService     // 服务器配置管理服务
+	cli            *cli.App                      // urfave/cli 应用实例
+	version        string                        // 版本号（编译时注入）
+	build          string                        // 构建信息（编译时注入）
+	connectSvc     *service.ConnectService       // SSH 连接服务
+	serverSvc      *service.ServerService        // 服务器配置管理服务
+	knownRecorder  transferport.KnownServerRecorder // known-servers 隐性表记录器
+	keySvc         *service.KeyService           // 密钥管理服务
+	keymgr         transferport.KeyManager       // 密钥管理器（直连 keygen 用）
 }
 
 // NewApp 创建 CLI 应用，注入所有 service 依赖。
-// 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc）。
-func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService) *App {
+// 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc/keygen）。
+func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
 	app.Usage = "An SSH Client"
@@ -45,11 +71,14 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 	app.HideVersion = true
 
 	a := &App{
-		cli:        app,
-		version:    version,
-		build:      build,
-		connectSvc: connectSvc,
-		serverSvc:  serverSvc,
+		cli:           app,
+		version:       version,
+		build:         build,
+		connectSvc:    connectSvc,
+		serverSvc:     serverSvc,
+		knownRecorder: knownRecorder,
+		keySvc:        keySvc,
+		keymgr:        keymgr,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -63,7 +92,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 }
 
 // NewFSApp creates CLI application for file transfer (assh-fs binary).
-func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService) *App {
+func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH-FS - SFTP File Transfer"
 	app.Usage = "SFTP File Transfer Client"
@@ -71,10 +100,11 @@ func NewFSApp(version, build string, transferSvc *service.TransferService, serve
 	app.HideVersion = true
 
 	a := &App{
-		cli:       app,
-		version:   version,
-		build:     build,
-		serverSvc: serverSvc,
+		cli:           app,
+		version:       version,
+		build:         build,
+		serverSvc:     serverSvc,
+		knownRecorder: knownRecorder,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -85,6 +115,7 @@ func NewFSApp(version, build string, transferSvc *service.TransferService, serve
 
 // registerFSCommands registers file transfer commands.
 func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc *service.ServerService) {
+	kr := a.knownRecorder
 	a.cli.Commands = []cli.Command{
 		{
 			Name:   "version",
@@ -94,7 +125,7 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 		{
 			Name:   "push",
 			Usage:  "Push local file to remote server",
-			Action: fsPushAction(transferSvc, serverSvc),
+			Action: fsPushAction(transferSvc, serverSvc, kr),
 			Flags: []cli.Flag{
 				cli.BoolFlag{Name: "r, recursive", Usage: "upload directory recursively"},
 				cli.BoolFlag{Name: "e, resume", Usage: "resume interrupted transfer"},
@@ -114,7 +145,7 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 		{
 			Name:   "pull",
 			Usage:  "Pull remote file to local",
-			Action: fsPullAction(transferSvc, serverSvc),
+			Action: fsPullAction(transferSvc, serverSvc, kr),
 			Flags: []cli.Flag{
 				cli.BoolFlag{Name: "r, recursive", Usage: "download directory recursively"},
 				cli.BoolFlag{Name: "e, resume", Usage: "resume interrupted transfer"},
@@ -242,7 +273,28 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 	}
 }
 
-func fsPushAction(transferSvc *service.TransferService, serverSvc *service.ServerService) func(*cli.Context) error {
+// recordDirectConnectForApp 是给 assh-fs 使用的小写别名，逻辑与 connect.go 一致。
+func (a *App) recordDirectConnectForApp(host string, port int, user, authFingerprint string) {
+	if a.knownRecorder == nil {
+		return
+	}
+	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
+	ks := &domain.KnownServer{
+		ID:              id,
+		Host:            host,
+		Port:            port,
+		User:            user,
+		AuthFingerprint: authFingerprint,
+	}
+	recorder := a.knownRecorder
+	go func() {
+		if err := recorder.RecordDirectConnect(ks); err != nil {
+			log.Debugf("failed to record direct connect: %v", err)
+		}
+	}()
+}
+
+func fsPushAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder) func(*cli.Context) error {
 	return func(c *cli.Context) error {
 		if c.NArg() < 3 {
 			return cli.ShowSubcommandHelp(c)
@@ -352,6 +404,10 @@ ctx := context.Background()
 			if err := transferSvc.PushFileDirect(ctx, server, localPath, remotePath, opts); err != nil {
 				return fmt.Errorf("push failed: %w", err)
 			}
+			// 记录直连到 known_servers 表（预计算 authFingerprint 避免明文密码传播）
+			if kr != nil {
+				recordDirectConnectAsync(kr, host, port, user, domain.ComputeAuthFingerprint(password, identityFile))
+			}
 		} else {
 			// Normal mode - use server name lookup
 			if err := transferSvc.PushFile(ctx, name, localPath, remotePath, opts); err != nil {
@@ -364,7 +420,7 @@ ctx := context.Background()
 	}
 }
 
-func fsPullAction(transferSvc *service.TransferService, serverSvc *service.ServerService) func(*cli.Context) error {
+func fsPullAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder) func(*cli.Context) error {
 	return func(c *cli.Context) error {
 		if c.NArg() < 2 {
 			return cli.ShowSubcommandHelp(c)
@@ -513,7 +569,11 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 			if err := transferSvc.PullFileDirect(ctx, server, remotePath, localPath, opts); err != nil {
 				return fmt.Errorf("pull failed: %w", err)
 			}
-} else {
+			// 记录直连到 known_servers 表（预计算 authFingerprint 避免明文密码传播）
+			if kr != nil {
+				recordDirectConnectAsync(kr, host, port, user, domain.ComputeAuthFingerprint(password, identityFile))
+			}
+		} else {
 			if err := transferSvc.PullFile(ctx, name, remotePath, localPath, opts); err != nil {
 				return fmt.Errorf("pull failed: %w", err)
 			}
@@ -527,7 +587,7 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 // registerCompletionHints 为各命令注册 shell 补全函数。
 // 为 info/rm/mv/rollback/login/run/bc 提供服务器名补全。
 func (a *App) registerCompletionHints() {
-	serverNameCommands := []string{"info", "rm", "mv", "rollback", "login", "run", "bc"}
+	serverNameCommands := []string{"info", "rm", "mv", "rollback", "login", "run", "bc", "keygen"}
 
 	for i := range a.cli.Commands {
 		cmd := &a.cli.Commands[i]
@@ -602,6 +662,7 @@ func (a *App) registerCommands() {
 	}
 	a.registerServerCommands()
 	a.registerConnectCommands()
+	a.registerKeygenCommands()
 }
 
 // beforeAction 是全局 Before 钩子，在每次命令执行前调用。
@@ -638,7 +699,7 @@ func (a *App) defaultAction(c *cli.Context) error {
 		return cli.ShowAppHelp(c)
 	}
 
-	client, err := a.loginCore(c)
+	client, directInfo, err := a.loginCore(c)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) && target != "" {
 			if suggestion, ok := a.serverSvc.SuggestServer(target); ok {
@@ -648,6 +709,10 @@ func (a *App) defaultAction(c *cli.Context) error {
 		return err
 	}
 	defer a.connectSvc.Close(client)
+
+	if directInfo != nil {
+		a.recordDirectConnect(directInfo.host, directInfo.port, directInfo.user, directInfo.authFingerprint)
+	}
 
 	if cmd := c.String("command"); cmd != "" {
 		return a.connectSvc.Run(client, cmd)

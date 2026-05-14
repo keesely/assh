@@ -4,5 +4,6 @@ build/*
 build.back/
 *.back
 assh
+assh-fs
 assh/
 backup/

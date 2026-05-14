@@ -92,6 +92,21 @@ func (s *Store) migrate() error {
 
 		CREATE INDEX IF NOT EXISTS idx_changelog_lookup ON server_changelog(server_name, group_name);
 		CREATE INDEX IF NOT EXISTS idx_changelog_version ON server_changelog(server_name, group_name, version);
+
+		CREATE TABLE IF NOT EXISTS known_servers (
+			id                TEXT PRIMARY KEY,
+			host              TEXT NOT NULL,
+			port              INTEGER NOT NULL DEFAULT 22,
+			user_name         TEXT NOT NULL DEFAULT 'root',
+			auth_fingerprint  TEXT NOT NULL DEFAULT '',
+			key_backup_path   TEXT DEFAULT '',
+			last_connected_at TEXT,
+			connect_count     INTEGER DEFAULT 1,
+			created_at        TEXT DEFAULT (datetime('now')),
+			updated_at        TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_known_servers_host_port ON known_servers(host, port);
 	`)
 
 	if err != nil {

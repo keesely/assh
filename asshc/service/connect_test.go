@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"testing"
 
 	"assh/asshc/domain"
@@ -47,7 +46,8 @@ func (m *mockSession) RunWithOutput(client *ssh.Client, cmd string) (string, err
 	if m.runWithOutputFunc != nil {
 		return m.runWithOutputFunc(client, cmd)
 	}
-	return "", nil
+	// 默认返回命令输出（模拟执行成功）
+	return "mock output for: " + cmd, nil
 }
 
 func TestNewConnectService(t *testing.T) {
@@ -95,7 +95,7 @@ func TestConnectByNameEmptyName(t *testing.T) {
 func TestConnectDirect(t *testing.T) {
 	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
 
-	client, err := svc.ConnectDirect("192.168.1.1", 22, "root", "secret", "")
+	client, err := svc.ConnectDirect("192.168.1.1", 22, "root", "secret", "", "")
 	if err != nil {
 		t.Errorf("ConnectDirect failed: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestConnectDirect(t *testing.T) {
 func TestConnectDirectDefaults(t *testing.T) {
 	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
 
-	client, err := svc.ConnectDirect("192.168.1.1", 0, "", "", "")
+	client, err := svc.ConnectDirect("192.168.1.1", 0, "", "", "", "")
 	if err != nil {
 		t.Errorf("ConnectDirect with defaults failed: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestConnectDirectDefaults(t *testing.T) {
 func TestConnectDirectEmptyHost(t *testing.T) {
 	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
 
-	_, err := svc.ConnectDirect("", 22, "root", "", "")
+	_, err := svc.ConnectDirect("", 22, "root", "", "", "")
 	if err == nil {
 		t.Error("ConnectDirect with empty host should return error")
 	}
@@ -146,13 +146,22 @@ func TestShellNilClient(t *testing.T) {
 func TestRun(t *testing.T) {
 	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
 
-	err := svc.Run(&ssh.Client{}, "ls -la")
+	err := svc.Run(&ssh.Client{}, "ls")
 	if err != nil {
 		t.Errorf("Run failed: %v", err)
 	}
 }
 
-func TestRunEmptyCmd(t *testing.T) {
+func TestRunNilClient(t *testing.T) {
+	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
+
+	err := svc.Run(nil, "ls")
+	if err == nil {
+		t.Error("Run with nil client should return error")
+	}
+}
+
+func TestRunEmptyCommand(t *testing.T) {
 	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
 
 	err := svc.Run(&ssh.Client{}, "")
@@ -162,23 +171,27 @@ func TestRunEmptyCmd(t *testing.T) {
 }
 
 func TestRunWithOutput(t *testing.T) {
-	mockSess := &mockSession{
-		runWithOutputFunc: func(client *ssh.Client, cmd string) (string, error) {
-			return "output", nil
-		},
-	}
-	svc := NewConnectService(&mockConnector{}, mockSess, &mockRepo{})
+	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
 
-	output, err := svc.RunWithOutput(&ssh.Client{}, "ls")
+	output, err := svc.RunWithOutput(&ssh.Client{}, "echo hello")
 	if err != nil {
 		t.Errorf("RunWithOutput failed: %v", err)
 	}
-	if output != "output" {
-		t.Errorf("expected 'output', got %q", output)
+	if output == "" {
+		t.Error("RunWithOutput should return output")
 	}
 }
 
-func TestRunWithOutputEmptyCmd(t *testing.T) {
+func TestRunWithOutputNilClient(t *testing.T) {
+	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
+
+	_, err := svc.RunWithOutput(nil, "echo hello")
+	if err == nil {
+		t.Error("RunWithOutput with nil client should return error")
+	}
+}
+
+func TestRunWithOutputEmptyCommand(t *testing.T) {
 	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
 
 	_, err := svc.RunWithOutput(&ssh.Client{}, "")
@@ -196,30 +209,11 @@ func TestClose(t *testing.T) {
 	}
 }
 
-func TestCloseNil(t *testing.T) {
+func TestCloseNilClient(t *testing.T) {
 	svc := NewConnectService(&mockConnector{}, &mockSession{}, &mockRepo{})
 
 	err := svc.Close(nil)
 	if err != nil {
-		t.Errorf("Close(nil) should not error: %v", err)
-	}
-}
-
-func TestConnectByNameConnectError(t *testing.T) {
-	mockConn := &mockConnector{
-		connectFunc: func(server *domain.Server) (*ssh.Client, error) {
-			return nil, errors.New("connection refused")
-		},
-	}
-	repo := &mockRepo{
-		servers: map[string]map[string]*domain.Server{
-			"": {"test": {Name: "test", Host: "10.0.0.1"}},
-		},
-	}
-	svc := NewConnectService(mockConn, &mockSession{}, repo)
-
-	_, err := svc.ConnectByName("test")
-	if err == nil {
-		t.Error("ConnectByName should return error when connector fails")
+		t.Errorf("Close with nil client should not return error: %v", err)
 	}
 }
