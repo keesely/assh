@@ -3,7 +3,7 @@
 **计划阶段**: Phase 6 (Key Management)
 **依赖**: Phase 1 (crypto) ✅ + Phase 3 (ssh) ✅ + Phase 4 (CLI) ✅
 **架构决策**: ADR-018 (known-servers 隐性表)
-**状态**: ⏳ 规划中
+**状态**: 🔄 开发中 (2026-05-11 起)
 
 ---
 
@@ -33,11 +33,13 @@
 
 ### 2. Key 备份机制
 
-**存储路径**: `~/.assh/v2/data/keys/{fingerprint}.pem`
+**存储路径**: `~/.assh/v2/data/keys/{ab}/{cd}/{hash[4:]}.pem`（三层嵌套目录）
 
-- add/set 时检测 `-k` 指向的文件 → 计算 SHA256 指纹 → 复制到 `data/keys/` 
+- add/set 时检测 `-k` 指向的文件 → 计算 SHA256 指纹 → 复制到 `data/keys/{ab}/{cd}/{hash}.pem`
 - SSH 连接时（`client.go` tryKeyFile）→ 优先查找 `data/keys/` 中匹配的备份
 - 原始路径文件被篡改/删除时，仍可用备份正常连接
+
+说明：前 4 个字符拆分为两级目录（如 `65/0d/ae84b...d.pem`）
 
 ### 3. `assh keygen` 命令
 
@@ -80,46 +82,86 @@ assh keygen -H host -u root -P pass       # 直连模式（无服务器配置）
 
 ## 子任务分解
 
-### P6.1 接口层
+### P6.1 接口层 ✅
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.1-a 接口定义 | `asshc/port/keymanager.go` | KeyManager 接口（Generate/DeployPublicKey/Backup/Lookup） |
-| **验证** | `go vet ./asshc/port/...` | |
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P6.1-a 接口定义 | `asshc/port/keymanager.go` | KeyManager 接口（Generate/GenerateToPath/DeployPublicKey/Backup/Lookup） | ✅ |
+| **验证** | `go vet ./asshc/port/...` | | ✅ |
 
+**接口签名**（v2 新增 comment 参数）：
 ```go
 type KeyManager interface {
-    // Generate 生成指定类型的密钥对，使用 account password 加密私钥。
-    // 私钥保存到 data/keys/{fingerprint}.pem。
-    // 返回私钥文件路径、公钥内容、指纹。
-    Generate(keyType string, bits int, passphrase string) (privPath string, pubKey []byte, fingerprint string, error)
-    
-    // DeployPublicKey SSH 登录服务器，将公钥追加到 ~/.ssh/authorized_keys。
+    // Generate — comment 参数透传到 ssh.MarshalPrivateKey
+    Generate(keyType string, bits int, passphrase []byte, comment string) (privPath string, pubKey []byte, fingerprint string, error)
+
+    // GenerateToPath — 独立生成模式，路径由调用者指定
+    GenerateToPath(keyType string, bits int, passphrase []byte, comment string, outputPath string) (pubKey []byte, fingerprint string, error)
+
+    // GenerateToExistingPath — 生成密钥到已有路径（覆盖），用于 keygen 复用已有配置
+    GenerateToExistingPath(keyType string, bits int, passphrase []byte, comment string, privPath string) (pubKey []byte, err error)
+
+    // DeployPublicKey — SSH 登录服务器，将公钥追加到 ~/.ssh/authorized_keys
     DeployPublicKey(server *domain.Server, pubKey []byte) error
-    
-    // BackupKey 将指定路径的密钥文件复制到 data/keys/ 目录，返回备份路径。
-    BackupKey(srcPath string) (backupPath string, fingerprint string, error)
-    
-    // LookupByPath 在 data/keys/ 中查找与原始路径匹配的备份密钥。
-    LookupByPath(originalPath string) (backupPath string, found bool)
-    
-    // ReadKeyFromStdin 从标准输入读取密钥内容并保存到 data/keys/ 目录。
+
+    // BackupKey — 将指定路径的密钥文件快照到 destPath（快照模式）
+    BackupKey(srcPath string, destPath string) (fingerprint string, error)
+
+    // BackupPath — 计算指定服务器名的备份路径并检查是否存在
+    BackupPath(name string) (path string, exists bool)
+
+    // ReadKeyFromStdin — 从标准输入读取密钥内容并保存到 data/keys/
     ReadKeyFromStdin() (savedPath string, fingerprint string, error)
-    
-    // GetAccountPassphrase 获取 account password，用于解密私钥。
-    GetAccountPassphrase() string
+
+    // GetAccountPassphrase — 获取 account password 的 []byte 副本
+    GetAccountPassphrase() []byte
 }
 ```
 
+**comment 默认行为**：未提供 `-C` 时，`marshalPrivateKey` 传入 "user@host"（与 ssh-keygen 行为一致）
+
 ### P6.2 基础设施层 — `asshc/infra/keymgr/`
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.2-a 密钥生成 | `generate.go` | 包装 crypto.RSA/Ed25519/ECDSA，OpenSSH 格式输出，指纹计算 |
-| P6.2-b 公钥部署 | `deploy.go` | SSH 登录 → 检测 authorized_keys → 追加公钥（幂等：指纹去重） |
-| P6.2-c 密钥备份 | `backup.go` | 指纹命名 + 复制 + data/keys/ 索引维护；按原始路径查找备份 |
-| P6.2-d 单元测试 | `*_test.go` | Mock SSH + 文件系统测试 |
-| **验证** | `go test ./asshc/infra/keymgr/... -v` | |
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P6.2-a 密钥生成 | `generate.go` | 包装 crypto.RSA/Ed25519/ECDSA，OpenSSH 格式输出，指纹计算，新增 `comment` 参数透传 | ✅ |
+| P6.2-b 公钥部署 | `deploy.go` | SSH 登录→检测 authorized_keys→追加公钥（幂等：指纹去重） | ⏳ 暂缓 |
+| P6.2-c 密钥备份 | `backup.go` | 服务器名哈希命名快照，无索引，BackupPath 查询 | ✅ |
+| P6.2-d 单元测试 | `*_test.go` | 56 个测试覆盖 Generate/GenerateToPath/Backup/BackupPath/KeyManager | ✅ |
+| **验证** | `go test ./asshc/infra/keymgr/... -v` | | ✅ 56/56 |
+
+**P6.2-a 密钥生成设计**（2026-05-12 修订）：
+- 包装 `crypto.GenerateRSA` / `GenerateEd25519` / `GenerateECDSA`
+- 使用 `ssh.MarshalPrivateKey(key, comment)` 输出 OpenSSH 格式 PEM（`comment` 写入 PEM 头部的 Comment 字段）
+- `passphrase` 类型为 `[]byte`（接口契约已更新），便于使用后清零
+- 保存路径：`data/keys/{fingerprint}.pem`
+- 返回：(privPath, pubKey[], fingerprint)
+- 指纹计算：`SHA256(PEM 内容)`
+- **comment 默认值**：未提供时填充 "user@host"（与 ssh-keygen 行为一致）
+- **新增 `-f` 别名**：`--output` 的 `-f` 别名，对齐 ssh-keygen（urfave/cli v1 Name: "output, O, f"）
+
+**P6.2-b 公钥部署设计**：
+- **DeployService**（`service/deploy.go`）：独立的部署服务，通过 SSHConnector 连接服务器并执行命令
+- **幂等流程**：
+  ```
+  1. SSH 登录服务器
+  2. 读取 ~/.ssh/authorized_keys
+  3. 解析每行公钥指纹
+  4. 指纹已存在 → 跳过（幂等）
+  5. 指纹不存在 → 追加公钥
+  6. authorized_keys 不存在 → 创建（mkdir -p ~/.ssh + touch）
+  ```
+- **容错处理**：部署失败不影响主流程（密钥生成+配置仍成功），仅记录警告
+- **KeyService 集成**：`NewKeyService` 内部创建 `NewDeployService(ssh)`，调用 `GenerateAndDeploy` 时自动部署
+
+**P6.2-c 密钥备份设计（2026-05-12 修订）**：
+- **快照模式**：`BackupKey(srcPath, destPath)` — 调用者指定目标路径，不修改 `Auth.KeyFile`
+- **权限检查**：源文件权限 group/other 可读 → 返回错误（安全保守策略）
+- **服务器关联**：目标路径由 `BackupPath(name)` 计算：`data/keys/{sha256(serverName)}.pem`
+- **覆盖策略**：直接覆盖已存在的快照（始终反映最新密钥）
+- **无索引**：不使用 `.index.json`，服务器名哈希本身就是索引
+- **BackupPath**：`BackupPath(name) (path, exists)` — 计算路径 + 检查快照是否存在
+- **登录优先级**：`BackupPath(name) → 存在则用 → 不存在则回退 Auth.KeyFile`
 
 **密钥存储安全**：
 - 生成的私钥使用 **account password** 作为 passphrase 加密（`ssh.MarshalPrivateKey(key, accountPass)`）
@@ -127,78 +169,91 @@ type KeyManager interface {
 - 连接时 `tryKeyFile` 使用 `ssh.ParsePrivateKeyWithPassphrase(key, accountPass)` 解析
 - 如果未设置 account password，则使用空密码（兼容模式）
 
-**公钥部署幂等策略**：
-```
-1. SSH 登录服务器
-2. 读取 ~/.ssh/authorized_keys
-3. 解析每行的公钥指纹
-4. 如果目标公钥指纹已存在 → 跳过（幂等）
-5. 如果不存在 → 追加
-6. 如果 authorized_keys 不存在 → 创建（mkdir -p ~/.ssh + touch）
-```
+### P6.3 服务层 ✅
 
-### P6.3 服务层
-
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.3-a KeyService | `asshc/service/key.go` | 密钥管理用例编排（GenerateAndDeploy/BackupAndConfigure） |
-| P6.3-b 单元测试 | `asshc/service/key_test.go` | Mock KeyManager + Mock ServerRepository |
-| **验证** | `go test ./asshc/service/... -v` | |
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P6.3-a KeyService | `asshc/service/key.go` | 密钥管理用例编排（GenerateAndDeploy/HandleKeyFlag） | ✅ |
+| P6.3-b 单元测试 | `asshc/service/key_test.go` | Mock KeyManager + Mock ServerRepository (16 个测试) | ✅ |
+| **验证** | `go test ./asshc/service/... -v` | 48 测试全部通过 | ✅ |
 
 ```go
 type KeyService struct {
     keymgr port.KeyManager
     repo   port.ServerRepository
-    ssh    port.SSHConnector  // 用于 keygen 部署时的连接
+    ssh    port.SSHConnector  // 预留：支持更精细的部署控制
 }
 
 // GenerateAndDeploy 生成密钥 → 部署到服务器 → 更新配置
 func (s *KeyService) GenerateAndDeploy(name string, keyType string, bits int) error
 
-// HandleKeyFlag 处理 -k 参数的三种情况：
-//   空字符串 → GenerateAndDeploy
-//   "-" 或 stdin pipe → 读取 stdin 并保存
-//   文件路径 → BackupKey 并更新配置
-func (s *KeyService) HandleKeyFlag(name, keyValue string) error
+// HandleKeyFlag 处理 -k 参数的三种情况并返回密钥路径：
+//   空字符串 → GenerateAndDeploy(name, "rsa", 4096)
+//   "-"      → 读取 stdin 并保存到 data/keys/
+//   文件路径 → BackupKey 快照到 data/keys/{sha256(name)}.pem
+func (s *KeyService) HandleKeyFlag(name, keyValue string) (keyFilePath string, err error)
 ```
 
-### P6.4 CLI 命令
+### P6.4 CLI 命令 ✅
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.4-a keygen 命令 | `cmd/keygen.go` | `assh keygen <server> [--type] [--bits]` |
-| P6.4-b 命令注册 | `cmd/app.go` | registerKeygenCommands() + NewApp 签名变更 |
-| P6.4-c add/set -k 增强 | `cmd/server.go` | 空参/stdin/备份逻辑 |
-| **验证** | `go build ./... && assh help` | |
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P6.4-a keygen 命令 | `cmd/keygen.go` | `assh keygen <server> [--type] [--bits]` — 命名服务器+直连+独立生成三种模式 | ✅ |
+| P6.4-b 命令注册 | `cmd/app.go` | registerKeygenCommands() + NewApp 签名变更 | ✅ |
+| P6.4-c add/set -k 增强 | `cmd/server.go` | 空参/stdin/备份逻辑（后续迭代） | ⏳ |
+| P6.4-d GenerateToPath + --output | `asshc/port/keymanager.go` + `asshc/infra/keymgr/generate.go` + `cmd/keygen.go` | `GenerateToPath` 接口/实现 + `--output`/-O/-f 独立生成模式 | ✅ |
+| P6.4-e `-C`/`--comment` | `cmd/keygen.go` | 密钥注释参数，透传全栈 | ✅ |
+| P6.4-f `-N`/`--new-passphrase` | `cmd/keygen.go` | CLI passphrase 优先于 account password | ✅ |
+| P6.4-g 无参交互式向导 | `cmd/keygen.go` | `assh keygen` 无参时触发 ssh-keygen 风格交互式向导 | ✅ |
+| **验证** | `go build ./... && assh help` | keygen 命令可见且 help 正确 | ✅ |
 
-**`cmd/keygen.go` 命令设计**：
+**命令参数**（对齐 ssh-keygen）：
 ```go
 {
     Name:      "keygen",
-    Usage:     "Generate SSH key and deploy to server",
-    ArgsUsage: "<server>",
+    Usage:     "Generate SSH key pair",
+    ArgsUsage: "[<server>]",
     Flags: []cli.Flag{
-        cli.StringFlag{Name: "type, t", Value: "rsa", Usage: "key type: rsa|ed25519|ecdsa"},
-        cli.IntFlag{Name: "bits, b", Value: 4096, Usage: "key bits (for RSA/ECDSA)"},
-        // 直连参数（复用已有模式）
-        cli.StringFlag{Name: "H, host", Usage: "host address"},
-        cli.StringFlag{Name: "u, user", Usage: "username"},
-        cli.StringFlag{Name: "P, password", Usage: "password"},
-        cli.IntFlag{Name: "p, port", Value: 22, Usage: "port"},
+        cli.StringFlag{Name: "type, t", Value: "rsa", Usage: "key type: rsa|ed25519|ecdsa [ssh-keygen: -t]"},
+        cli.IntFlag{Name: "bits, b", Value: 4096, Usage: "key bits (for RSA/ECDSA) [ssh-keygen: -b]"},
+        cli.StringFlag{Name: "output, O, f", Usage: "output path (directory or file path, standalone mode) [ssh-keygen: -f]"},
+        cli.StringFlag{Name: "comment, C", Value: "", Usage: "key comment (default: user@host) [ssh-keygen: -C]"},
+        cli.StringFlag{Name: "new-passphrase, N", Value: "", Usage: "passphrase for private key (default: account password) [ssh-keygen: -N]"},
+        // Direct connection parameters
+        cli.StringFlag{Name: "H, host", Usage: "host address (direct connection mode)"},
+        cli.StringFlag{Name: "u, user", Usage: "username (direct connection mode)"},
+        cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
+        cli.IntFlag{Name: "p, port", Value: 22, Usage: "SSH port (direct connection mode)"},
+        cli.StringFlag{Name: "P, password", Usage: "password (direct connection mode)"},
     },
 }
 ```
 
-### P6.5 known-servers 隐性表（ADR-018）
+**Passphrase 优先级**（`-N` vs account password）：
+```go
+func resolvePassphrase(cliPassphrase string, accountPassphrase []byte) []byte {
+    if cliPassphrase != "" {
+        return []byte(cliPassphrase)  // 最高优先级：CLI -N 参数
+    }
+    return accountPassphrase           // 次优先级：account password（Phase 8 实现）
+}
+```
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.5-a 接口扩展 | `asshc/port/repository.go` | 新增 `KnownServerRecorder` 接口或 `RecordDirectConnect` / `LookupKnownServer` 方法 |
-| P6.5-b 数据库迁移 | `asshc/infra/store/db.go` | `migrate()` 新增 `known_servers` 建表语句 |
-| P6.5-c 存储实现 | `asshc/infra/store/known.go` | 新增文件：upsert/lookup 实现 |
-| P6.5-d 直连接入点 | `cmd/connect.go` + `cmd/app.go` | 直连成功后调用 `RecordDirectConnect()` |
-| P6.5-e keygen 关联 | `asshc/infra/keymgr/deploy.go` | 直连 keygen 后更新 `key_backup_path` |
-| **验证** | `go test ./asshc/infra/store/... -v` | |
+**三种运行模式**（优先级从高到低）：
+1. **独立生成模式**（`--output`/`-O`/`-f`）— `assh keygen -f ~/.ssh/mykey`，私钥写入指定路径 + 公钥写入 `{path}.pub`
+2. **已命名服务器模式** — `assh keygen myserver`，生成密钥 → 部署 → 更新服务器配置
+3. **直连模式**（`-H`）— `assh keygen -H 192.168.1.1 -u root -P password`，生成密钥 → 尝试部署 → 记录 known_servers
+4. **交互式模式**（无参）— `assh keygen`，ssh-keygen 风格交互式向导（路径/类型/bits/passphrase）
+
+### P6.5 known-servers 隐性表（ADR-018）✅
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P6.5-a 接口扩展 | `asshc/port/repository.go` | 新增 `KnownServerRecorder` 接口 | ✅ |
+| P6.5-b 数据库迁移 | `asshc/infra/store/db.go` | `known_servers` 建表语句 | ✅ |
+| P6.5-c 存储实现 | `asshc/infra/store/known.go` | upsert/lookup 实现 | ✅ |
+| P6.5-d 直连接入点 | `cmd/connect.go` + `cmd/app.go` | 直连成功后调用 `RecordDirectConnect()` | ✅ |
+| P6.5-e keygen 关联 | `cmd/keygen.go` + `asshc/service/deploy.go` | 直连 keygen 后调用 DeployService.DeployToServer + RecordDirectConnect + UpdateKeyBackupPath | ✅ |
 
 **表结构**（详见 ADR-018）：
 ```sql
@@ -226,48 +281,69 @@ CREATE TABLE IF NOT EXISTS known_servers (
 | 两者 | `SHA256(password):SHA256(keypath)` 组合 |
 | 仅 agent | 空字符串 `""` |
 
-### P6.6 SSH 连接层修改
+### P6.6 SSH 连接层修改 ✅
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.6-a 备份优先策略 | `asshc/infra/ssh/client.go` | tryKeyFile 优先查 data/keys/ 备份 |
-| P6.6-b known-servers 密钥查找 | `asshc/infra/ssh/client.go` | 直连时查 known_servers 的 key_backup_path |
-| **验证** | `go test ./asshc/infra/ssh/... -v` | |
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P6.6-a 备份优先策略 | `asshc/infra/ssh/client.go` | Connector 持有 accountPassphrase + tryBackupKey + data/keys/{ab}/{cd}/xxx.pem 三层嵌套备份优先 | ✅ |
+| P6.6-b known-servers 密钥查找 | `asshc/infra/ssh/client.go` + `asshc/service/connect.go` | 直连时查 known_servers 的 key_backup_path + ConnectDirect 新增 keyBackupPath 参数 | ✅ |
+| **验证** | `go test ./asshc/infra/ssh/... -v` | | ✅ |
 
-**修改逻辑**（`tryKeyFile` 方法）：
+**P6.6-a 备份优先策略设计**（ADR-026）：
+
 ```go
+// Connector 持有 passphrase，用于解密备份密钥
+type Connector struct {
+    accountPassphrase []byte
+}
+
+// NewConnectorWithPassphrase 创建包含 account passphrase 的 Connector
+func NewConnectorWithPassphrase(accountPassphrase []byte) *Connector
+
+// tryKeyFile 认证策略
 func (c *Connector) tryKeyFile(keyFile string) ssh.AuthMethod {
     // 1. 优先查找 data/keys/ 中的备份
-    if backupPath := c.lookupBackup(keyFile); backupPath != "" {
-        key, err := os.ReadFile(backupPath)
-        if err == nil {
-            if signer, err := ssh.ParsePrivateKey(key); err == nil {
-                return ssh.PublicKeys(signer)
-            }
+    if c.accountPassphrase != nil {
+        if m := c.tryBackupKey(keyFile); m != nil {
+            return m
         }
     }
     // 2. 回退到原始路径
-    key, err := os.ReadFile(keyFile)
-    if err != nil {
-        return nil
-    }
-    signer, err := ssh.ParsePrivateKey(key)
-    if err != nil {
-        return nil
-    }
-    return ssh.PublicKeys(signer)
+    ...
 }
+
+// tryBackupKey 从 data/keys/{ab}/{cd}/{hash}.pem 加载并解密
+func (c *Connector) tryBackupKey(keyFile string) ssh.AuthMethod
 ```
 
-### P6.7 配置路径 & DI
+**备份目录结构**：
+```
+~/.assh/v2/data/keys/
+├── {ab}/
+│   └── {cd}/
+│       └── {hash[4:]}.pem            # keygen 生成的密钥（按内容 SHA256，前4字符为目录）
+├── {ab}/
+│   └── {cd}/
+│       └── {hash[4:]}.pem            # BackupKey 快照（按原始路径 SHA256，前4字符为目录）
+└── ...
+```
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P6.7-a KeysDir 路径 | `config/path.go` | 新增 `KeysDir = "~/.assh/v2/data/keys"` |
-| P6.7-b DI 注入 — assh | `main.go` | 创建 KeyManager + KeyService + KnownServerRecorder，注入 cmd.NewApp() |
-| P6.7-c DI 注入 — assh-fs | `cmd/fs/main.go` | 如有需要，同步注入 KeyService |
-| P6.7-d App 签名变更 | `cmd/app.go` | NewApp 增加 `*service.KeyService` |
-| **验证** | `go build ./... && go vet ./...` | |
+**main.go 注入顺序**：
+```
+1. 创建 KeyManager（获取 passphrase）
+2. 创建 ConnectorWithPassphrase（注入 passphrase）
+3. 创建 ConnectService（注入带 passphrase 的 Connector）
+```
+
+### P6.7 配置路径 & DI ✅
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P6.7-a KeysDir 路径 | `config/path.go` | 新增 `KeysDir = "~/.assh/v2/data/keys"` | ✅ |
+| P6.7-b DI 注入 — assh | `main.go` | 创建 KeyManager → ConnectorWithPassphrase → ConnectService，注入 cmd.NewApp() | ✅ |
+| P6.7-c DI 注入 — assh-fs | `cmd/fs/main.go` | assh-fs 无 keygen，使用 NewConnector() 无 passphrase（备份优先策略不可用） | ⏳ |
+| P6.7-d App 签名变更 | `cmd/app.go` | NewApp 增加 `*service.KeyService` + `port.KeyManager` 参数 | ✅ |
+| **验证** | `go build ./... && go test ./... -v` | 编译+全量测试通过 | ✅ |
 
 ---
 

@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 20 |
+| accepted | 27 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -39,6 +39,9 @@
 | ADR-022 | Phase 5 SFTP 功能拆分为F1-F28验收标准 | accepted | 2026-05-10 |
 | ADR-023 | 文件名规范：xxx → BUG-XXX-标题.md | accepted | 2026-05-10 |
 | ADR-024 | v1→v2 配置导入指令 | accepted | 2026-05-10 |
+| ADR-025 | assh keygen ssh-keygen 参数对齐 | accepted | 2026-05-12 |
+| ADR-026 | SSH 连接密钥备份优先策略 | accepted | 2026-05-13 |
+| ADR-027 | 简化 SSH 认证策略 — 去除两轮认证回退 | accepted | 2026-05-13 |
 
 ## 新增 ADR
 
@@ -120,7 +123,30 @@ YYYY-MM-DD
 - `assh`：SSH 客户端主二进制（shell/run/bc/server 管理）
 - `assh-fs`：文件系统工具独立二进制（push/pull/sftp 交互）
 - 共享核心：`asshc/` 下所有 domain/port/service/infra 模块
-- 共享初始化：`cmd/bootstrap.go` 提供 `NewAppComponents()` 
+- 共享初始化：`cmd/bootstrap.go` 提供 `NewAppComponents()`
 - 短期承载 SFTP 文件传输，未来可扩展挂载功能（Phase 11）
 
 详细内容见对应 ADR 文件。
+
+## Phase 6 ADR 变更摘要
+
+本次 Phase 6 引入的关键架构决策：
+
+| ADR | 变更 | 影响 |
+|-----|------|------|
+| ADR-020 | 阶段编号调整：插入Phase 6密钥管理 | Phase 编号重排 |
+| ADR-025 | **ssh-keygen 参数对齐**：新增 `-f`/`-C`/`-N` 参数、`Generate`/`GenerateToPath`/`GenerateAndDeploy` 接口签名增加 `comment` 参数、`keygenInteractive` 无参交互式向导 | Port/infra/service/CLI 四层传导、mock + 测试更新（37 处）|
+| ADR-026 | **SSH 连接密钥备份优先策略**：Connector 持有 accountPassphrase + `tryBackupKey` + 三层嵌套目录备份优先 | `sshinfra/client.go` 新增 passphrase 字段/方法、`connect.go` 签名变更、`main.go` 注入顺序调整 |
+| ADR-027 | **简化 SSH 认证策略**：去除两轮认证回退 | 认证流程简化，减少延迟和日志噪声 |
+
+详细内容见对应 ADR 文件。
+
+## Phase 7 ADR 变更摘要
+
+本次 Phase 7 引入的关键架构决策：
+
+| ADR | 变更 | 影响 |
+|-----|------|------|
+| ADR-028 | 代理 & 隧道架构设计（待创建） | TBD |
+
+详情待 Phase 7 设计完成后补充。

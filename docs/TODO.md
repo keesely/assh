@@ -728,41 +728,121 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 
 ---
 
-### 📝 Phase 6: 密钥管理 (Key Management)
+### 🔄 Phase 6: 密钥管理 (Key Management)
 
 目标：实现 SSH 密钥自动生成、加密存储、轮换管理，支持 `-K`/`--keygen` 快捷生成
 
 详情：参见 [docs/modules/key-management.md](modules/key-management.md)
 
-依赖：Phase 2 (SQLite) + Phase 3 (SSH AuthMethod)
+依赖：Phase 2 (SQLite) + Phase 3 (SSH) + Phase 4 (CLI) — 不依赖 Phase 5 (SFTP)
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| K.1 KeyManager 接口 | `asshc/port/keymgr.go` | 密钥生成/读取/存储接口 |
-| K.2 RSA/Ed25519 生成 | `asshc/infra/keymgr/generate.go` | `ssh.MarshalPrivateKey` 生成密钥对 |
-| K.3 加密存储 | `asshc/infra/keymgr/encrypted.go` | 用账号密码作为 passphrase 加密 |
-| K.4 KeyService | `asshc/service/key.go` | 密钥管理用例编排 |
-| K.5 known-servers 表 | `asshc/infra/store/known.go` | ADR-018: 记录直接连接+密钥路径 |
-| K.6 SSH 客户端修改 | `asshc/infra/ssh/dial.go` | 自动检测已存密钥并注入 |
-| K.7 keygen 命令 | `cmd/keygen.go` | `-K`/`--keygen` 标记 + `assh keygen` 子命令 |
-| K.8 密钥轮换 | `asshc/service/key.go` | 重新生成并替换已知服务器密钥 |
-| **验证**: `go test ./asshc/... -v` | | |
+**阶段优先级**: 先 known-servers 表 → KeyManager 接口 → infra 层 → service 层 → CLI 命令 → 集成
 
-### 📝 Phase 7: 代理 & 隧道
+| 编号 | 任务 | 文件名 | 说明 | 优先级 |
+|------|------|--------|------|--------|
+| P6.1 | KeyManager 接口 | `asshc/port/keymanager.go` | Generate/DeployPublicKey/Backup/Lookup 接口 | ✅ |
+| P6.2-a | 密钥生成 | `asshc/infra/keymgr/generate.go` | RSA/Ed25519/ECDSA 生成，OpenSSH 格式，指纹计算 | ✅ |
+| P6.2-b | 公钥部署 | `asshc/service/deploy.go` | DeployService 部署公钥到 ~/.ssh/authorized_keys，幂等实现 | ✅ |
+| P6.2-c | 密钥备份 | `asshc/infra/keymgr/backup.go` | 指纹命名→复制→data/keys/索引维护 | ✅ |
+| P6.2-d | 单元测试 | `asshc/infra/keymgr/*_test.go` | 56 个测试覆盖 Generate/GenerateToPath/Backup/BackupPath/KeyManager | ✅ |
+| P6.3 | KeyService | `asshc/service/key.go` | GenerateAndDeploy / HandleKeyFlag 用例编排 | ✅ |
+| P6.3-b | 单元测试 | `asshc/service/key_test.go` | Mock KeyManager + Mock ServerRepository (16 个测试) | ✅ |
+| P6.4 | keygen 命令 | `cmd/keygen.go` | `assh keygen <server> [--type] [--bits]` 命令，三种模式 + ssh-keygen 参数对齐 | ✅ |
+| P6.4-c | add/set -k 增强 | `cmd/server.go` | 空参/stdin/备份逻辑，集成 HandleKeyFlag | ✅ |
+| P6.4-d | GenerateToPath 接口+实现+CLI | `asshc/port/keymanager.go` + `asshc/infra/keymgr/generate.go` + `cmd/keygen.go` | `GenerateToPath` 接口在 port、实现 infra/keymgr、`--output`/-O/-f 独立生成模式，新增 `-C` comment/`-N` passphrase 参数和交互式向导 | ✅ |
 
-目标：实现 SOCKS5 代理、端口转发、SSH 隧道
+**P6.4 详细记录**（2026-05-12 ssh-keygen 参数对齐）：
 
-依赖：Phase 3 (ssh)
+| 任务 | 说明 | 状态 |
+|------|------|:----:|
+| P6.4-a `-f` 别名 | `--output` 的 `-f` 别名，对齐 ssh-keygen | ✅ |
+| P6.4-b `-C`/`--comment` | 密钥注释参数，透传全栈 (port→infra→service→CLI) | ✅ |
+| P6.4-c `-N`/`--new-passphrase` | CLI passphrase 优先于 account password | ✅ |
+| P6.4-d 无参交互式向导 | `assh keygen` 无参时触发 ssh-keygen 风格交互式向导 | ✅ |
+| P6.4-e comment 默认值 | 未提供 `-C` 时默认 "user@host" | ✅ |
 
-| 任务 | 文件 | 说明 |
-|------|------|------|
-| P7.1 Proxy 接口 | `asshc/port/proxy.go` | Proxy 接口 |
-| P7.2 SOCKS5 | `asshc/infra/proxy/socks5.go` | SOCKS5 代理 |
-| P7.3 端口转发 | `asshc/infra/proxy/port.go` | 本地/远程端口转发 |
-| P7.4 SSH 隧道 | `asshc/infra/tunnel/tunnel.go` | 隧道管理 |
-| P7.5 代理服务 | `asshc/service/proxy.go` | ProxyService |
-| P7.6 代理命令 | `cmd/proxy.go` | proxy/hostproxy/localproxy |
-| **验证**: `go test ./asshc/... -v` | |
+**参数规格**（对齐 ssh-keygen）：
+```
+assh keygen -f <path>         # 独立生成模式（-f = --output = -O）
+assh keygen -C "comment"      # 密钥注释
+assh keygen -N "passphrase"   # 私钥密码（覆盖 account password）
+assh keygen                   # 无参 → 交互式向导
+assh keygen -H host -u user -P pass  # 直连模式
+```
+
+**接口签名变更**：
+```go
+// port/keymanager.go
+Generate(keyType string, bits int, passphrase []byte, comment string) (privPath string, pubKey []byte, fingerprint string, err error)
+GenerateToPath(keyType string, bits int, passphrase []byte, comment string, outputPath string) (pubKey []byte, fingerprint string, err error)
+
+// service/key.go
+GenerateAndDeploy(name string, keyType string, bits int, comment string) error
+```
+
+**ADR-025 决策记录**：参见 [docs/adrs/025-ssh-keygen-参数对齐.md](adrs/025-ssh-keygen-参数对齐.md)
+| P6.5-a | known-servers 接口扩展 | `asshc/port/repository.go` | 新增 KnownServerRecorder 接口 | ✅ |
+| P6.5-b | known-servers 数据库迁移 | `asshc/infra/store/db.go` | migrate() 新增 known_servers 建表 | ✅ |
+| P6.5-c | known-servers 存储实现 | `asshc/infra/store/known.go` | 新建文件：upsert/lookup 实现 | ✅ |
+| P6.5-d | 直连接入点 | `cmd/connect.go` + `cmd/app.go` | 直连成功后 RecordDirectConnect() | ✅ |
+| P6.5-e | keygen 关联 known-servers | `cmd/keygen.go` + `asshc/service/deploy.go` | 直连 keygen 后调用 DeployService.DeployToServer + RecordDirectConnect + UpdateKeyBackupPath | ✅ |
+| P6.6-a | SSH 备份优先策略 | `asshc/infra/ssh/client.go` | Connector 持有 accountPassphrase + tryBackupKey + data/keys/{hash}/key.pem 备份优先 | ✅ |
+| P6.6-b | known-servers 密钥查找 | `asshc/infra/ssh/client.go` + `asshc/service/connect.go` | 直连时查 known_servers 的 key_backup_path + ConnectDirect 新增 keyBackupPath 参数 | ✅ |
+| P6.7-a | KeysDir 路径 | `config/path.go` | 新增 KeysDir 常量 | ✅ |
+| P6.7-b | DI 注入 — assh | `main.go` | 创建 KeyManager + KeyService，注入 cmd.NewApp() | ✅ |
+| P6.7-c | DI 注入 — assh-fs | `cmd/fs/main.go` | assh-fs 无需 keygen，传递 nil | ⭐⭐ (optional) |
+| P6.7-d | App 签名变更 | `cmd/app.go` | NewApp 增加 `*service.KeyService` + `port.KeyManager` 参数 | ✅ |
+| **P1** | **验证** | `go build ./... && go test ./... -v` | **编译+测试全部通过** | **必选** |
+
+---
+
+### ✅ Phase 6: 密钥管理 — 完成 (2026-05-13)
+
+全部任务完成，验收通过。详见 [modules/key-management.md](modules/key-management.md)。
+
+---
+
+### 🔄 Phase 7: 代理 & 隧道
+
+**目标**：实现 SOCKS5 代理、端口转发、SSH 隧道，支持安全翻墙和远程端口转发
+
+**依赖**：Phase 3 (SSH连接层)、Phase 4 (CLI命令组装)
+
+**重要约束**：隧道功能运行中需要持续驻留进程，不能阻塞 CLI 正常退出。架构上需处理：
+- 后台任务管理（daemon/goroutine 生命周期）
+- 端口监听和转发中断恢复
+- 多隧道并发管理
+
+**阶段优先级**：Proxy 接口 → SOCKS5 实现 → 本地端口转发 → 远程端口转发 → SSH 隧道管理 → 命令组装
+
+| 编号 | 任务 | 文件 | 说明 | 优先级 |
+|------|------|------|------|--------|
+| P7.1 | Proxy 接口定义 | `asshc/port/proxy.go` | Proxy/PortForward/Tunnel 接口定义 | ✅ |
+| P7.2-a | SOCKS5 服务端 | `asshc/infra/proxy/socks5.go` | SOCKS5 协议实现（RFC 1928） | ⏳ |
+| P7.2-b | SOCKS5 命令行 | `cmd/tunnel.go` | `assh proxy` / `assh tunnel` 命令 | ⏳ |
+| P7.3-a | 本地端口转发 | `asshc/infra/proxy/port.go` | -L 本地转发（ssh -L 等价） | ⏳ |
+| P7.3-b | 远程端口转发 | `asshc/infra/proxy/port.go` | -R 远程转发（ssh -R 等价） | ⏳ |
+| P7.4 | SSH 隧道管理 | `asshc/infra/tunnel/tunnel.go` | 隧道生命周期管理（启动/停止/会话保持/重连） | ⏳ |
+| P7.5 | 代理服务编排 | `asshc/service/proxy.go` | ProxyService 用例编排 | ⏳ |
+| P7.6 | 隧道命令 | `cmd/tunnel.go` | `assh tunnel [start\|stop\|list]` | ⏳ |
+| P7.7 | 单元测试 | `asshc/infra/proxy/*_test.go` + `asshc/service/proxy_test.go` | SOCKS5/端口转发/隧道测试 | ⏳ |
+| P7.8 | DI 注入 | `main.go` + `cmd/bootstrap.go` | 注册隧道命令 | ⏳ |
+| **P1** | **验证** | `go build ./... && go test ./...` | | **必选** |
+
+**详细设计**：见 [modules/proxy-tunnel.md](modules/proxy-tunnel.md)
+
+**ADR 记录**：见 [docs/adrs.md](../adrs.md)（待创建 ADR-028）
+
+#### 参数规格
+
+```
+assh proxy <server>              # 启动 SOCKS5 代理（默认 :1080）
+assh proxy <server> -p 8080     # 指定端口
+assh tunnel start <server> -L local:remote  # 本地端口转发
+assh tunnel start <server> -R remote:local  # 远程端口转发
+assh tunnel stop <id>            # 停止隧道
+assh tunnel list                 # 列出活跃隧道
+```
 
 ### 📝 Phase 8: 云同步 (Qiniu)
 
@@ -841,6 +921,54 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 | P12.6 回滚支持 | 升级失败时回滚到上一版本 |
 | **验证**: `go test ./asshc/... -v` |
 
+### 📝 Phase 13: 远程命令执行增强
+
+目标：增强 `run` 和 `bc` 命令，添加超时、输出格式化、stdout/stderr 分离等功能
+
+依赖： Phase 3 (SSH) + Phase 4 (CLI)
+
+**现状分析：**
+
+| 功能 | run | bc | 状态 |
+|------|-----|-----|------|
+| 单服务器命令执行 | ✅ | - | 已有 |
+| 多服务器并发执行 | - | ✅ | 已有 |
+| 命令超时 | ❌ | ❌ | 缺失 |
+| stdout/stderr 分离 | ❌ | ❌ | 缺失 |
+| 输出格式化 (JSON/Table) | ❌ | ✅ JSON | 部分 |
+| 管道支持 (stdin) | ❌ | ❌ | 缺失 |
+| 变量替换 | ❌ | ❌ | 缺失 |
+| 异步/后台任务 | ❌ | ❌ | 缺失 |
+| 命令历史 | ❌ | ❌ | 缺失 |
+
+| 编号 | 任务 | 文件 | 说明 | 优先级 |
+|------|------|------|------|--------|
+| P13.1 | 命令超时 | `asshc/port/session.go` + `asshc/infra/ssh/session.go` | 新增 `RunWithTimeout` / `RunWithOutputTimeout` 方法 | ⏳ |
+| P13.2 | stdout/stderr 分离 | `asshc/service/connect.go` | 新增 `RunWithStderr` 方法，返回 stdout + stderr | ⏳ |
+| P13.3 | 输出格式化 | `cmd/connect.go` | run/bc 添加 `--format json/table/plain` 参数 | ⏳ |
+| P13.4 | run 超时/格式化 | `cmd/connect.go` | run 命令添加 `--timeout` / `--format` 支持 | ⏳ |
+| P13.5 | bc 超时/格式化 | `cmd/connect.go` | bc 命令添加 `--timeout` / `--format` 支持 | ⏳ |
+| P13.6 | 变量替换 | `cmd/connect.go` | 支持 `{{.Host}}` / `{{.User}}` / `{{.Name}}` 替换 | ⏳ |
+| **验证** | `go test ./asshc/... -v` | | | |
+
+**接口变更：**
+```go
+// port/session.go
+type SSHSession interface {
+    // 现有方法
+    Shell(client *ssh.Client) error
+    Run(client *ssh.Client, cmd string) error
+    RunWithOutput(client *ssh.Client, cmd string) (string, error)
+
+    // P13.1 新增
+    RunWithTimeout(client *ssh.Client, cmd string, timeout time.Duration) error
+    RunWithOutputTimeout(client *ssh.Client, cmd string, timeout time.Duration) (string, error)
+
+    // P13.2 新增
+    RunWithStderr(client *ssh.Client, cmd string) (stdout, stderr string, err error)
+}
+```
+
 ### 📝 实验阶段: 虚拟命令投放与执行测试
 
 目标：实验性功能，测试虚拟命令（模拟命令）的投放和执行机制
@@ -874,7 +1002,8 @@ Phase 0 (骨架)
                     ├── Phase 10 (跳板机)
                     ├── Phase 11 (远程挂载)
                     ├── Phase 12 (自动更新)
-                    └── 实验阶段 (虚拟命令)
+                    └── Phase 13 (命令执行增强)
+                          └── 实验阶段 (虚拟命令)
 ```
 
 ## 验证策略
