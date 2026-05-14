@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 27 |
+| accepted | 29 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -42,6 +42,8 @@
 | ADR-025 | assh keygen ssh-keygen 参数对齐 | accepted | 2026-05-12 |
 | ADR-026 | SSH 连接密钥备份优先策略 | accepted | 2026-05-13 |
 | ADR-027 | 简化 SSH 认证策略 — 去除两轮认证回退 | accepted | 2026-05-13 |
+| ADR-028 | 代理 & 隧道架构设计（SOCKS5/端口转发/隧道管理） | accepted | 2026-05-13 |
+| ADR-029 | Smart Proxy 智能代理系统（正向代理+AutoProxy规则+透明日志+多端口规则） | proposed | 2026-05-13 |
 
 ## 新增 ADR
 
@@ -147,6 +149,7 @@ YYYY-MM-DD
 
 | ADR | 变更 | 影响 |
 |-----|------|------|
-| ADR-028 | 代理 & 隧道架构设计（待创建） | TBD |
+| ADR-028 | **代理 & 隧道架构设计**：SOCKS5（NO AUTH + USERNAME/PASSWORD）、本地/远程端口转发（完整 [bind_addr]:port:host:hostport 规格）、TunnelManager 生命周期管理、Fork+PID 文件 daemon 模式、CLI 参数+配置驱动重连、CLI 拆分 proxy/tunnel 两命令组 | port/proxy.go、infra/proxy/（socks5.go+port.go）、service/proxy.go、cmd/proxy.go、cmd/tunnel.go 共约 1300+ 行新增 |
+| ADR-029 | **Smart Proxy 智能代理系统**：正向代理统一 SOCKS5+HTTP 入口、AutoProxy 规则引擎（GFWList 兼容）、透明日志（全链路请求/响应记录）、多端口规则（批量参数配置） | 新增 port/rules.go、port/logger.go、infra/proxy/rules/、infra/proxy/http_connect.go、infra/proxy/logger.go，扩展 service/proxy.go、cmd/proxy.go |
 
-详情待 Phase 7 设计完成后补充。
+详细内容见 [ADR-028](adrs/028-proxy-tunnel-architecture.md) 和 [ADR-029](adrs/029-smart-proxy-system.md)。

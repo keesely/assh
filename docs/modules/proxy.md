@@ -1,11 +1,13 @@
-# Proxy Module
+# Proxy Module（已迁移）
 
-**文件**: `asshv2/asshc/infra/proxy/socks5.go` + `asshv2/asshc/infra/proxy/port.go` + `asshv2/asshc/infra/tunnel/tunnel.go`
+> ⚠️ 本文档已废弃，请移步 [proxy-tunnel.md](proxy-tunnel.md) 查看完整的 Phase 7 代理 & 隧道设计文档。
 
-## 功能
+## 迁移说明
 
-支持多种代理模式：
+- 旧文件 `infra/tunnel/tunnel.go` → 合并至 `infra/proxy/`
+- 旧 `hostproxy` 命令 → `tunnel` 命令组
+- 旧 `localproxy` 命令 → `tunnel` 命令组
 
-- **SOCKS5 代理**：`proxy` 命令
-- **端口转发**：`hostproxy` 命令（远程端口 → 本地端口）
-- **SSH 隧道**：`localproxy` 命令
+详细信息见：
+- [代理 & 隧道设计文档](proxy-tunnel.md)
+- [ADR-028: 代理 & 隧道架构设计](../adrs/028-proxy-tunnel-architecture.md)
