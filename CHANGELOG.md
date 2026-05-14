@@ -37,6 +37,89 @@
 - ADR-028: 代理&隧道基础架构 (accepted)
 - ADR-029: Smart Proxy 智能代理系统 (accepted)
 
+### Phase 6: 密钥管理 (Key Management)
+
+#### 接口层 (`asshc/port/`)
+- `keymanager.go` — KeyManager 接口 (Generate/GenerateToPath/DeployPublicKey/Backup/Lookup)
+- `repository.go` — 新增 KnownServerRecorder 接口
+
+#### 基础设施层 (`asshc/infra/keymgr/`)
+- `generate.go` — 密钥生成 (RSA 2048/4096, Ed25519, ECDSA P256/P384/P521; OpenSSH 格式; 指纹 SHA256)
+  - `Generate` — 生成到默认路径 `~/.ssh/`
+  - `GenerateToPath` — 生成到指定路径 (`-f`/`--output`)
+  - 支持 passphrase 加密私钥
+- `backup.go` — 密钥备份 (指纹命名 → 复制 → data/keys/ 索引维护)
+- 56 个单元测试全部通过
+
+#### 服务编排层 (`asshc/service/`)
+- `deploy.go` — DeployService (公钥部署到 `~/.ssh/authorized_keys`, 幂等实现)
+- `key.go` — KeyService (GenerateAndDeploy / HandleKeyFlag 用例编排)
+- 16 个单元测试全部通过
+
+#### CLI 命令 (`cmd/`)
+- `keygen.go` — `assh keygen` 命令，三种模式：
+  - `assh keygen <server>` — 生成密钥 → 部署到服务器
+  - `assh keygen -f <path>` — 独立生成到指定路径
+  - `assh keygen` (无参) — 交互式向导
+  - ssh-keygen 参数对齐: `-f`/`-C comment`/`-N passphrase`/`-t type`/`-b bits`
+
+#### 数据层 (`asshc/infra/store/`)
+- `known.go` — known_servers 建表 + upsert/lookup 实现 (直连记录, 密钥路径关联)
+
+#### SSH 集成 (`asshc/infra/ssh/`)
+- `client.go` — 备份优先策略 (tryBackupKey: 先尝试 data/keys/ 备份密钥)
+
+#### DI 注入
+- `main.go` — KeyManager + KeyService 创建注入; ConnectService KeyBackupPath 传递
+- `cmd/app.go` — App 新增 keySvc 字段, 注册 keygen 命令
+
+#### 架构决策
+- ADR-025: ssh-keygen 参数对齐 (`-f`/`-C`/`-N` 全栈透传)
+- ADR-026: SSH 密钥备份优先策略 (data/keys/ → ~/.ssh/)
+- ADR-027: 简化 SSH 认证策略 (去除两轮回退)
+
+**完成时间**: 2026-05-13 | **验证**: 编译 ✅ vet ✅ 72 个测试全部通过 ✅
+
+### Phase 5: SFTP 文件传输
+
+#### 接口层 (`asshc/port/`)
+- `transfer.go` — FileTransfer 接口 (Push/Pull/List/Remove/Mkdir + PushBatch/PullBatch)
+  - `TransferProgress` 回调、`TransferResult`、`FileInfo`
+
+#### 基础设施层 (`asshc/infra/sftp/`)
+- `client.go` — SFTPSession 封装 (创建/关闭/重连; 并发读写 MaxConcurrentRequestsPerFile=64)
+- `upload.go` — Push 实现 (单文件/目录递归 `-r`/断点续传 `--resume`/Hash Header/Glob 匹配/进度回调)
+- `download.go` — Pull 实现 (同上对称)
+- `header.go` — 256B Hash Header (Magic:4B + Version:2B + HashType:2B + OrigSize:8B + SHA256:64B + Reserved:176B)
+- `ops.go` — 远程操作 (List/Remove/Mkdir)
+- `progress.go` — 进度条显示 (百分比/速率/ETA/传输字节)
+- `verify.go` — 传输后验证 (大小比对始终执行, SHA256 可选 --checksum)
+
+#### 服务编排层 (`asshc/service/`)
+- `transfer.go` — TransferService (PushFile/PullFile/ListRemote/RemoveRemote/MkdirRemote)
+  - 覆盖策略: 询问/--force强制/--skip跳过
+  - 多文件 goroutine 池并发 (默认 3)
+
+#### CLI 命令 (`cmd/`)
+- `sftp_cmd.go` — push/pull/交互式 FS 命令定义 (assh + assh-fs 共享)
+  - `assh-fs push <server> <local> <remote> [-r] [--resume] [-f/--skip] [--checksum]`
+  - `assh-fs pull <server> <remote> [local] [-r] [--resume]`
+  - `assh-fs <server>` — 交互式 SFTP 会话 (ls/cd/get/put/chmod/...)
+  - 直连参数: `-H/-u/-p/-P/-i/-k`
+- `fs/main.go` — assh-fs 独立入口 (DI 组合根)
+- `bootstrap.go` — NewAppComponents() 公共初始化逻辑
+
+#### CLI 增强
+- `main.go` — expandCombinedFlags() 组合短参数预处理 (RQ-001: `-qnt` → `-q -n -t`)
+- SSH 认证回退: `asshc/infra/ssh/client.go` — key 失败后 password-only 回退 (BUG-010)
+
+#### 验证
+- 28 项验收测试全部通过 (F1-F28)
+- 编译 ✅ vet ✅ 测试 ✅
+- ADR-017~024 记录架构决策
+
+**完成时间**: 2026-05-11 | **验收**: F1-F28 全部通过 ✅
+
 ### Phase 4: CLI 命令组装
 
 - `cmd/server.go` — 服务器管理命令
