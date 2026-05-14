@@ -17,6 +17,7 @@ import (
 
 	"assh/cmd"
 	"assh/asshc/infra/keymgr"
+	"assh/asshc/infra/proxy"
 	sshinfra "assh/asshc/infra/ssh"
 	"assh/asshc/infra/store"
 	"assh/asshc/service"
@@ -73,8 +74,12 @@ func main() {
 	// 6. 创建密钥管理器服务
 	keySvc := service.NewKeyService(km, repo, connector)
 
-	// 7. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km)
+	// 7. 创建隧道管理器和代理服务（Phase 7）
+	tunnelMgr := proxy.NewTunnelManager()
+	proxySvc := service.NewProxyService(repo, connector, connectSvc, tunnelMgr)
+
+	// 8. 创建 CLI 应用并运行
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
