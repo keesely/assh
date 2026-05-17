@@ -1060,7 +1060,26 @@ type SSHSession interface {
 }
 ```
 
-### 🔬 实验阶段: AI 安全检查 (Phase X)
+### 🔬 实验阶段计划
+
+实验阶段（Phase X）用于探索验证前瞻性功能，与主版本线（Phase 0-13）并行开发。
+
+**定位**:
+- **实验性**: 验证概念和用户需求，不保证最终进入主版本
+- **独立性**: 每个实验子阶段（X1, X2...）独立开发，互不依赖
+- **低门槛**: 允许快速原型验证，不要求完整三层架构
+- **可升格**: 验证成功后可升格为主版本线的新 Phase
+
+**子阶段总览**:
+
+| 编号 | 内容 | 状态 | 优先级 |
+|------|------|:----:|:------:|
+| X1 | AI 安全检查 — 通过大模型自动生成漏洞检测脚本并执行 | 🆕 进行中 | 高 |
+| X2 | 虚拟命令投放与执行 — 虚拟命令的下发、跟踪和结果收集 | ⏳ 排队中 | 低 |
+
+**分支策略**: 实验阶段在 `dev/v2.0.0-phase-9` 分支上开发（与 Phase 9 共用），独立包路径避免冲突。
+
+### 🆕 X1: AI 安全检查
 
 目标：通过 AI 大模型自动生成漏洞检测脚本并执行安全检查
 
@@ -1081,16 +1100,16 @@ type SSHSession interface {
 
 | 编号 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|:----:|
-| X.1 | AI 配置 | `config/` (合入现有配置) | OpenAI 兼容 API 配置 (endpoint/model/key/params) | ⬜ |
-| X.2 | AI 接口定义 | `asshc/port/ai.go` | AIProvider 接口 (Generate/SecureCheck) | ⬜ |
-| X.3 | AI 客户端 | `asshc/infra/ai/openai.go` | OpenAI 兼容 API 调用实现 | ⬜ |
-| X.4 | CVE 查询 | `asshc/infra/cve/nvd.go` | NVD NIST API CVE 详情自动查询 | ⬜ |
-| X.5 | 漏洞领域实体 | `asshc/domain/vuln.go` | VulnCheck/Script/Report 等领域类型 | ⬜ |
-| X.6 | 安全审查引擎 | `asshc/infra/security/scanner.go` | 脚本自动安全审查 (危险命令/路径/操作) | ⬜ |
-| X.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ⬜ |
-| X.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ⬜ |
-| X.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ⬜ |
-| X.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ⬜ |
+| X1.1 | AI 配置 | `config/` (合入现有配置) | OpenAI 兼容 API 配置 (endpoint/model/key/params) | ⬜ |
+| X1.2 | AI 接口定义 | `asshc/port/ai.go` | AIProvider 接口 (Generate/SecureCheck) | ⬜ |
+| X1.3 | AI 客户端 | `asshc/infra/ai/openai.go` | OpenAI 兼容 API 调用实现 | ⬜ |
+| X1.4 | CVE 查询 | `asshc/infra/cve/nvd.go` | NVD NIST API CVE 详情自动查询 | ⬜ |
+| X1.5 | 漏洞领域实体 | `asshc/domain/vuln.go` | VulnCheck/Script/Report 等领域类型 | ⬜ |
+| X1.6 | 安全审查引擎 | `asshc/infra/security/scanner.go` | 脚本自动安全审查 (危险命令/路径/操作) | ⬜ |
+| X1.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ⬜ |
+| X1.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ⬜ |
+| X1.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ⬜ |
+| X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ⬜ |
 | **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ⬜ |
 
 **命令使用预览**:
@@ -1105,22 +1124,22 @@ assh security vuln-check -s myserver "检查是否存在未修补的 Log4j 漏�
 ls ~/.assh/security/scripts/
 ```
 
-### 📝 实验阶段: 虚拟命令投放与执行测试
+### ⏳ X2: 虚拟命令投放与执行
 
 目标：实验性功能，测试虚拟命令（模拟命令）的投放和执行机制
 
-依赖： Phase 4 (CLI) + 实验性设计
+依赖：Phase 4 (CLI) + 实验性设计
 
 > 本阶段为探索性实验，用于验证概念和用户需求，不保证最终实现。
 
-| 任务 | 说明 |
-|------|------|
-| X.1 虚拟命令定义 | 定义什么是虚拟命令（不实际执行，仅记录） |
-| X.2 命令投放系统 | 通过配置或远程下发虚拟命令到客户端 |
-| X.3 命令执行跟踪 | 记录虚拟命令的执行状态（pending/running/completed） |
-| X.4 结果收集 | 收集虚拟命令的执行结果并上报 |
-| X.5 实验命令 | `cmd/experiment.go` — 投放、执行、结果查看 |
-| **验证**: 手动测试 |
+| 编号 | 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|:----:|
+| X2.1 | 虚拟命令定义 | `asshc/domain/vcmd.go` | 定义虚拟命令结构（不实际执行，仅记录） | ⏳ |
+| X2.2 | 命令投放系统 | `asshc/service/vcmd.go` | 通过配置或远程下发虚拟命令到客户端 | ⏳ |
+| X2.3 | 命令执行跟踪 | `asshc/service/vcmd.go` | 记录虚拟命令的执行状态 (pending/running/completed) | ⏳ |
+| X2.4 | 结果收集 | `asshc/service/vcmd.go` | 收集虚拟命令的执行结果并上报 | ⏳ |
+| X2.5 | 实验命令 | `cmd/experiment.go` | 投放、执行、结果查看 | ⏳ |
+| **验证** | 手动测试 | | | ⏳ |
 
 ## 依赖顺序
 
@@ -1139,7 +1158,9 @@ Phase 0 (骨架)
                     ├── Phase 11 (远程挂载)
                     ├── Phase 12 (自动更新)
                     └── Phase 13 (命令执行增强)
-                          └── 实验阶段 (虚拟命令)
+                          └── 实验阶段 (Phase X)
+                                ├── X1: AI 安全检查
+                                └── X2: 虚拟命令投放与执行
 ```
 
 ## 验证策略
