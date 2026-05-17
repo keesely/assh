@@ -950,21 +950,21 @@ assh sync pull
 assh sync history [-n 10]
 ```
 
-### 📝 Phase 9: 服务器健康检查
+### 🔄 Phase 9: 服务器健康检查 — 进行中 (2026-05-17)
 
 目标：实现服务器批量健康检查和单一检查功能
 
 依赖：Phase 3 (ssh) + Phase 4 (CLI)
 
-| 任务 | 说明 |
-|------|------|
-| P9.1 健康检查接口 | `asshc/port/health.go` — HealthChecker 接口 |
-| P9.2 SSH 健康检查 | `asshc/infra/ssh/health.go` — 连接检测、延迟检测 |
-| P9.3 健康检查服务 | `asshc/service/health.go` — HealthService |
-| P9.4 检查命令 | `cmd/health.go` — health check/list 命令 |
-| P9.5 列表检查 | 批量检查服务器组，支持并发 |
-| P9.6 单一检查 | 指定单个服务器检查并输出详细结果 |
-| **验证**: `go test ./asshc/... -v` |
+| 编号 | 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|:----:|
+| P9.1 | 健康检查接口 | `asshc/port/health.go` | HealthChecker 接口定义 | ⬜ |
+| P9.2 | SSH 健康检查 | `asshc/infra/ssh/health.go` | 连接检测、延迟检测实现 | ⬜ |
+| P9.3 | 健康检查服务 | `asshc/service/health.go` | HealthService 编排层 | ⬜ |
+| P9.4 | 检查命令 | `cmd/health.go` | health check/list 命令 | ⬜ |
+| P9.5 | 列表检查 | — | 批量检查服务器组，支持并发 | ⬜ |
+| P9.6 | 单一检查 | — | 指定单个服务器检查并输出详细结果 | ⬜ |
+| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ⬜ |
 
 ### 📝 Phase 10: 跳板机/堡垒机支持
 
