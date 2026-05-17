@@ -107,6 +107,31 @@ func (s *Store) migrate() error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_known_servers_host_port ON known_servers(host, port);
+
+		CREATE TABLE IF NOT EXISTS cloud_accounts (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			name        TEXT NOT NULL DEFAULT 'default',
+			type        TEXT NOT NULL DEFAULT 'qiniu',
+			access_key  TEXT NOT NULL,
+			secret_key  BLOB NOT NULL,
+			bucket      TEXT NOT NULL,
+			zone        TEXT NOT NULL DEFAULT 'huadong',
+			enabled     INTEGER NOT NULL DEFAULT 1,
+			created_at  TEXT DEFAULT (datetime('now')),
+			updated_at  TEXT DEFAULT (datetime('now')),
+			UNIQUE(name)
+		);
+
+		CREATE TABLE IF NOT EXISTS sync_history (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			direction   TEXT NOT NULL,
+			status      TEXT NOT NULL,
+			message     TEXT,
+			pushed      INTEGER DEFAULT 0,
+			updated     INTEGER DEFAULT 0,
+			conflicts   INTEGER DEFAULT 0,
+			timestamp   TEXT DEFAULT (datetime('now'))
+		);
 	`)
 
 	if err != nil {

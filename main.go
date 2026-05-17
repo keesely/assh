@@ -20,6 +20,8 @@ import (
 	"assh/asshc/infra/proxy"
 	sshinfra "assh/asshc/infra/ssh"
 	"assh/asshc/infra/store"
+	qiniusync "assh/asshc/infra/sync/qiniu"
+	"assh/asshc/port"
 	"assh/asshc/service"
 	"assh/config"
 )
@@ -78,8 +80,13 @@ func main() {
 	tunnelMgr := proxy.NewTunnelManager()
 	proxySvc := service.NewProxyService(repo, connector, connectSvc, tunnelMgr)
 
-	// 8. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc)
+	// 8. 创建云同步服务（Phase 8）
+	// 初始使用空账户，实际账户在 Login 时从 DB 获取
+	syncer := qiniusync.NewSyncer(port.SyncAccount{})
+	syncSvc := service.NewSyncService(syncer, repo)
+
+	// 9. 创建 CLI 应用并运行
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
