@@ -1060,6 +1060,51 @@ type SSHSession interface {
 }
 ```
 
+### 🔬 实验阶段: AI 安全检查 (Phase X)
+
+目标：通过 AI 大模型自动生成漏洞检测脚本并执行安全检查
+
+依赖：Phase 3 (ssh) + Phase 4 (CLI)
+
+> 本阶段为探索性实验，用于验证 AI 驱动的安全检测概念，不保证最终实现。
+
+**设计文档**: `docs/worklogs/2026-05-17-PhaseX-AI-Security-Design.md`
+
+**设计决策**:
+- **AI 接口**: OpenAI 兼容 API (可配置 endpoint/model/api_key/max_tokens/temperature)
+- **输入**: CVE 编号 + 自由文本描述，自动从 NVD NIST 查询 CVE 详情
+- **安全审查**: 双重审查 — 自动规则过滤 + 高风险操作用户确认
+- **执行**: SSH 远程执行 + 本地脚本保存 (`~/.assh/security/scripts/`)
+- **输出**: 终端显示 + Markdown 报告文件
+- **日志**: 完整保存 (脚本 + 执行日志 + 结果 + 时间戳)
+- **目标**: 指定单个服务器 (`-s <server>`)
+
+| 编号 | 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|:----:|
+| X.1 | AI 配置 | `config/` (合入现有配置) | OpenAI 兼容 API 配置 (endpoint/model/key/params) | ⬜ |
+| X.2 | AI 接口定义 | `asshc/port/ai.go` | AIProvider 接口 (Generate/SecureCheck) | ⬜ |
+| X.3 | AI 客户端 | `asshc/infra/ai/openai.go` | OpenAI 兼容 API 调用实现 | ⬜ |
+| X.4 | CVE 查询 | `asshc/infra/cve/nvd.go` | NVD NIST API CVE 详情自动查询 | ⬜ |
+| X.5 | 漏洞领域实体 | `asshc/domain/vuln.go` | VulnCheck/Script/Report 等领域类型 | ⬜ |
+| X.6 | 安全审查引擎 | `asshc/infra/security/scanner.go` | 脚本自动安全审查 (危险命令/路径/操作) | ⬜ |
+| X.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ⬜ |
+| X.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ⬜ |
+| X.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ⬜ |
+| X.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ⬜ |
+| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ⬜ |
+
+**命令使用预览**:
+```bash
+# 按 CVE 编号检查
+assh security vuln-check -s myserver "CVE-2024-3094"
+
+# 按漏洞描述检查
+assh security vuln-check -s myserver "检查是否存在未修补的 Log4j 漏洞"
+
+# 查看生成的脚本和报告
+ls ~/.assh/security/scripts/
+```
+
 ### 📝 实验阶段: 虚拟命令投放与执行测试
 
 目标：实验性功能，测试虚拟命令（模拟命令）的投放和执行机制
