@@ -20,4 +20,13 @@ var (
 	ErrInvalidVersion = errors.New("invalid version number")
 	// ErrKnownServerNotFound 表示 known_servers 表中未找到指定记录。
 	ErrKnownServerNotFound = errors.New("known server not found")
+
+	// ErrAccountNotFound 表示云账户未配置。
+	ErrAccountNotFound = errors.New("cloud account not found")
+
+	// ErrSyncFailed 表示同步操作失败。
+	ErrSyncFailed = errors.New("sync operation failed")
+
+	// ErrInvalidAccount 表示云账户凭据无效。
+	ErrInvalidAccount = errors.New("invalid cloud account credentials")
 )
