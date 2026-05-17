@@ -901,20 +901,54 @@ assh tunnel list                             # 列出活跃隧道
 | `0.0.0.0:8080:web:80` | 0.0.0.0 | 8080 | web | 80 |
 | `127.0.0.1:8443:svc:443` | 127.0.0.1 | 8443 | svc | 443 |
 
-### 🔄 Phase 8: 云同步 (Qiniu)
+### ✅ Phase 8: 云同步 (Qiniu) — 完成 (2026-05-16)
 
-目标：实现七牛云数据备份同步
+目标：实现七牛云数据备份同步，支持服务器配置的云端推送与拉取
 
-依赖：Phase 2 (storage)
+依赖：Phase 2 (storage) + Phase 4 (CLI)
+设计文档：`docs/worklogs/2026-05-16-Phase8-Design.md`
 
-| 任务 | 文件 | 来源 |
-|------|------|------|
-| P8.1 Syncer 接口 | `asshc/port/syncer.go` | 新写 |
-| P8.2 Qiniu 同步 | `asshc/infra/sync/qiniu/` | 从 `asshv2/lib/qiniu/` 移植重构 |
-| P8.3 同步服务 | `asshc/service/sync.go` | SyncService |
-| P8.4 同步命令 | `cmd/sync.go` | sync push/pull/account |
-| P8.5 清理旧代码 | 移除 `asshv2/lib/qiniu/` | |
-| **验证**: `go test ./asshc/... -v` | |
+**设计决策**：
+- 数据范围：仅服务器配置（不包含密钥/密码原文）
+- 账户管理：单账户模式
+- 同步策略：增量同步为主（版本号比较）
+- 冲突处理：保留双方，云端版本添加 `_cloud_<ts>` 后缀
+
+| 编号 | 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|:----:|
+| P8.1 | Syncer 接口 | `asshc/port/syncer.go` | Syncer 接口 + DTOs (SyncAccount/SyncData/ServerData/SyncResult/SyncObject/SyncHistory) | ✅ |
+| P8.1a | 数据库迁移 | `asshc/infra/store/db.go` | `cloud_accounts` + `sync_history` 表 | ✅ |
+| P8.1b | 账户存储 | `asshc/infra/store/account.go` | GetAccount/SetAccount/DeleteAccount/TestAccount + 加密存储 | ✅ |
+| P8.2 | Qiniu 同步实现 | `asshc/infra/sync/qiniu/qiniu.go` | `SyncObject` 实现 port.Syncer (Login/Push/Pull/List/Delete) | ✅ |
+| P8.3 | 同步服务 | `asshc/service/sync.go` | `SyncService` + `SyncStore` 接口 + Push/Pull 合并逻辑 | ✅ |
+| P8.4 | 同步命令 | `cmd/sync.go` | sync account set/show/delete/test + push/pull/history | ✅ |
+| P8.5 | 清理旧代码 | 移除 `asshv2/lib/qiniu/` | 已删除 legacy 代码 | ✅ |
+| P8.6 | DI 注入 | `main.go` + `cmd/app.go` | Syncer + SyncService 创建+注入 | ✅ |
+| **验证** | `go build ./... && go test ./... -v` | | **编译+测试全部通过** | ✅ |
+
+**同步命令使用**：
+```bash
+# 配置云账户（交互式）
+assh sync account set
+
+# 配置云账户（命令行）
+assh sync account set --access-key <AK> --secret-key <SK> --bucket <bucket> --zone huadong
+
+# 查看账户信息
+assh sync account show
+
+# 测试连接
+assh sync account test
+
+# 推送本地配置到云端
+assh sync push
+
+# 从云端拉取配置
+assh sync pull
+
+# 查看同步历史
+assh sync history [-n 10]
+```
 
 ### 📝 Phase 9: 服务器健康检查
 
