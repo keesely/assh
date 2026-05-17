@@ -4,8 +4,8 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 8 云同步 进行中 2026/05/14)
-- **上一稳定版本**: v2.0.0 (Phase 1 完成)
+- **Version**: v2.0.0 (Phase 8 云同步 完成 2026/05/16 → Phase 9 服务器健康检查 进行中 2026/05/17)
+- **上一稳定版本**: v2.0.0 (Phase 8 完成)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
@@ -80,8 +80,8 @@ asshv2/
 | **5** | **SFTP 文件传输** | **✅ 完成 (2026-05-11)** |
 | **6** | **密钥管理 (Key Management)** | **✅ 完成 (2026-05-13)** |
 | **7** | **代理 & 隧道 (SOCKS5/端口转发/SSH隧道)** | **✅ 完成 (2026-05-13)** |
-| **8** | **云同步 (Qiniu)** | **🔄 进行中** |
-| 9 | 服务器健康检查 | ⏳ |
+| **8** | **云同步 (Qiniu)** | **✅ 完成 (2026-05-16)** |
+| **9** | **服务器健康检查** | **🔄 进行中 (2026-05-17)** |
 | 10 | 跳板机/堡垒机支持 | ⏳ |
 | 11 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ |
 | 12 | 自动更新/升级 | ⏳ |
@@ -143,6 +143,12 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/service/proxy_ports.go` — ParsePorts 多端口规则解析
 - [x] `cmd/proxy.go` — proxy CLI 命令（Smart Proxy + 直连）
 - [x] `cmd/tunnel.go` — tunnel CLI 命令（start/stop/list）
+- [x] `asshc/port/syncer.go` — Syncer 接口 + SyncAccount/SyncData/ServerData/SyncResult DTOs (Phase 8)
+- [x] `asshc/domain/sync.go` — CloudAccount/SyncHistory 领域实体
+- [x] `asshc/infra/sync/qiniu/qiniu.go` — 七牛云 Syncer 实现 (Login/Push/Pull/List/Delete)
+- [x] `asshc/infra/store/account.go` — 云账户 CRUD + AES-GCM 加密存储
+- [x] `asshc/service/sync.go` — SyncService + SyncStore 接口 + Push/Pull 合并逻辑
+- [x] `cmd/sync.go` — sync CLI 命令 (account set/show/delete/test + push/pull/history)
 
 ## 开发命令
 
