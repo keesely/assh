@@ -250,7 +250,7 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 | 7 | 代理 & 隧道 (SOCKS5/端口转发/SSH隧道) | ssh | 6 |
 | 8 | 云同步 (Qiniu) | 无 | 6 |
 | 9 | 服务器健康检查 | ssh + CLI | 4 |
-| 10 | 跳板机/堡垒机 | ssh | 5 |
+| 10 | 跳板机支持 | ssh | 5 |
 | 11 | 远程挂载 (sshfs/webdav/samba) | ssh | 6 |
 | 12 | 自动更新/升级 | CLI | 4 |
 | X | 实验阶段: 虚拟命令 | CLI + 实验性 | 4 |
