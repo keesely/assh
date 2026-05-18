@@ -950,7 +950,7 @@ assh sync pull
 assh sync history [-n 10]
 ```
 
-### 🔄 Phase 9: 服务器健康检查 — 进行中 (2026-05-17)
+### ✅ Phase 9: 服务器健康检查 — 完成 (2026-05-17)
 
 目标：实现服务器批量健康检查和单一检查功能
 
@@ -958,13 +958,51 @@ assh sync history [-n 10]
 
 | 编号 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|:----:|
-| P9.1 | 健康检查接口 | `asshc/port/health.go` | HealthChecker 接口定义 | ⬜ |
-| P9.2 | SSH 健康检查 | `asshc/infra/ssh/health.go` | 连接检测、延迟检测实现 | ⬜ |
-| P9.3 | 健康检查服务 | `asshc/service/health.go` | HealthService 编排层 | ⬜ |
-| P9.4 | 检查命令 | `cmd/health.go` | health check/list 命令 | ⬜ |
-| P9.5 | 列表检查 | — | 批量检查服务器组，支持并发 | ⬜ |
-| P9.6 | 单一检查 | — | 指定单个服务器检查并输出详细结果 | ⬜ |
-| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ⬜ |
+| P9.1 | 健康检查接口 | `asshc/port/health.go` | HealthChecker 接口 + HealthResult/HealthDetails DTOs + HealthStatus 枚举 | ✅ |
+| P9.2 | SSH 健康检查 | `asshc/infra/ssh/health.go` | 连接延迟检测 + 远程系统信息采集（uptime/load/memory/disk） | ✅ |
+| P9.3 | 健康检查服务 | `asshc/service/health.go` | HealthService 编排层（CheckServer/CheckGroup/CheckAll/CheckServers + 并发） | ✅ |
+| P9.4 | 检查命令 | `cmd/health.go` | health check/list 命令 | ✅ |
+| P9.5 | 列表检查 | `cmd/health.go` | 批量检查服务器组，支持并发（--concurrency） | ✅ |
+| P9.6 | 单一检查 | `cmd/health.go` | 指定单个服务器检查并输出详细结果（--detail） | ✅ |
+| P9.7 | DI 注入 | `main.go` + `cmd/app.go` | HealthChecker + HealthService 创建+注入 | ✅ |
+| **验证** | `go build ./... && go test ./...` | | **编译+测试全部通过** | ✅ |
+
+**命令使用**：
+```bash
+# 单一服务器检查
+assh health check myserver
+
+# 单一服务器详细检查（含系统信息）
+assh health check myserver --detail
+
+# 多服务器检查（逗号分隔）
+assh health check server1,server2,server3
+
+# 检查所有服务器
+assh health list
+
+# 检查指定分组
+assh health list --group prod
+
+# 指定并发数
+assh health list --concurrency 10
+
+# 详细模式（含系统信息）
+assh health list --detail
+```
+
+**输出格式**：
+```
+✓ myserver (192.168.1.10:22)
+  Status:   healthy
+  Latency:  45.2ms
+  Checked:  2026-05-17 15:04:05
+  --- System Info ---
+  Uptime:   up 30 days
+  Load:     0.15 0.20 0.18
+  Memory:   2.1G/8.0G
+  Disk:     15G/100G (15%)
+```
 
 ### 📝 Phase 10: 跳板机/堡垒机支持
 

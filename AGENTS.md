@@ -4,8 +4,8 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 8 云同步 完成 2026/05/16 → Phase 9 进行中 2026/05/17 | 实验 X1 进行中 2026/05/17)
-- **上一稳定版本**: v2.0.0 (Phase 8 完成)
+- **Version**: v2.0.0 (Phase 9 健康检查 完成 2026/05/17 | 实验 X1 进行中 2026/05/17)
+- **上一稳定版本**: v2.0.0 (Phase 9 完成)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
@@ -81,7 +81,7 @@ asshv2/
 | **6** | **密钥管理 (Key Management)** | **✅ 完成 (2026-05-13)** |
 | **7** | **代理 & 隧道 (SOCKS5/端口转发/SSH隧道)** | **✅ 完成 (2026-05-13)** |
 | **8** | **云同步 (Qiniu)** | **✅ 完成 (2026-05-16)** |
-| **9** | **服务器健康检查** | **🔄 进行中 (2026-05-17)** |
+| **9** | **服务器健康检查** | **✅ 完成 (2026-05-17)** |
 | 10 | 跳板机/堡垒机支持 | ⏳ |
 | 11 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ |
 | 12 | 自动更新/升级 | ⏳ |
@@ -150,6 +150,10 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/infra/store/account.go` — 云账户 CRUD + AES-GCM 加密存储
 - [x] `asshc/service/sync.go` — SyncService + SyncStore 接口 + Push/Pull 合并逻辑
 - [x] `cmd/sync.go` — sync CLI 命令 (account set/show/delete/test + push/pull/history)
+- [x] `asshc/port/health.go` — HealthChecker 接口 + HealthResult/HealthDetails DTOs (Phase 9)
+- [x] `asshc/infra/ssh/health.go` — SSH 健康检查实现（连接延迟 + 系统信息采集）
+- [x] `asshc/service/health.go` — HealthService 编排层（单机/分组/全量 + 并发）
+- [x] `cmd/health.go` — health CLI 命令 (check/list)
 
 ## 开发命令
 
