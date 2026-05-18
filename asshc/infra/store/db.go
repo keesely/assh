@@ -132,6 +132,20 @@ func (s *Store) migrate() error {
 			conflicts   INTEGER DEFAULT 0,
 			timestamp   TEXT DEFAULT (datetime('now'))
 		);
+
+		CREATE TABLE IF NOT EXISTS jump_history (
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			target_expr      TEXT NOT NULL,
+			path_text        TEXT NOT NULL,
+			path_data        BLOB,
+			chain_count      INTEGER NOT NULL DEFAULT 0,
+			last_used        TEXT,
+			use_count        INTEGER DEFAULT 1,
+			created_at       TEXT DEFAULT (datetime('now')),
+			updated_at       TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_jump_history_last_used ON jump_history(last_used DESC);
 	`)
 
 	if err != nil {
@@ -178,4 +192,9 @@ func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.db.Close()
+}
+
+// JumpRecorder 返回跳板历史记录器。
+func (s *Store) JumpRecorder() *JumpRecorder {
+	return NewJumpRecorder(s)
 }

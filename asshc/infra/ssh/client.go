@@ -120,6 +120,98 @@ func (c *Connector) Close(client *ssh.Client) error {
 	return nil
 }
 
+// ConnectChain 通过跳板链连接到目标服务器。
+// chain 参数为有序的跳板服务器列表，从第一个依次连接到最后的目标服务器。
+// 返回最终的 ssh.Client（连接到目标服务器）。
+func (c *Connector) ConnectChain(target *domain.Server, chain []*domain.Server) (*ssh.Client, error) {
+	if len(chain) == 0 {
+		return c.Connect(target)
+	}
+
+	var parents []*ssh.Client
+
+	// Step 1: 连接第一个跳板机
+	first := chain[0]
+	client, err := c.Connect(first)
+	if err != nil {
+		return nil, fmt.Errorf("jump[0] %s: %w", first.Host, err)
+	}
+	parents = append(parents, client)
+
+	// Step 2: 依次串联后续跳板机
+	for i := 1; i < len(chain); i++ {
+		hop := chain[i]
+		client, err = c.dialThrough(client, hop)
+		if err != nil {
+			c.closeAll(parents)
+			return nil, fmt.Errorf("jump[%d] %s: %w", i, hop.Host, err)
+		}
+		parents = append(parents, client)
+	}
+
+	// Step 3: 最后连接目标
+	targetClient, err := c.dialThrough(client, target)
+	if err != nil {
+		c.closeAll(parents)
+		return nil, fmt.Errorf("target %s: %w", target.Host, err)
+	}
+
+	return targetClient, nil
+}
+
+// ChainClient 包装 SSH 客户端，包含目标连接和所有跳板机连接。
+// Close 时按"目标 → 最后一跳 → ... → 第一跳"顺序级联关闭。
+type ChainClient struct {
+	*ssh.Client
+	parents []*ssh.Client
+}
+
+// Close 级联关闭所有连接。
+func (c *ChainClient) Close() error {
+	// 先关闭目标连接
+	c.Client.Close()
+	// 再按倒序关闭所有跳板连接
+	for i := len(c.parents) - 1; i >= 0; i-- {
+		c.parents[i].Close()
+	}
+	return nil
+}
+
+// dialThrough 通过已有客户端拨号到目标服务器。
+// 连接建立后自动配置 Keepalive（与直连行为一致）。
+func (c *Connector) dialThrough(parent *ssh.Client, server *domain.Server) (*ssh.Client, error) {
+	addr := net.JoinHostPort(server.Host, fmt.Sprintf("%d", server.Port))
+	conn, err := parent.Dial("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("dial %s: %w", addr, err)
+	}
+	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, c.buildConfig(server))
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("handshake %s: %w", addr, err)
+	}
+	client := ssh.NewClient(sshConn, chans, reqs)
+	c.setupKeepalive(client, server)
+	return client, nil
+}
+
+// buildConfig 根据服务器配置构建 SSH ClientConfig。
+func (c *Connector) buildConfig(server *domain.Server) *ssh.ClientConfig {
+	return &ssh.ClientConfig{
+		User:            server.User,
+		Auth:            c.authMethods(server),
+		HostKeyCallback: c.getHostKeyCallback(server),
+		Timeout:         DefaultTimeout,
+	}
+}
+
+// closeAll 关闭所有跳板连接（用于错误回滚）。
+func (c *Connector) closeAll(clients []*ssh.Client) {
+	for _, client := range clients {
+		client.Close()
+	}
+}
+
 // authMethods 根据服务器配置，按优先级收集可用的认证方式。
 // 认证顺序：SSH Agent → 密钥文件 → 密码。
 // 如果密钥和密码同时配置，初始尝试使用全部方法；若密钥认证失败，
