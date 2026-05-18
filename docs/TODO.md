@@ -728,7 +728,7 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 
 ---
 
-### 🔄 Phase 6: 密钥管理 (Key Management)
+### ✅ Phase 6: 密钥管理 (Key Management)
 
 目标：实现 SSH 密钥自动生成、加密存储、轮换管理，支持 `-K`/`--keygen` 快捷生成
 

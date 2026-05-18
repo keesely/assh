@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| fixed | 10 |
+| fixed | 11 |
 | known | 0 |
 | in-progress | 0 |
 
