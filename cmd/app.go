@@ -61,11 +61,12 @@ type App struct {
 	keymgr         transferport.KeyManager       // 密钥管理器（直连 keygen 用）
 	proxySvc       *service.ProxyService         // 代理 & 隧道服务
 	syncSvc        *service.SyncService          // 云同步服务
+	healthSvc      *service.HealthService        // 健康检查服务
 }
 
 // NewApp 创建 CLI 应用，注入所有 service 依赖。
 // 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc/keygen）。
-func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService, syncSvc *service.SyncService) *App {
+func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService, syncSvc *service.SyncService, healthSvc *service.HealthService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
 	app.Usage = "An SSH Client"
@@ -83,6 +84,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 		keymgr:        keymgr,
 		proxySvc:      proxySvc,
 		syncSvc:       syncSvc,
+		healthSvc:     healthSvc,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -670,6 +672,7 @@ func (a *App) registerCommands() {
 	a.registerProxyCommands()
 	a.registerTunnelCommands()
 	a.registerSyncCommands()
+	a.registerHealthCommands()
 }
 
 // beforeAction 是全局 Before 钩子，在每次命令执行前调用。

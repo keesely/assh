@@ -85,8 +85,12 @@ func main() {
 	syncer := qiniusync.NewSyncer(port.SyncAccount{})
 	syncSvc := service.NewSyncService(syncer, repo)
 
-	// 9. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc)
+	// 9. 创建健康检查服务（Phase 9）
+	healthChecker := sshinfra.NewHealthChecker(connector)
+	healthSvc := service.NewHealthService(healthChecker, repo)
+
+	// 10. 创建 CLI 应用并运行
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
