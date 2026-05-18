@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| fixed | 9 |
+| fixed | 10 |
 | known | 0 |
 | in-progress | 0 |
 
@@ -24,7 +24,7 @@
 | BUG-008 | --resume 参数未从 service 层传递到 infra 层 | fixed | 2026-05-11 |
 | BUG-009 | ComputeRemoteSHA256 是 stub，-S 校验总是失败 | fixed | 2026-05-11 |
 | BUG-010 | SSH 密钥认证失败后未回退到密码认证 | fixed | 2026-05-11 |
-| BUG-011 | 默认 Action 中 -J 在 target 后未解析 | fixed | 2026-05-19 |
+| BUG-011 | [默认 Action 中 -J 在 target 后未解析](bugs/BUG-011-default-action-jump-flag.md) | fixed | 2026-05-19 |
 
 ## 新增 Bug
 
