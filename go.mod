@@ -7,8 +7,8 @@ require (
 	github.com/qiniu/api.v7/v7 v7.4.0
 	github.com/rs/zerolog v1.32.0
 	github.com/urfave/cli v1.22.2
-	golang.org/x/crypto v0.35.0
-	golang.org/x/term v0.29.0
+	golang.org/x/crypto v0.45.0
+	golang.org/x/term v0.37.0
 	modernc.org/sqlite v1.50.0
 )
 
