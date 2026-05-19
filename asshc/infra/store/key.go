@@ -1,13 +1,13 @@
 package store
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"errors"
 	"io"
+
+	"assh/asshc/infra/crypto"
 )
 
 // keyConfigKey 是 config 表中用于存储 AES 加密密钥的键名。
@@ -85,22 +85,7 @@ func (s *Store) encryptPassword(plaintext string) ([]byte, error) {
 		}
 	}
 
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-
-	return gcm.Seal(nonce, nonce, []byte(plaintext), nil), nil
+	return crypto.EncryptGCM(key, []byte(plaintext))
 }
 
 // decryptPassword 使用 AES-GCM 解密密文，恢复密码明文。
@@ -115,23 +100,7 @@ func (s *Store) decryptPassword(ciphertext []byte) (string, error) {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-
-	nonceSize := gcm.NonceSize()
-	if len(ciphertext) < nonceSize {
-		return "", errors.New("ciphertext too short")
-	}
-
-	nonce, data := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, data, nil)
+	plaintext, err := crypto.DecryptGCM(key, ciphertext)
 	if err != nil {
 		return "", err
 	}

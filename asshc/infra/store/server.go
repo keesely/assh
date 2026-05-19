@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"assh/asshc/domain"
+	"assh/log"
 )
 
 // selectCols 定义服务器表查询的基础列名，在多个查询中复用。
@@ -109,8 +111,16 @@ func (s *Store) Set(name string, server *domain.Server) error {
 		}
 	}
 
-	// 序列化全量快照（密码以明文保存，用于回滚恢复）
-	snapshotJSON, err := json.Marshal(server)
+	// 序列化全量快照（密码加密存储，用于回滚恢复）
+	snapshot := *server
+	if snapshot.Auth != nil && snapshot.Auth.Password != "" {
+		encrypted, err := s.encryptPassword(snapshot.Auth.Password)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt snapshot password: %w", err)
+		}
+		snapshot.Auth.Password = string(encrypted)
+	}
+	snapshotJSON, err := json.Marshal(snapshot)
 	if err != nil {
 		return err
 	}
@@ -338,10 +348,18 @@ func (s *Store) RollbackTo(name string, version int) error {
 		return err
 	}
 
-	// 反序列化快照
+	// 反序列化快照（密码已加密，需要解密后再使用）
 	var restored domain.Server
 	if err := json.Unmarshal([]byte(snapshotStr), &restored); err != nil {
 		return err
+	}
+	// 解密快照中的密码
+	if restored.Auth != nil && restored.Auth.Password != "" {
+		decrypted, err := s.decryptPassword([]byte(restored.Auth.Password))
+		if err != nil {
+			return fmt.Errorf("failed to decrypt snapshot password: %w", err)
+		}
+		restored.Auth.Password = decrypted
 	}
 	restored.Group = group
 	restored.Name = serverName
@@ -462,7 +480,9 @@ func (s *Store) scanServer(scanner interface{ Scan(dest ...interface{}) error })
 	}
 
 	if optionsJSON != "" && optionsJSON != "{}" {
-		json.Unmarshal([]byte(optionsJSON), &server.Options)
+		if err := json.Unmarshal([]byte(optionsJSON), &server.Options); err != nil {
+			log.Warnf("failed to parse options for server %s.%s: %v", group, name, err)
+		}
 	}
 
 	return server, nil

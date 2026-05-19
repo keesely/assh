@@ -1,16 +1,14 @@
 package store
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"io"
 	"time"
 
 	"assh/asshc/domain"
+	"assh/asshc/infra/crypto"
+	"assh/log"
 )
 
 // accountSelectCols 定义云账户表查询的基础列名。
@@ -209,8 +207,17 @@ func (s *Store) scanAccount(scanner interface{ Scan(dest ...interface{}) error }
 		Zone:      zone,
 		Enabled:   intToBool(enabled),
 	}
-	acct.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	acct.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	var parseErr error
+	acct.CreatedAt, parseErr = time.Parse(time.RFC3339, createdAt)
+	if parseErr != nil {
+		log.Warnf("failed to parse created_at for account %q: %v", name, parseErr)
+		acct.CreatedAt = time.Time{}
+	}
+	acct.UpdatedAt, parseErr = time.Parse(time.RFC3339, updatedAt)
+	if parseErr != nil {
+		log.Warnf("failed to parse updated_at for account %q: %v", name, parseErr)
+		acct.UpdatedAt = time.Time{}
+	}
 
 	return acct, nil
 }
@@ -260,22 +267,7 @@ func (s *Store) encryptData(plaintext string) ([]byte, error) {
 		}
 	}
 
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-
-	return gcm.Seal(nonce, nonce, []byte(plaintext), nil), nil
+	return crypto.EncryptGCM(key, []byte(plaintext))
 }
 
 // decryptData 使用 AES-GCM 解密数据。
@@ -289,23 +281,7 @@ func (s *Store) decryptData(ciphertext []byte) (string, error) {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-
-	nonceSize := gcm.NonceSize()
-	if len(ciphertext) < nonceSize {
-		return "", errors.New("ciphertext too short")
-	}
-
-	nonce, data := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, data, nil)
+	plaintext, err := crypto.DecryptGCM(key, ciphertext)
 	if err != nil {
 		return "", err
 	}

@@ -6,6 +6,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/port"
+	"assh/log"
 )
 
 // JumpRecorder 实现 port.JumpHistoryRecorder 接口。
@@ -71,7 +72,9 @@ func (r *JumpRecorder) List(limit int) ([]*domain.JumpHistory, error) {
 			if err != nil {
 				return nil, err
 			}
-			json.Unmarshal([]byte(decrypted), &jh.PathData)
+			if err := json.Unmarshal([]byte(decrypted), &jh.PathData); err != nil {
+				log.Warnf("failed to parse jump history path data: %v", err)
+			}
 		}
 		results = append(results, jh)
 	}
@@ -99,7 +102,9 @@ func (r *JumpRecorder) Get(id int64) (*domain.JumpHistory, error) {
 		if err != nil {
 			return nil, err
 		}
-		json.Unmarshal([]byte(decrypted), &jh.PathData)
+		if err := json.Unmarshal([]byte(decrypted), &jh.PathData); err != nil {
+			log.Warnf("failed to parse jump history path data: %v", err)
+		}
 	}
 
 	return jh, nil

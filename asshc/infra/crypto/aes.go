@@ -1,3 +1,7 @@
+// Package crypto provides encryption and decryption functionality.
+//
+// WARNING: Do not use ECB mode (AESEncryptECB/AESDecryptECB) - it is insecure.
+// Always use GCM mode (AESEncryptGCM/AESDecryptGCM) instead.
 package crypto
 
 import (
@@ -196,8 +200,57 @@ func aesDecryptGCM(ciphertext []byte, key []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// aesEncryptECB 使用 AES-ECB 模式加密（不安全，仅用于兼容旧系统）。
-// 警告：ECB 模式不隐藏明文模式，不应在新系统中使用。
+// EncryptGCM encrypts plaintext using AES-256-GCM with a random nonce.
+// Returns: nonce || ciphertext || tag (joined into a single slice).
+func EncryptGCM(key, plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	return ciphertext, nil
+}
+
+// DecryptGCM decrypts ciphertext using AES-256-GCM.
+// Expects input format: nonce || ciphertext || tag (same as EncryptGCM output).
+func DecryptGCM(key, ciphertext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, cipher := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, cipher, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return plaintext, nil
+}
+
+// aesEncryptECB uses AES-ECB mode encryption (insecure, only for legacy compatibility).
+// Deprecated: ECB mode does not hide plaintext patterns and should not be used in new systems.
 func aesEncryptECB(plain []byte, block cipher.Block) ([]byte, error) {
 	plaintext := pkcs7Pad(plain, block.BlockSize())
 	ciphertext := make([]byte, len(plaintext))
@@ -209,7 +262,8 @@ func aesEncryptECB(plain []byte, block cipher.Block) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// aesDecryptECB 使用 AES-ECB 模式解密。
+// aesDecryptECB uses AES-ECB mode decryption.
+// Deprecated: ECB mode does not hide plaintext patterns and should not be used in new systems.
 func aesDecryptECB(cipher []byte, block cipher.Block) ([]byte, error) {
 	if len(cipher)%block.BlockSize() != 0 {
 		return nil, errors.New("ciphertext is not a multiple of block size")
