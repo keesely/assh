@@ -110,7 +110,6 @@ func (sp *SmartProxy) Start(client *ssh.Client) error {
 // Stop terminates all listeners and active connections.
 func (sp *SmartProxy) Stop() error {
 	sp.mu.Lock()
-	defer sp.mu.Unlock()
 
 	if sp.socks5Listener != nil {
 		sp.socks5Listener.Close()
@@ -126,6 +125,10 @@ func (sp *SmartProxy) Stop() error {
 
 	sp.client = nil
 	sp.cancel()
+
+	sp.mu.Unlock()
+
+	sp.wg.Wait() // Wait for accept loops to finish, AFTER unlock
 
 	return nil
 }

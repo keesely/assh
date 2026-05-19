@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -64,7 +65,7 @@ func (s *SyncObject) Login(ctx context.Context, account port.SyncAccount) error 
 	// 初始化配置（根据区域自动选择上传域名）
 	s.cfg = storage.Config{
 		Zone:          zone,
-		UseHTTPS:      false,
+		UseHTTPS:      true,
 		UseCdnDomains: false,
 	}
 
@@ -136,7 +137,7 @@ func (s *SyncObject) Pull(ctx context.Context) (*port.SyncData, error) {
 	domain := s.cfg.Zone.SrcUpHosts[0]
 	
 	// 构建公开下载 URL
-	downloadURL := fmt.Sprintf("http://%s/%s", domain, syncFileName)
+	downloadURL := fmt.Sprintf("https://%s/%s", domain, syncFileName)
 	
 	// 通过 HTTP 下载文件
 	// 使用七牛云 SDK 的默认 HTTP 客户端
@@ -147,11 +148,17 @@ func (s *SyncObject) Pull(ctx context.Context) (*port.SyncData, error) {
 	}
 	defer resp.Body.Close()
 
-	// 读取响应数据
+	const maxSyncDataSize = 50 * 1024 * 1024 // 50MB
+
+	// 读取响应数据（限制大小防止 OOM）
+	limitedReader := io.LimitReader(resp.Body, maxSyncDataSize+1)
 	buf := new(bytes.Buffer)
-	_, err = buf.ReadFrom(resp.Body)
+	_, err = buf.ReadFrom(limitedReader)
 	if err != nil {
 		return nil, fmt.Errorf("qiniu pull: read response failed: %w", err)
+	}
+	if int64(buf.Len()) > maxSyncDataSize {
+		return nil, fmt.Errorf("qiniu pull: sync data exceeds maximum size (%d bytes)", maxSyncDataSize)
 	}
 
 	// 反序列化同步数据

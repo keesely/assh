@@ -13,6 +13,15 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// allowedTables 白名单：防止 PRAGMA table_info SQL 注入。
+var allowedTables = map[string]bool{
+	"servers":          true,
+	"cloud_accounts":   true,
+	"jump_history":     true,
+	"config":           true,
+	"server_changelog": true,
+}
+
 // Store 是 SQLite 存储的核心结构，实现 ServerRepository 接口。
 // 管理数据库连接、读写锁、以及 AES 加密密钥。
 type Store struct {
@@ -165,6 +174,9 @@ func (s *Store) migrate() error {
 // columnExists 检查指定表中是否存在指定列。
 // 使用 PRAGMA table_info 查询表结构信息。
 func (s *Store) columnExists(table, column string) (bool, error) {
+	if !allowedTables[table] {
+		return false, fmt.Errorf("table %q is not allowed", table)
+	}
 	rows, err := s.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return false, err

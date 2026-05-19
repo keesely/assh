@@ -239,9 +239,15 @@ func (m *tunnelManager) reconnectLoop(ctx context.Context, connectFn func() (*ss
 }
 
 // Close cancels the context and waits for the reconnect loop to finish.
+// Uses a timeout to prevent deadlock when reconnect loop doesn't close done channel.
 func (m *tunnelManager) Close() {
 	m.cancel()
-	<-m.done
+	select {
+	case <-m.done:
+		// normal close
+	case <-time.After(5 * time.Second):
+		log.Warnf("tunnel manager close timeout")
+	}
 }
 
 // Daemonize forks the current process to run in background.
