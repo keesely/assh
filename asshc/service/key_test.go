@@ -134,7 +134,7 @@ func (c *mockConnectorWithDeployFail) Close(client *ssh.Client) error {
 	return nil
 }
 
-func (c *mockConnectorWithDeployFail) ConnectChain(target *domain.Server, chain []*domain.Server) (interface{}, error) {
+func (c *mockConnectorWithDeployFail) ConnectChain(target *domain.Server, chain []*domain.Server) (*ssh.Client, error) {
 	return nil, errors.New("mock SSH connection error for deploy test")
 }
 

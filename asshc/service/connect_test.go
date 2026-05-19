@@ -9,7 +9,7 @@ import (
 
 type mockConnector struct {
 	connectFunc     func(server *domain.Server) (*ssh.Client, error)
-	connectChainFunc func(target *domain.Server, chain []*domain.Server) (interface{}, error)
+	connectChainFunc func(target *domain.Server, chain []*domain.Server) (*ssh.Client, error)
 }
 
 func (m *mockConnector) Connect(server *domain.Server) (*ssh.Client, error) {
@@ -23,7 +23,7 @@ func (m *mockConnector) Close(client *ssh.Client) error {
 	return nil
 }
 
-func (m *mockConnector) ConnectChain(target *domain.Server, chain []*domain.Server) (interface{}, error) {
+func (m *mockConnector) ConnectChain(target *domain.Server, chain []*domain.Server) (*ssh.Client, error) {
 	if m.connectChainFunc != nil {
 		return m.connectChainFunc(target, chain)
 	}

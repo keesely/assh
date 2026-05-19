@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kballard/go-shellquote"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -302,7 +303,7 @@ func computeRemoteHash(sshClient *ssh.Client, remotePath string) (string, error)
 	}
 	defer session.Close()
 
-	out, err := session.Output("sha256sum " + remotePath)
+	out, err := session.Output("sha256sum " + shellquote.Join(remotePath))
 	if err != nil {
 		return "", fmt.Errorf("remote sha256sum failed: %w", err)
 	}
