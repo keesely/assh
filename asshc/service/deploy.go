@@ -117,19 +117,17 @@ func (s *DeployService) readAuthorizedKeys(session *ssh.Session) (string, error)
 
 // appendToAuthorizedKeys 将公钥追加到远程服务器的 ~/.ssh/authorized_keys。
 // 如果 ~/.ssh 目录不存在，自动创建。
+// 使用 stdin 传入公钥内容，避免 shell 转义/注入风险。
 // 使用单次 session.Run() 执行所有操作，避免 "session already started" 错误。
 func (s *DeployService) appendToAuthorizedKeys(session *ssh.Session, pubKey []byte) error {
-	// 构建命令，转义单引号
-	pubKeyStr := strings.ReplaceAll(string(pubKey), "'", "'\"'\"'")
+	// 通过 stdin 传入公钥，避免 shell 转义
+	session.Stdin = bytes.NewReader(append(pubKey, '\n'))
 
 	// 使用单次 SSH session 执行所有操作：
 	// 1. 创建 ~/.ssh 目录并设置权限
-	// 2. 追加公钥到 authorized_keys
+	// 2. 从 stdin 读取公钥并追加到 authorized_keys
 	// 3. 设置 authorized_keys 权限
-	cmd := fmt.Sprintf(
-		`mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%%s\n' '%s' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`,
-		pubKeyStr,
-	)
+	cmd := `mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`
 
 	if err := session.Run(cmd); err != nil {
 		return fmt.Errorf("deploy key: %w", err)

@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net"
+	"os"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -253,8 +255,8 @@ func (f *RemoteForward) handleConn(remoteConn net.Conn) {
 func generateID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
-		// 极低概率 fallback
-		return fmt.Sprintf("tunnel-%d", &b)
+		// 极低概率 fallback: use timestamp + PID
+		return fmt.Sprintf("tunnel-%d-%d", time.Now().UnixNano(), os.Getpid())
 	}
 	return fmt.Sprintf("%x", b)
 }

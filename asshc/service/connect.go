@@ -2,6 +2,8 @@ package service
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"assh/asshc/domain"
 	"assh/asshc/port"
@@ -122,4 +124,107 @@ func (s *ConnectService) Close(client *ssh.Client) error {
 // Connector 返回底层的 SSHConnector，用于 DeployService 等场景。
 func (s *ConnectService) Connector() port.SSHConnector {
 	return s.connector
+}
+
+// ConnectChain 通过指定跳板链连接到目标服务器。
+// chainExpr 的格式：逗号分隔的跳板列表
+//   每条记录可以是：服务器名 或 @history_id
+//      服务器名 → 从 DB 读取配置
+//      @id      → 从 jump_history 读取并恢复跳板链
+//      user@host[:port] → 直连参数构建服务器对象
+func (s *ConnectService) ConnectChain(target string, chainExpr string) (*ssh.Client, []*domain.Server, error) {
+	// 解析目标服务器
+	targetServer, err := s.resolveTarget(target)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 解析跳板链
+	chain, err := s.parseJumpChain(chainExpr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 通过跳板链连接
+	client, err := s.connector.ConnectChain(targetServer, chain)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, chain, nil
+}
+
+// resolveTarget 解析目标服务器（已保存名称 或 user@host 格式）
+func (s *ConnectService) resolveTarget(target string) (*domain.Server, error) {
+	if strings.Contains(target, "@") {
+		// 直连参数
+		parts := strings.SplitN(target, "@", 2)
+		user, host := parts[0], parts[1]
+		// 解析 port
+		host, portStr, _ := strings.Cut(host, ":")
+		port := 22
+		if portStr != "" {
+			port, _ = strconv.Atoi(portStr)
+		}
+		if user == "" {
+			user = "root"
+		}
+		return &domain.Server{
+			Host: host,
+			Port: port,
+			User: user,
+		}, nil
+	}
+
+	// 从 DB 读取
+	return s.repo.Get(target)
+}
+
+// parseJumpChain 解析跳板链表达式为 *domain.Server 列表
+// 返回值还包括是否包含 direct 类型（需要记录历史）
+func (s *ConnectService) parseJumpChain(chainExpr string) ([]*domain.Server, error) {
+	if chainExpr == "" || chainExpr == "none" {
+		return nil, nil
+	}
+
+	tokens := strings.Split(chainExpr, ",")
+	var chain []*domain.Server
+
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(token, "@"):
+			// history ref: @id
+			// TODO: 从 jump_history 读取并恢复，实现 P10.7 时完成
+		case strings.Contains(token, "@"):
+			// direct: user@host[:port]
+			parts := strings.SplitN(token, "@", 2)
+			user, host := parts[0], parts[1]
+			host, portStr, _ := strings.Cut(host, ":")
+			port := 22
+			if portStr != "" {
+				port, _ = strconv.Atoi(portStr)
+			}
+			if user == "" {
+				user = "root"
+			}
+			chain = append(chain, &domain.Server{
+				Host: host,
+				Port: port,
+				User: user,
+			})
+		default:
+			// server ref: 从 DB 读取
+			server, err := s.repo.Get(token)
+			if err != nil {
+				return nil, fmt.Errorf("resolve jump host %q: %w", token, err)
+			}
+			chain = append(chain, server)
+		}
+	}
+
+	return chain, nil
 }

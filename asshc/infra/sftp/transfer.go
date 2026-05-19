@@ -328,7 +328,7 @@ func (t *SFTPTransfer) LocalIsDir(path string) bool {
 }
 
 func (t *SFTPTransfer) CollectLocalFiles(dir string) ([]string, error) {
-	return collectLocalFiles(dir, dir)
+	return collectLocalFiles(dir, dir, 0)
 }
 
 func (t *SFTPTransfer) CollectRemoteFiles(server *domain.Server, dir string) ([]string, error) {
@@ -344,7 +344,7 @@ func (t *SFTPTransfer) CollectRemoteFiles(server *domain.Server, dir string) ([]
 	}
 	defer client.Close()
 
-	files, err := collectRemoteFiles(client, dir, dir)
+	files, err := collectRemoteFiles(client, dir, dir, 0)
 	if err != nil {
 		return nil, err
 	}

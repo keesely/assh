@@ -89,8 +89,11 @@ func main() {
 	healthChecker := sshinfra.NewHealthChecker(connector)
 	healthSvc := service.NewHealthService(healthChecker, repo)
 
-	// 10. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc)
+	// 10. 创建跳板历史服务（Phase 10）
+	jumpSvc := service.NewJumpService(repo.JumpRecorder())
+
+	// 11. 创建 CLI 应用并运行
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc, jumpSvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

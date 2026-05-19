@@ -16,6 +16,15 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const (
+	maxBCConcurrency = 10           // max concurrent batch command goroutines
+	maxBCOutputSize  = 10 * 1024 * 1024 // 10MB per server output
+)
+
+// resolveFlag 从 cli 上下文中获取字符串参数值。
+// 优先使用 cli 正常解析的值（c.IsSet 为 true），
+// 如果未解析则从 c.Args() 中手动查找短参数（v1 兼容）。
+
 // registerConnectCommands 注册连接相关命令（login/run/bc）。
 func (a *App) registerConnectCommands() {
 	a.cli.Commands = append(a.cli.Commands, []cli.Command{
@@ -32,6 +41,7 @@ func (a *App) registerConnectCommands() {
 				cli.StringFlag{Name: "P, password", Usage: "password"},
 				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
 				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
 			},
 		},
 		{
@@ -46,6 +56,7 @@ func (a *App) registerConnectCommands() {
 				cli.StringFlag{Name: "P, password", Usage: "password"},
 				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
 				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
 			},
 		},
 		{
@@ -63,6 +74,7 @@ func (a *App) registerConnectCommands() {
 				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
 				cli.StringFlag{Name: "P, password", Usage: "password override"},
 				cli.StringFlag{Name: "log", Usage: "output log path (default: ./bc-result-{timestamp}.json)"},
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
 			},
 		},
 	}...)
@@ -91,12 +103,31 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error)
 	user := firstNonEmpty(resolveFlag(c, "user", "u"), resolveFlag(c, "login", "l"))
 	password := resolveFlag(c, "password", "P")
 	keyFile := firstNonEmpty(resolveFlag(c, "identity-file", "i"), resolveFlag(c, "key", "k"))
+	jumpExpr := resolveFlag(c, "jump", "J")
 
 	if target == "" && host == "" {
 		return nil, nil, fmt.Errorf("no target specified: use <name>, <user@host>, or -H <host>")
 	}
 	if target != "" && host != "" {
 		return nil, nil, fmt.Errorf("cannot specify both target and -H/--host")
+	}
+
+	// 如果有 -J 参数，使用 ConnectChain
+	if jumpExpr != "" && jumpExpr != "none" {
+		client, chain, err := a.connectSvc.ConnectChain(target, jumpExpr)
+		if err != nil {
+			return nil, nil, err
+		}
+		// 异步记录跳板历史
+		if len(chain) > 0 && a.jumpSvc != nil {
+			pathText := jumpExpr
+			go func() {
+				if err := a.jumpSvc.RecordJumpChain(target, pathText, chain); err != nil {
+					log.Debugf("failed to record jump chain: %v", err)
+				}
+			}()
+		}
+		return client, nil, nil
 	}
 
 	switch {
@@ -186,7 +217,17 @@ func (a *App) runAction(c *cli.Context) error {
 		return fmt.Errorf("command is required")
 	}
 
-	client, err := a.connectSvc.ConnectByName(name)
+	jumpExpr := c.String("jump")
+
+	var client *ssh.Client
+	var err error
+
+	// 如果有 -J 参数，使用 ConnectChain
+	if jumpExpr != "" && jumpExpr != "none" {
+		client, _, err = a.connectSvc.ConnectChain(name, jumpExpr)
+	} else {
+		client, err = a.connectSvc.ConnectByName(name)
+	}
 	if err != nil {
 		return err
 	}
@@ -266,11 +307,16 @@ func (a *App) bcAction(c *cli.Context) error {
 		allResults []bcServerResult
 	)
 
+	// Limit concurrent goroutines
+	sem := make(chan struct{}, maxBCConcurrency)
+
 	// 并发对每台服务器执行命令
 	for _, name := range names {
 		wg.Add(1)
+		sem <- struct{}{} // acquire semaphore (blocks if at capacity)
 		go func(n string) {
 			defer wg.Done()
+			defer func() { <-sem }() // release semaphore
 
 			result := bcServerResult{Name: n}
 
@@ -296,6 +342,12 @@ func (a *App) bcAction(c *cli.Context) error {
 			}
 
 			output, runErr := a.connectSvc.RunWithOutput(client, cmd)
+
+			// Truncate output if too large
+			if len(output) > maxBCOutputSize {
+				output = output[:maxBCOutputSize] + "\n... (truncated at 10MB)"
+			}
+
 			if runErr != nil {
 				result.Error = runErr.Error()
 				result.Stdout = output

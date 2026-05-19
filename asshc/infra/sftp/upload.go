@@ -10,8 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kballard/go-shellquote"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+)
+
+const (
+	maxDepth = 100
+	maxFiles = 100000
 )
 
 type UploadOptions struct {
@@ -197,7 +203,7 @@ func pushSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Cli
 }
 
 func pushDirectory(ctx context.Context, client *sftp.Client, sshClient *ssh.Client, localDir, remoteDir string, opts UploadOptions, progress TransferProgress) error {
-	files, err := collectLocalFiles(localDir, localDir)
+	files, err := collectLocalFiles(localDir, localDir, 0)
 	if err != nil {
 		return err
 	}
@@ -229,7 +235,11 @@ func pushDirectory(ctx context.Context, client *sftp.Client, sshClient *ssh.Clie
 	return nil
 }
 
-func collectLocalFiles(baseDir, currentDir string) ([]string, error) {
+func collectLocalFiles(baseDir, currentDir string, depth int) ([]string, error) {
+	if depth > maxDepth {
+		return nil, fmt.Errorf("max directory depth exceeded (%d)", maxDepth)
+	}
+
 	var files []string
 
 	entries, err := os.ReadDir(currentDir)
@@ -240,13 +250,17 @@ func collectLocalFiles(baseDir, currentDir string) ([]string, error) {
 	for _, entry := range entries {
 		path := filepath.Join(currentDir, entry.Name())
 		if entry.IsDir() {
-			subFiles, err := collectLocalFiles(baseDir, path)
+			subFiles, err := collectLocalFiles(baseDir, path, depth+1)
 			if err != nil {
 				return nil, err
 			}
 			files = append(files, subFiles...)
 		} else {
 			files = append(files, path)
+		}
+
+		if len(files) > maxFiles {
+			return nil, fmt.Errorf("max file count exceeded (%d)", maxFiles)
 		}
 	}
 
@@ -302,7 +316,7 @@ func computeRemoteHash(sshClient *ssh.Client, remotePath string) (string, error)
 	}
 	defer session.Close()
 
-	out, err := session.Output("sha256sum " + remotePath)
+	out, err := session.Output("sha256sum " + shellquote.Join(remotePath))
 	if err != nil {
 		return "", fmt.Errorf("remote sha256sum failed: %w", err)
 	}

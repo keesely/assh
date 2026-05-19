@@ -62,11 +62,12 @@ type App struct {
 	proxySvc       *service.ProxyService         // 代理 & 隧道服务
 	syncSvc        *service.SyncService          // 云同步服务
 	healthSvc      *service.HealthService        // 健康检查服务
+	jumpSvc        *service.JumpService          // 跳板历史服务
 }
 
 // NewApp 创建 CLI 应用，注入所有 service 依赖。
 // 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc/keygen）。
-func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService, syncSvc *service.SyncService, healthSvc *service.HealthService) *App {
+func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService, syncSvc *service.SyncService, healthSvc *service.HealthService, jumpSvc *service.JumpService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
 	app.Usage = "An SSH Client"
@@ -85,6 +86,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 		proxySvc:      proxySvc,
 		syncSvc:       syncSvc,
 		healthSvc:     healthSvc,
+		jumpSvc:       jumpSvc,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -640,6 +642,7 @@ func (a *App) Run(args []string) error {
 //   - -p/--port、-u/--user、-l/--login：连接参数（v1 兼容，默认 Action 中使用）
 //   - -P/--password、-i/--identity-file、-k/--key：认证参数（v1 兼容）
 //   - -H/--host：直连主机地址（v1 兼容）
+//   - -J/--jump：跳板机链（默认 Action 中使用）
 func (a *App) setupGlobalFlags() {
 	a.cli.Flags = []cli.Flag{
 		cli.BoolFlag{Name: "v, verbose", Usage: "verbose output"},
@@ -654,6 +657,7 @@ func (a *App) setupGlobalFlags() {
 		cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
 		cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
 		cli.StringFlag{Name: "H, host", Usage: "host address"},
+		cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
 	}
 }
 

@@ -13,4 +13,7 @@ type SSHConnector interface {
 	Connect(server *domain.Server) (*ssh.Client, error)
 	// Close 关闭 SSH 连接并释放相关资源。
 	Close(client *ssh.Client) error
+	// ConnectChain 通过跳板链连接到目标服务器。
+	// chain 参数为有序的跳板服务器列表，从第一个依次连接。
+	ConnectChain(target *domain.Server, chain []*domain.Server) (*ssh.Client, error)
 }
