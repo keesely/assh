@@ -1126,9 +1126,53 @@ type SSHSession interface {
 }
 ```
 
+### 📝 Phase 14: Proxy & Tunnel 增强计划 (Planned)
+
+目标：修复已知代理/隧道问题，重构 proxy/tunnel 参数体系，提供更灵活可靠的代理模式
+
+**状态说明**：Phase 7 (Proxy & Tunnel) 已完成基础功能交付，但存在以下已知问题和改进空间：
+
+| 问题 | 现状 | 计划变更 |
+|------|------|----------|
+| `--http` / `--http-mode` 无效 | `assh proxy --http :8080` 仅启动 SOCKS5，HTTP CONNECT 未生效 | 修复 HTTP CONNECT 代理启动逻辑 |
+| proxy 参数语义不直观 | `--tcp`/`--http-mode` 仅用于反向模式，`--socks5` 正向固定 | 统一为 `--http`/`--tcp`/`--socks` 三参数，按目标端决定服务类型 |
+| tunnel 命令冗余 | 需要 `assh tunnel start myserver -L 8080:localhost:80` | 去除 `start` 子命令，直接 `assh tunnel myserver -L 8080:localhost:80` |
+| 缺少传输层类型指定 | 端口转发仅支持 TCP | 新增 `--listen` 参数，支持 `tcp`/`http` 枚举值 |
+| 端口参数不支持自动补全 | `8080::80` 中间为空 host 时报错 | 空 host 自动补全为 `127.0.0.1` |
+
+| 编号 | 任务 | 文件 | 说明 | 优先级 |
+|------|------|------|------|--------|
+| P14.1 | 🔧 修复 --http/--http-mode 无效 | `cmd/proxy.go` | 当前 `--http` 无法启用 HTTP CONNECT 代理，仅启动 SOCKS5；`--http-mode` 反向模式未正确处理。需修复 listener 编排逻辑，确保 `--http` 正确启动 HTTP CONNECT 处理器 | P0 |
+| P14.2 | 重构 proxy 参数体系 | `cmd/proxy.go` + `service/proxy.go` | `--http` 在目标端启动 HTTP Server 监听指定端口，将端口数据转发；`--tcp` 在目标端启动 TCP 服务监听指定端口，转发端口数据；`--socks` 启用 SOCKS 代理；目标端根据代理上下文确定（正常为服务器），`--reverse` 时目标端为本地 | P0 |
+| P14.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 |
+| P14.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80 | P0 |
+| P14.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 |
+| **验证** | `go build ./... && go test ./... -v` | | | |
+
+**使用预览** (变更后):
+
+```bash
+# 代理：参数统一
+assh proxy myserver --http :8080              # 目标端启动 HTTP Server，转发数据
+assh proxy myserver --tcp :9090               # 目标端启动 TCP 服务，转发数据
+assh proxy myserver --socks :1080             # 启用 SOCKS 代理
+assh proxy myserver --reverse --http :8080    # 反向：本地端启动 HTTP Server
+assh proxy myserver --reverse --tcp --ports 80:3000  # 反向 TCP 端口映射
+
+# 隧道：简化命令 + --listen + 自动补全
+assh tunnel myserver -L 8080:web:80           # 本地转发（原 assh tunnel start ...）
+assh tunnel myserver --listen tcp -R 8080:web:80    # 远程 TCP 监听转发
+assh tunnel myserver --listen http -R 8080:web:80   # 远程 HTTP 监听转发
+assh tunnel myserver -L 80::80                 # 等价于 -L 80:127.0.0.1:80
+assh tunnel stop <id>
+assh tunnel list
+```
+
+---
+
 ### 🔬 实验阶段计划
 
-实验阶段（Phase X）用于探索验证前瞻性功能，与主版本线（Phase 0-13）并行开发。
+实验阶段（Phase X）用于探索验证前瞻性功能，与主版本线（Phase 0-14）并行开发。
 
 **定位**:
 - **实验性**: 验证概念和用户需求，不保证最终进入主版本
@@ -1224,11 +1268,12 @@ Phase 0 (骨架)
                     ├── Phase 10 (跳板机)
                     ├── Phase 11 (远程挂载)
                     ├── Phase 12 (自动更新)
-                                └── Phase 13 (命令执行增强)
-                                      └── 实验阶段 (Phase X)
-                                            ├── X1: AI 安全检查
-                                            ├── X2: 虚拟命令投放与执行
-                                            └── X3: 堡垒机管理
+                    ├── Phase 13 (命令执行增强)
+                    └── Phase 14 (代理/隧道增强) ← 基于 Phase 7 + Phase 10
+                          └── 实验阶段 (Phase X)
+                                ├── X1: AI 安全检查
+                                ├── X2: 虚拟命令投放与执行
+                                └── X3: 堡垒机管理
 ```
 
 ## 验证策略

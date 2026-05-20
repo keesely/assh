@@ -253,6 +253,8 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 | 10 | 跳板机支持 | ssh | 5 |
 | 11 | 远程挂载 (sshfs/webdav/samba) | ssh | 6 |
 | 12 | 自动更新/升级 | CLI | 4 |
+| 13 | 远程命令执行增强 | Phase 3 + Phase 4 | 6 |
+| 14 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化) | Phase 7 + Phase 10 | 4 |
 | X | 实验阶段: 虚拟命令 | CLI + 实验性 | 4 |
 
 详细任务清单见 [TODO.md](TODO.md)。
