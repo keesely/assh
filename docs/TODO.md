@@ -1008,6 +1008,9 @@ assh health list --detail
 
 目标：实现 SSH 多跳跳板机支持，覆盖登录/命令执行/文件传输/端口转发全场景
 
+> **安全修复 (v2.0.1, 2026-05-19)**: P0/P1/P2 安全修复已合并到此分支。
+> 详见 [SECURITYS.md](SECURITYS.md) 和 [hotfix-plan.md](hotfix-plan.md)。
+
 设计文档：[Phase10-Design.md](Phase10-Design.md)
 ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
@@ -1141,7 +1144,7 @@ type SSHSession interface {
 | X2 | 虚拟命令投放与执行 — 虚拟命令的下发、跟踪和结果收集 | ⏳ 排队中 | 低 |
 | X3 | 堡垒机管理 — 集中式堡垒机节点认证/审计/授权 | ⏳ 排队中 | 低 |
 
-**分支策略**: 实验阶段在 `dev/v2.0.0-phase-9` 分支上开发（与 Phase 9 共用），独立包路径避免冲突。
+**分支策略**: 实验阶段在 `dev/v2.0.1-phase-10` 分支上开发，独立包路径避免冲突。
 
 ### 🆕 X1: AI 安全检查
 

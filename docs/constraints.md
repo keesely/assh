@@ -13,7 +13,7 @@
 | `github.com/pkg/sftp` | v1.13.7+ | SFTP 客户端 |
 | `github.com/qiniu/api.v7/v7` | v7.4.0 | 七牛云 SDK |
 | `github.com/urfave/cli` | v1.22.2 | CLI 框架 |
-| `golang.org/x/crypto` | v0.25.0 | SSH 库 |
+| `golang.org/x/crypto` | v0.45.0 | SSH 库 |
 | `golang.org/x/term` | (indirect) | 终端原始模式设置（通过 x/crypto/ssh 间接依赖） |
 
 > **kiris 库**（`github.com/keesely/kiris`）：Phase 1 移植后已无直接依赖，待后续确认是否从 go.mod 移除。
