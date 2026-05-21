@@ -115,4 +115,12 @@ func (m *KeyManager) ReadKeyFromStdin() (savedPath string, fingerprint string, e
 	return destPath, fp, nil
 }
 
+// ClearSensitiveData 清零 KeyManager 中的敏感数据（如 passphrase）。
+// 应在不再需要 KeyManager 时调用，防止敏感数据在内存中残留。
+func (m *KeyManager) ClearSensitiveData() {
+	for i := range m.passphrase {
+		m.passphrase[i] = 0
+	}
+	m.passphrase = nil
+}
 

@@ -22,6 +22,9 @@ func NewJumpRecorder(store *Store) *JumpRecorder {
 
 // Record 记录一次跳板链使用。
 func (r *JumpRecorder) Record(jh *domain.JumpHistory) error {
+	r.store.mu.Lock()
+	defer r.store.mu.Unlock()
+
 	// 序列化 PathData 为 JSON
 	pathDataJSON, err := json.Marshal(jh.PathData)
 	if err != nil {
@@ -47,6 +50,9 @@ func (r *JumpRecorder) Record(jh *domain.JumpHistory) error {
 
 // List 返回历史记录，按 last_used 降序排列。
 func (r *JumpRecorder) List(limit int) ([]*domain.JumpHistory, error) {
+	r.store.mu.RLock()
+	defer r.store.mu.RUnlock()
+
 	rows, err := r.store.db.Query(`
 		SELECT id, target_expr, path_text, path_data, chain_count, last_used, use_count, created_at, updated_at
 		FROM jump_history
@@ -83,6 +89,9 @@ func (r *JumpRecorder) List(limit int) ([]*domain.JumpHistory, error) {
 
 // Get 根据 ID 获取历史记录。
 func (r *JumpRecorder) Get(id int64) (*domain.JumpHistory, error) {
+	r.store.mu.RLock()
+	defer r.store.mu.RUnlock()
+
 	row := r.store.db.QueryRow(`
 		SELECT id, target_expr, path_text, path_data, chain_count, last_used, use_count, created_at, updated_at
 		FROM jump_history
@@ -112,18 +121,27 @@ func (r *JumpRecorder) Get(id int64) (*domain.JumpHistory, error) {
 
 // Delete 删除指定历史记录。
 func (r *JumpRecorder) Delete(id int64) error {
+	r.store.mu.Lock()
+	defer r.store.mu.Unlock()
+
 	_, err := r.store.db.Exec("DELETE FROM jump_history WHERE id = ?", id)
 	return err
 }
 
 // Clear 清空所有历史记录。
 func (r *JumpRecorder) Clear() error {
+	r.store.mu.Lock()
+	defer r.store.mu.Unlock()
+
 	_, err := r.store.db.Exec("DELETE FROM jump_history")
 	return err
 }
 
 // IncrementUse 递增使用次数并更新 last_used。
 func (r *JumpRecorder) IncrementUse(id int64) error {
+	r.store.mu.Lock()
+	defer r.store.mu.Unlock()
+
 	_, err := r.store.db.Exec(`
 		UPDATE jump_history
 		SET use_count = use_count + 1, last_used = datetime('now')

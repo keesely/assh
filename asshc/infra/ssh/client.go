@@ -56,6 +56,15 @@ func NewConnectorWithPassphrase(accountPassphrase []byte) *Connector {
 	}
 }
 
+// ClearSensitiveData 清零 Connector 中的敏感数据（如 accountPassphrase）。
+// 应在不再需要 Connector 时调用，防止敏感数据在内存中残留。
+func (c *Connector) ClearSensitiveData() {
+	for i := range c.accountPassphrase {
+		c.accountPassphrase[i] = 0
+	}
+	c.accountPassphrase = nil
+}
+
 // Connect 根据服务器配置建立 SSH 连接。
 // 自动选择认证方式、配置 HostKey 校验和 Keepalive 心跳。
 // 认证策略：优先尝试 Agent/KeyFile/Password 的组合，如果 KeyFile 认证失败
