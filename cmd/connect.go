@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -310,7 +311,9 @@ func (a *App) bcAction(c *cli.Context) error {
 	}
 
 	logDir := "/tmp/assh/bclogs"
-	os.MkdirAll(logDir, 0755)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Warnf("failed to create log directory %s: %v", logDir, err)
+	}
 	timestamp := time.Now()
 
 	jumpExpr := c.String("jump")
@@ -362,7 +365,7 @@ func (a *App) bcAction(c *cli.Context) error {
 			}
 			if err != nil {
 				result.Error = err.Error()
-				writeLogFile(logDir+"/"+n+".log", "error: "+err.Error())
+				writeLogFile(logDir+"/"+sanitizeLogFilename(n)+".log", "error: "+err.Error())
 				stdoutMu.Lock()
 				fmt.Printf("[%s] error: %v\n", n, err)
 				stdoutMu.Unlock()
@@ -390,15 +393,15 @@ func (a *App) bcAction(c *cli.Context) error {
 			if runErr != nil {
 				result.Error = runErr.Error()
 				result.Stdout = output
-				writeLogFile(logDir+"/"+n+".log", output)
-				writeLogFile(logDir+"/"+n+".log", "error: "+runErr.Error())
+				writeLogFile(logDir+"/"+sanitizeLogFilename(n)+".log", output)
+				writeLogFile(logDir+"/"+sanitizeLogFilename(n)+".log", "error: "+runErr.Error())
 
 				stdoutMu.Lock()
 				fmt.Printf("[%s] error: %v\n", n, runErr)
 				stdoutMu.Unlock()
 			} else {
 				result.Stdout = output
-				writeLogFile(logDir+"/"+n+".log", output)
+				writeLogFile(logDir+"/"+sanitizeLogFilename(n)+".log", output)
 
 				stdoutMu.Lock()
 				for _, line := range strings.Split(output, "\n") {
@@ -455,6 +458,18 @@ func writeLogFile(filePath, content string) {
 	}
 	defer f.Close()
 	f.WriteString(content + "\n")
+}
+
+// sanitizeLogFilename 清理日志文件名，防止路径遍历攻击。
+// 只保留文件名部分，移除目录分隔符和特殊字符。
+func sanitizeLogFilename(name string) string {
+	// 只保留文件名部分（移除路径）
+	cleaned := filepath.Base(name)
+	// 替换不安全的字符
+	cleaned = strings.ReplaceAll(cleaned, "/", "_")
+	cleaned = strings.ReplaceAll(cleaned, "\\", "_")
+	cleaned = strings.ReplaceAll(cleaned, "..", "_")
+	return cleaned
 }
 
 // resolveFlag 从 cli 上下文中获取字符串参数值。

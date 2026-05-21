@@ -17,7 +17,9 @@ import (
 	"time"
 
 	"assh/asshc/domain"
+	"assh/asshc/port"
 	"assh/config"
+	"assh/log"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -40,6 +42,9 @@ type Connector struct {
 	chainParents map[*ssh.Client][]*ssh.Client // 跳板链目标→父连接映射
 }
 
+// 编译期接口合规检查
+var _ port.SSHConnector = (*Connector)(nil)
+
 // NewConnector 创建 Connector 实例（不含 passphrase，用于向后兼容）。
 // 密钥备份优先策略不可用，备份密钥解密不可用。
 func NewConnector() *Connector {
@@ -53,6 +58,15 @@ func NewConnectorWithPassphrase(accountPassphrase []byte) *Connector {
 	return &Connector{
 		accountPassphrase: accountPassphrase,
 	}
+}
+
+// ClearSensitiveData 清零 Connector 中的敏感数据（如 accountPassphrase）。
+// 应在不再需要 Connector 时调用，防止敏感数据在内存中残留。
+func (c *Connector) ClearSensitiveData() {
+	for i := range c.accountPassphrase {
+		c.accountPassphrase[i] = 0
+	}
+	c.accountPassphrase = nil
 }
 
 // Connect 根据服务器配置建立 SSH 连接。
@@ -383,6 +397,8 @@ func (c *Connector) getHostKeyCallback(server *domain.Server) ssh.HostKeyCallbac
 	// 检查是否跳过 host key 验证
 	if skip, ok := server.Options["insecure_skip_hostkey"]; ok {
 		if v, ok := skip.(bool); ok && v {
+			log.Warnf("⚠️  Host key verification disabled for %s (insecure_skip_hostkey=true)", server.Name)
+			log.Warnf("   This should only be used in trusted networks")
 			return ssh.InsecureIgnoreHostKey()
 		}
 	}

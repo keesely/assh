@@ -100,24 +100,29 @@ func aesEncryptCBC(plain []byte, block cipher.Block) ([]byte, error) {
 }
 
 // aesDecryptCBC 使用 AES-CBC 模式解密（IV 从密文头部提取）。
+// 错误信息故意模糊化以防止 padding oracle 攻击。
 func aesDecryptCBC(ciphertext []byte, block cipher.Block) ([]byte, error) {
 	blockSize := block.BlockSize()
 	if len(ciphertext) < blockSize {
-		return nil, errors.New("ciphertext too short")
+		return nil, errors.New("decryption failed")
 	}
 
 	iv := ciphertext[:blockSize]
 	data := ciphertext[blockSize:]
 
 	if len(data)%blockSize != 0 {
-		return nil, errors.New("ciphertext is not a multiple of block size")
+		return nil, errors.New("decryption failed")
 	}
 
 	plaintext := make([]byte, len(data))
 	mode := cipher.NewCBCDecrypter(block, iv)
 	mode.CryptBlocks(plaintext, data)
 
-	return pkcs7Unpad(plaintext)
+	result, err := pkcs7Unpad(plaintext)
+	if err != nil {
+		return nil, errors.New("decryption failed")
+	}
+	return result, nil
 }
 
 // aesEncryptCTR 使用 AES-CTR 模式加密，返回 IV + 密文。
@@ -249,6 +254,57 @@ func DecryptGCM(key, ciphertext []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+// EncryptGCMWithAAD encrypts plaintext using AES-256-GCM with authenticated additional data.
+// AAD (Additional Authenticated Data) binds the ciphertext to a specific context
+// (e.g., table name + row ID), preventing ciphertext from being moved between contexts.
+// Returns: nonce || ciphertext || tag.
+func EncryptGCMWithAAD(key, plaintext, aad []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, aad)
+	return ciphertext, nil
+}
+
+// DecryptGCMWithAAD decrypts ciphertext using AES-256-GCM with authenticated additional data.
+// AAD must match the value used during encryption, otherwise decryption will fail.
+func DecryptGCMWithAAD(key, ciphertext, aad []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, data := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, data, aad)
+	if err != nil {
+		return nil, err
+	}
+
+	return plaintext, nil
+}
+
 // aesEncryptECB uses AES-ECB mode encryption (insecure, only for legacy compatibility).
 // Deprecated: ECB mode does not hide plaintext patterns and should not be used in new systems.
 func aesEncryptECB(plain []byte, block cipher.Block) ([]byte, error) {
@@ -266,7 +322,7 @@ func aesEncryptECB(plain []byte, block cipher.Block) ([]byte, error) {
 // Deprecated: ECB mode does not hide plaintext patterns and should not be used in new systems.
 func aesDecryptECB(cipher []byte, block cipher.Block) ([]byte, error) {
 	if len(cipher)%block.BlockSize() != 0 {
-		return nil, errors.New("ciphertext is not a multiple of block size")
+		return nil, errors.New("decryption failed")
 	}
 
 	plaintext := make([]byte, len(cipher))
@@ -274,7 +330,11 @@ func aesDecryptECB(cipher []byte, block cipher.Block) ([]byte, error) {
 		block.Decrypt(plaintext[i:i+block.BlockSize()], cipher[i:i+block.BlockSize()])
 	}
 
-	return pkcs7Unpad(plaintext)
+	result, err := pkcs7Unpad(plaintext)
+	if err != nil {
+		return nil, errors.New("decryption failed")
+	}
+	return result, nil
 }
 
 // pkcs7Pad 对数据进行 PKCS#7 填充，使长度为 blockSize 的整数倍。

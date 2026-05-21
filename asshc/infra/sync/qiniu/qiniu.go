@@ -31,6 +31,9 @@ type SyncObject struct {
 	cfg  storage.Config
 }
 
+// 编译期接口合规检查
+var _ port.Syncer = (*SyncObject)(nil)
+
 // NewSyncer 创建七牛云同步器实例。
 //
 // 参数 account 包含七牛云的访问密钥、存储空间和区域配置。

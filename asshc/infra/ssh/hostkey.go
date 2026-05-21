@@ -3,6 +3,7 @@ package ssh
 import (
 	"net"
 
+	"assh/asshc/port"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -11,6 +12,10 @@ import (
 type KnownHostsChecker struct {
 	knownHostsPath string // known_hosts 文件路径（预留）
 }
+
+// 编译期接口合规检查
+var _ port.HostKeyChecker = (*KnownHostsChecker)(nil)
+var _ port.HostKeyChecker = (*InsecureChecker)(nil)
 
 // NewKnownHostsChecker 创建 KnownHostsChecker 实例（预留）。
 func NewKnownHostsChecker(path string) *KnownHostsChecker {

@@ -105,7 +105,7 @@ func (s *Store) ListKnownServers() ([]*domain.KnownServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeAndLog(rows, "rows")
 
 	var results []*domain.KnownServer
 	for rows.Next() {

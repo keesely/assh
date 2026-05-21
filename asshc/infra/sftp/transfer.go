@@ -25,6 +25,9 @@ type SFTPTransfer struct {
 	sshConnector func(server *domain.Server) (*ssh.Client, error)
 }
 
+// 编译期接口合规检查
+var _ port.FileTransfer = (*SFTPTransfer)(nil)
+
 func NewSFTPTransfer(sshConnector func(server *domain.Server) (*ssh.Client, error)) *SFTPTransfer {
 	return &SFTPTransfer{
 		sshConnector: sshConnector,
