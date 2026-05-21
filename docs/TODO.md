@@ -1126,7 +1126,7 @@ type SSHSession interface {
 }
 ```
 
-### 📝 Phase 14: Proxy & Tunnel 增强计划 (Planned)
+### 📝 NEXT-001: Proxy & Tunnel 增强计划 (Planned)
 
 目标：修复已知代理/隧道问题，重构 proxy/tunnel 参数体系，引入 SQLite 服务管理持久化，提供灵活的代理和隧道服务生命周期管理
 
@@ -1144,19 +1144,19 @@ type SSHSession interface {
 
 | 编号 | 任务 | 文件 | 说明 | 优先级 |
 |------|------|------|------|--------|
-| P14.1 | 🔧 修复 --http/--http-mode 无效 | `cmd/proxy.go` | 当前 `--http` 无法启用 HTTP CONNECT 代理，仅启动 SOCKS5；`--http-mode` 反向模式未正确处理。需修复 listener 编排逻辑，确保 `--http` 正确启动 HTTP CONNECT 处理器 | P0 |
-| P14.2 | 重构 proxy 参数体系 | `cmd/proxy.go` + `service/proxy.go` | `--http` 在目标端启动 HTTP Server 监听指定端口，将端口数据转发；`--tcp` 在目标端启动 TCP 服务监听指定端口，转发端口数据；`--socks` 启用 SOCKS 代理；目标端根据代理上下文确定（正常为服务器），`--reverse` 时目标端为本地 | P0 |
-| P14.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 |
-| P14.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80 | P0 |
-| P14.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 |
-| P14.6 | **服务领域实体 + 存储接口** | `asshc/domain/service.go` + `asshc/port/servicemgr.go` | 定义 `ServiceInstance` 领域实体（ID/类型/服务器/端口/状态/配置快照/创建时间等），`ServiceRepository` 接口（CRUD + ListByStatus + ListByType） | P0 |
-| P14.7 | **SQLite 持久化实现** | `asshc/infra/store/service.go` | 新建 `services` 表存储服务记录，AES-GCM 加密敏感配置（如密码/认证信息），支持状态标记（running/stopped/failed）、自动时间戳、服务名唯一索引 | P0 |
-| P14.8 | **ServiceManager 接口 + 实现** | `asshc/port/servicemgr.go` + `asshc/infra/service/mgr.go` | 定义 `ServiceManager` 接口（Start/Stop/Restart/Status/List），实现包括：代理服务管理器（ProxyManager）和隧道服务管理器（TunnelManager），统一生命周期控制 | P0 |
-| P14.9 | **ServiceManager 服务编排** | `asshc/service/servicemgr.go` | `ManageService` 编排层，组装 StartService/StopService/ListServices/RestartService，联动 ServiceRepository 持久化状态变更 | P0 |
-| P14.10 | **assh service 命令组** | `cmd/service.go` | 统一服务管理命令：`assh service list [--type proxy/tunnel] [--status running/stopped]`、`assh service start <id>`、`assh service stop <id>`、`assh service restart <id>`、`assh service rm <id>`；支持 `--all` 批量操作 | P0 |
-| P14.11 | **数据库迁移** | `asshc/infra/store/db.go` | `migrate()` 新增 `services` 建表 | P0 |
-| P14.12 | **DI 注入** | `main.go` + `cmd/app.go` | ServiceManager + ManageService 创建注入 | P0 |
-| P14.13 | **自动重连/恢复** | `asshc/service/servicemgr.go` | 启动时自动恢复状态为 running 的服务（按类型调用对应 Manager.Start），支持退避重试 | P1 |
+| NEXT-001.1 | 🔧 修复 --http/--http-mode 无效 | `cmd/proxy.go` | 当前 `--http` 无法启用 HTTP CONNECT 代理，仅启动 SOCKS5；`--http-mode` 反向模式未正确处理。需修复 listener 编排逻辑，确保 `--http` 正确启动 HTTP CONNECT 处理器 | P0 |
+| NEXT-001.2 | 重构 proxy 参数体系 | `cmd/proxy.go` + `service/proxy.go` | `--http` 在目标端启动 HTTP Server 监听指定端口，将端口数据转发；`--tcp` 在目标端启动 TCP 服务监听指定端口，转发端口数据；`--socks` 启用 SOCKS 代理；目标端根据代理上下文确定（正常为服务器），`--reverse` 时目标端为本地 | P0 |
+| NEXT-001.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 |
+| NEXT-001.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80 | P0 |
+| NEXT-001.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 |
+| NEXT-001.6 | **服务领域实体 + 存储接口** | `asshc/domain/service.go` + `asshc/port/servicemgr.go` | 定义 `ServiceInstance` 领域实体（ID/类型/服务器/端口/状态/配置快照/创建时间等），`ServiceRepository` 接口（CRUD + ListByStatus + ListByType） | P0 |
+| NEXT-001.7 | **SQLite 持久化实现** | `asshc/infra/store/service.go` | 新建 `services` 表存储服务记录，AES-GCM 加密敏感配置（如密码/认证信息），支持状态标记（running/stopped/failed）、自动时间戳、服务名唯一索引 | P0 |
+| NEXT-001.8 | **ServiceManager 接口 + 实现** | `asshc/port/servicemgr.go` + `asshc/infra/service/mgr.go` | 定义 `ServiceManager` 接口（Start/Stop/Restart/Status/List），实现包括：代理服务管理器（ProxyManager）和隧道服务管理器（TunnelManager），统一生命周期控制 | P0 |
+| NEXT-001.9 | **ServiceManager 服务编排** | `asshc/service/servicemgr.go` | `ManageService` 编排层，组装 StartService/StopService/ListServices/RestartService，联动 ServiceRepository 持久化状态变更 | P0 |
+| NEXT-001.10 | **assh service 命令组** | `cmd/service.go` | 统一服务管理命令：`assh service list [--type proxy/tunnel] [--status running/stopped]`、`assh service start <id>`、`assh service stop <id>`、`assh service restart <id>`、`assh service rm <id>`；支持 `--all` 批量操作 | P0 |
+| NEXT-001.11 | **数据库迁移** | `asshc/infra/store/db.go` | `migrate()` 新增 `services` 建表 | P0 |
+| NEXT-001.12 | **DI 注入** | `main.go` + `cmd/app.go` | ServiceManager + ManageService 创建注入 | P0 |
+| NEXT-001.13 | **自动重连/恢复** | `asshc/service/servicemgr.go` | 启动时自动恢复状态为 running 的服务（按类型调用对应 Manager.Start），支持退避重试 | P1 |
 | **验证** | `go build ./... && go test ./... -v` | | | |
 
 **设计说明**：
@@ -1274,7 +1274,7 @@ assh service restart --type tunnel            # 重启所有隧道服务
 
 ### 🔬 实验阶段计划
 
-实验阶段（Phase X）用于探索验证前瞻性功能，与主版本线（Phase 0-14）并行开发。
+实验阶段（Phase X）用于探索验证前瞻性功能，与主版本线（Phase 0-13 + NEXT-001）并行开发。
 
 **定位**:
 - **实验性**: 验证概念和用户需求，不保证最终进入主版本
@@ -1371,7 +1371,7 @@ Phase 0 (骨架)
                     ├── Phase 11 (远程挂载)
                     ├── Phase 12 (自动更新)
                     ├── Phase 13 (命令执行增强)
-                    └── Phase 14 (代理/隧道增强) ← 基于 Phase 7 + Phase 10
+                    └── NEXT-001 (代理/隧道增强) ← 基于 Phase 7 + Phase 10
                           └── 实验阶段 (Phase X)
                                 ├── X1: AI 安全检查
                                 ├── X2: 虚拟命令投放与执行
