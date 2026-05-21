@@ -1,10 +1,15 @@
-# ASSH v2.0.0 综合安全审查报告
+# ASSH 综合安全审查报告（索引）
 
-**审查日期**: 2026-05-19  
-**审查范围**: `asshv2/` 全量 Go 源码（asshc/, cmd/, config/, log/）  
-**审查工具**: `go vet`、`go test -race`、OSV 漏洞数据库、手动代码审计、逻辑边界分析  
-**源文档**: `docs/securitys/security-review-2026-05-19.md`、`docs/securitys/LOGIC_BOUNDARY_AUDIT.md`、`docs/securitys/security-audit-2026-05-19.md`  
-**报告版本**: 2.0（合并去重版）
+**最近更新**: 2026-05-22  
+**审查范围**: `asshv2/` 全量 Go 源码  
+**审查工具**: `govulncheck`、`go vet`、`go test -race`、`gocyclo`、`staticcheck`、OSV 漏洞数据库、手动代码审计  
+**索引版本**: 3.0  
+
+| 版本 | 日期 | 范围 | 报告 | 发现 |
+|------|------|------|------|------|
+| 1.0 | 2026-05-19 | v2.0.0 | 综合审查 + 逻辑边界 | 6🔴+2🟠+12🟡+9🟢 = 29 |
+| 2.0 | 2026-05-19 | v2.0.0 | 去重合并为本索引 | 同 1.0 |
+| 3.0 | 2026-05-22 | **v2.0.1** | `security-audit-2026-05-22.md` | **4🔴+12🟡+19🟠+24🟢 = 59** |
 
 ---
 
@@ -632,19 +637,21 @@ SOCKS5Proxy、HTTPConnectProxy、SmartProxy、LocalForward、RemoteForward 各�
 
 | 文档 | 说明 |
 |------|------|
-| `docs/securitys/security-review-2026-05-19.md` | 原始安全审查报告（源文档） |
-| `docs/securitys/LOGIC_BOUNDARY_AUDIT.md` | 原始逻辑边界审查报告（源文档） |
-| `docs/securitys/security-audit-2026-05-19.md` | 综合审查报告（源文档，含修复方案摘要） |
-| `docs/securitys/fix-plan.md` | 详细修复方案（源文档，P0-P3 代码级步骤） |
-| **`docs/hotfix-plan.md`** | **本报告配套修复计划（合并去重版）** |
+| `docs/securitys/security-review-2026-05-19.md` | v2.0.0 原始安全审查报告（源文档） |
+| `docs/securitys/LOGIC_BOUNDARY_AUDIT.md` | v2.0.0 原始逻辑边界审查报告（源文档） |
+| `docs/securitys/security-audit-2026-05-19.md` | v2.0.0 综合审查报告（源文档，含修复方案摘要） |
+| `docs/securitys/fix-plan.md` | v2.0.0 详细修复方案（P0-P3 代码级步骤） |
+| **`docs/hotfix-plan.md`** | **v2.0.0 配套修复计划（合并去重版）** |
+| **`docs/securitys/security-audit-2026-05-22.md`** | **v2.0.1 全量安全审查（本报告）** |
 
 ### C. 版本历史
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 1.0 | 2026-05-19 | 初始安全审查报告 |
+| 1.0 | 2026-05-19 | 初始安全审查报告 (v2.0.0) |
 | 2.0 | 2026-05-19 | 合并安全审查 + 逻辑边界审查，去重后归档为 `SECURITYS.md` |
+| 3.0 | 2026-05-22 | v2.0.1 全量安全审查 — `security-audit-2026-05-22.md`（59 项发现：4 CRITICAL, 12 HIGH, 19 MEDIUM, 24 LOW） |
 
 ---
 
-*本报告由 `docs/securitys/` 目录下 4 份源文档合并去重生成，原始文件未修改。*
+*本报告由 `docs/securitys/` 目录下 5 份源文档合并生成，原始文件未修改。*
