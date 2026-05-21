@@ -1,5 +1,123 @@
 # Changelog
 
+## v2.0.1 (2026-05-22)
+
+### 安全审计修复 (Batch 1/2/4)
+
+**来源**: [安全审计报告](docs/securitys/security-audit-2026-05-22.md) | **分支**: `hotfix/security-audit-2026-05-22`
+
+#### P0 CRITICAL (4项)
+- 修复 `RollbackTo()` 快照前密码明文写入Changelog的问题 (AES-GCM加密)
+- 修复 SFTP Shell `!` 命令注入 (白名单验证 `allowedLocalCmds`)
+- 修复 Host Key 验证绕过 (insecure 模式下添加warn日志)
+- 新增 Argon2id KEK 保护 DEK 加密密钥 (key_derivation.go)
+
+#### P1 HIGH (7项)
+- 修复服务器名路径遍历 (`sanitizeLogFilename` 路径清理)
+- PKCS1v15 导出标记 Deprecated (建议OAEP)
+- 敏感内存清零 (`Store.Close()`/`Connector.ClearSensitiveData()`/`KeyManager.ClearSensitiveData()`)
+- 修复读锁写入 cryptoKey (改用 `atomic.Value` + `sync.Once`)
+- JumpRecorder 添加完整锁保护
+- 新增密钥轮换框架 (`key_version` + `reencrypt` 命令)
+
+#### P2 MEDIUM (9项)
+- 移除死代码: 重复SFTP handler (~155行)、`reconnectLoop`、`expandPathSimple`、`keyTypeDefaultFilenames`
+- `os.Exit(0)` → `cli.NewExitError` 正确错误处理
+- CBC padding oracle 错误信息统一模糊化
+- 新增 GCM AAD context 绑定 (`EncryptGCMWithAAD`/`DecryptGCMWithAAD`)
+- 无盐 SHA256 改用 HMAC-SHA256 (认证指纹)
+- `closeAndLog` 辅助函数处理 defer 错误
+- 15 个编译期接口合规检查 (`var _` 断言)
+- 全量添加 `log.Warnf` 记录静默忽略的错误
+
+### Phase 10: 跳板机支持 (Jump Host)
+
+**完成时间**: 2026-05-22 | **ADR**: ADR-030 | **设计**: [Phase10-Design.md](docs/Phase10-Design.md)
+
+#### 领域层 (`asshc/domain/`)
+- `jump.go` — JumpHistory 领域实体 + JumpHopAuth 类型
+
+#### 接口层 (`asshc/port/`)
+- `jump.go` — JumpHistoryRecorder 接口 (Record/List/Get/Delete/Clear/IncrementUse)
+- `connector.go` — 新增 ConnectChain(target, chain) 多跳连接方法
+
+#### 基础设施层
+- `asshc/infra/ssh/client.go` — ConnectChain 多跳SSH实现 (`chainClient` + `dialThrough`)
+  - 每跳 Keepalive 心跳
+  - 带索引的错误报告 (`"jump[1] gateway: ..."`)
+  - 级联关闭父连接 (资源泄漏修复)
+- `asshc/infra/store/jump.go` — JumpRecorder CRUD + AES-GCM 加密存储
+- `asshc/infra/store/db.go` — jump_history 表迁移
+
+#### 服务编排层 (`asshc/service/`)
+- `connect.go` — ConnectChain 服务 + parseJumpChain 解析
+  - Options 默认跳板 (`Options["jump_hosts"]`)
+  - 配置隔离规则 (CLI flags 不传给跳板机)
+  - `-J none` 禁用跳板
+  - IPv6 方括号解析 (`[::1]`)
+  - `-J @id` 历史跳板链复用
+- `jump.go` — JumpService 跳板历史管理 (RecordJumpChain/List/Delete/Clear)
+
+#### CLI 命令 (`cmd/`)
+- `connect.go` — login/run/bc 全部支持 `-J/--jump` 参数
+- `sftp_cmd.go` — push/pull 支持 `-J` (assh-fs)
+- `proxy.go` — proxy 支持 `-J`
+- `tunnel.go` — tunnel 支持 `-J`
+- `jump.go` — `assh jump history` 命令 (list/--clear/--delete)
+
+#### DI 注入
+- `main.go` — JumpService + JumpHistoryRecorder 注入
+- `cmd/fs/main.go` + `cmd/bootstrap.go` — assh-fs 跳板支持
+
+#### 验证
+- 编译 ✅ vet ✅ 测试 ✅ 竞态检测 ✅
+- P0 (11任务) + P1 (7任务) 全部完成
+
+### Phase 9: 服务器健康检查
+
+**完成时间**: 2026-05-17
+
+#### 接口层 (`asshc/port/`)
+- `health.go` — HealthChecker 接口 + HealthResult/HealthDetails DTOs + HealthStatus 枚举
+
+#### 基础设施层
+- `asshc/infra/ssh/health.go` — SSH 健康检查实现 (连接延迟 + 系统信息采集: uptime/load/memory/disk)
+
+#### 服务编排层 (`asshc/service/`)
+- `health.go` — HealthService 编排层 (CheckServer/CheckGroup/CheckAll/CheckServers + 并发)
+
+#### CLI 命令
+- `cmd/health.go` — health check/list 命令 (单机/批量/分组巡检, `--detail` 系统信息, `--concurrency`)
+
+#### DI 注入
+- `main.go` + `cmd/app.go` — HealthChecker + HealthService 创建注入
+
+#### 验证
+- 编译 ✅ vet ✅ 测试 ✅
+
+### Phase 8: 云同步 (Qiniu)
+
+**完成时间**: 2026-05-16
+
+#### 接口层 (`asshc/port/`)
+- `syncer.go` — Syncer 接口 + DTOs (SyncAccount/SyncData/ServerData/SyncResult/SyncObject)
+
+#### 数据层 (`asshc/infra/store/`)
+- `db.go` — cloud_accounts + sync_history 表迁移
+- `account.go` — 云账户 CRUD + AES-GCM 加密存储
+
+#### 基础设施层
+- `asshc/infra/sync/qiniu/qiniu.go` — SyncObject 实现 port.Syncer (Login/Push/Pull/List/Delete)
+
+#### 服务编排层 (`asshc/service/`)
+- `sync.go` — SyncService (Push/Pull 合并逻辑, 冲突保留双方策略)
+
+#### CLI 命令
+- `cmd/sync.go` — sync account set/show/delete/test + push/pull/history
+
+#### 验证
+- 编译 ✅ vet ✅ 测试 ✅
+
 ## v2.0.0-dev (2026-05-13)
 
 ### Phase 7: 代理 & 隧道 (Smart Proxy 系统)
