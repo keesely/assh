@@ -395,8 +395,16 @@ func (s *Store) RollbackTo(name string, version int) error {
 		}
 	}
 
-	// 为回滚条目序列化快照
-	snapshotJSON, err := json.Marshal(restored)
+	// 为回滚条目序列化快照（密码加密存储，与 Set() 保持一致）
+	snapshot := restored
+	if snapshot.Auth != nil && snapshot.Auth.Password != "" {
+		encrypted, err := s.encryptPassword(snapshot.Auth.Password)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt snapshot password: %w", err)
+		}
+		snapshot.Auth.Password = string(encrypted)
+	}
+	snapshotJSON, err := json.Marshal(snapshot)
 	if err != nil {
 		return err
 	}

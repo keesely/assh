@@ -1111,11 +1111,51 @@ func handleChmod(client *sftp.Client, cwd string, args []string) {
 	}
 }
 
+// allowedLocalCmds 白名单：SFTP 交互模式下允许执行的本地命令
+var allowedLocalCmds = map[string]bool{
+	"ls":    true,
+	"ll":    true,
+	"dir":   true,
+	"cat":   true,
+	"head":  true,
+	"tail":  true,
+	"pwd":   true,
+	"echo":  true,
+	"grep":  true,
+	"wc":    true,
+	"sort":  true,
+	"uniq":  true,
+	"file":  true,
+	"stat":  true,
+	"du":    true,
+	"df":    true,
+	"which": true,
+	"env":   true,
+	"set":   true,
+}
+
 func handleLocalCmd(args []string) {
 	if len(args) == 0 {
 		return
 	}
-	cmd := exec.Command(args[0], args[1:]...)
+
+	cmdName := args[0]
+	if !allowedLocalCmds[cmdName] {
+		fmt.Fprintf(os.Stderr, "Error: command '%s' is not allowed in SFTP interactive mode\n", cmdName)
+		fmt.Fprintf(os.Stderr, "Allowed commands: ")
+		first := true
+		for cmd := range allowedLocalCmds {
+			if !first {
+				fmt.Fprintf(os.Stderr, ", ")
+			}
+			fmt.Fprintf(os.Stderr, "%s", cmd)
+			first = false
+		}
+		fmt.Fprintf(os.Stderr, "\n")
+		return
+	}
+
+	cmd := exec.Command(cmdName, args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
@@ -1284,13 +1324,8 @@ func handleSftpRm(client *sftp.Client, cwd string, args []string) {
 }
 
 func handleSftpLocalCmd(args []string) {
-	if len(args) == 0 {
-		return
-	}
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Run()
+	// 复用 handleLocalCmd 的白名单验证
+	handleLocalCmd(args)
 }
 
 // init 初始化 CLI 帮助模板和环境目录。

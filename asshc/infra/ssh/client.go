@@ -18,6 +18,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/config"
+	"assh/log"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -383,6 +384,8 @@ func (c *Connector) getHostKeyCallback(server *domain.Server) ssh.HostKeyCallbac
 	// 检查是否跳过 host key 验证
 	if skip, ok := server.Options["insecure_skip_hostkey"]; ok {
 		if v, ok := skip.(bool); ok && v {
+			log.Warnf("⚠️  Host key verification disabled for %s (insecure_skip_hostkey=true)", server.Name)
+			log.Warnf("   This should only be used in trusted networks")
 			return ssh.InsecureIgnoreHostKey()
 		}
 	}
