@@ -72,6 +72,7 @@ func main() {
 	// 5. 创建 service 层（依赖注入）
 	serverSvc := service.NewServerService(repo)
 	connectSvc := service.NewConnectService(connector, session, repo)
+	connectSvc.SetJumpRecorder(repo.JumpRecorder()) // P10.7-c: -J @id 复用
 
 	// 6. 创建密钥管理器服务
 	keySvc := service.NewKeyService(km, repo, connector)
