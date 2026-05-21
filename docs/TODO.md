@@ -1004,7 +1004,7 @@ assh health list --detail
   Disk:     15G/100G (15%)
 ```
 
-### 🆕 Phase 10: 跳板机支持 (进行中)
+### ✅ Phase 10: 跳板机支持 (P0+P1 完成, 2026-05-22)
 
 目标：实现 SSH 多跳跳板机支持，覆盖登录/命令执行/文件传输/端口转发全场景
 
@@ -1015,6 +1015,10 @@ assh health list --detail
 ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
 依赖：Phase 3 (ssh)
+
+**完成总结** (2026-05-22):
+- P0 (11 个任务): ✅ Core 跳板链连接 + 资源泄漏修复 + Options 默认跳板 + Keepalive + 错误报告 + IPv6
+- P1 (7 个任务): ✅ assh-fs -J / proxy/tunnel -J / jump history 命令 / -J @id 复用 / assh-fs DI / RecordJumpChain 认证完善
 
 | 编号 | 任务 | 文件 | 说明 | 优先级 |
 |------|------|------|------|--------|
@@ -1029,22 +1033,24 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 | P10.4-a | ✅ login -J 支持 | `cmd/connect.go` | loginAction 识别 -J/--jump | P0 |
 | P10.4-b | ✅ run -J 支持 | `cmd/connect.go` | runAction 识别 -J | P0 |
 | P10.4-c | ✅ bc -J 支持 | `cmd/connect.go` | bcAction 识别 -J | P0 |
-| P10.5-a | assh-fs push -J 支持 | `cmd/sftp_cmd.go` | push 命令 -J 标志 | P1 |
-| P10.5-b | assh-fs pull -J 支持 | `cmd/sftp_cmd.go` | pull 命令 -J 标志 | P1 |
-| P10.6-a | proxy -J 支持 | `cmd/proxy.go` | proxy 命令 -J 标志 | P1 |
-| P10.6-b | tunnel -J 支持 | `cmd/tunnel.go` | tunnel 命令 -J 标志 | P1 |
-| P10.7-a | jump history 命令 | `cmd/jump.go` | assh jump history [list/--clear/--delete] | P1 |
-| P10.7-b | 历史自动记录 | `cmd/connect.go` + `cmd/jump.go` | 有 direct 跳板时自动写历史 | P1 |
-| P10.7-c | -J @id 复用 | `service/connect.go` | history-ref 解析：从历史恢复跳板链+认证 | P1 |
-| P10.8-a | DI 注入 assh | `main.go` + `cmd/app.go` | JumpService + JumpHistoryRecorder 注入 | P0 |
-| P10.8-b | DI 注入 assh-fs | `cmd/fs/main.go` + `cmd/bootstrap.go` | assh-fs 的 jump 支持 | P1 |
-| P10.9-a | Options 默认跳板 | `asshc/service/connect.go` | ConnectByName 检查 Options["jump_hosts"] | P0 |
-| P10.9-b | Config 隔离规则 | `asshc/service/connect.go` | CLI flags 不传给跳板机 | P0 |
-| P10.9-c | -J none 禁用 | `asshc/service/connect.go` | `-J none` 跳过跳板逻辑 | P0 |
-| P10.9-d | IPv6 方括号解析 | `asshc/service/connect.go` | parseJumpChain 识别 `[...]` | P0 |
-| P10.9-e | 每跳 Keepalive | `asshc/infra/ssh/client.go` | dialThrough 中 setupKeepalive | P0 |
-| P10.9-f | 每跳错误报告 | `asshc/infra/ssh/client.go` | 带索引的错误包装 ("jump[1] gateway: ...") | P0 |
-| **验证** | `go build ./... && go test ./asshc/... -v` | | 编译+测试全部通过 | P0 |
+| P10.5-a | ✅ assh-fs push -J 支持 | `cmd/sftp_cmd.go` | push 命令 -J 标志 | P1 |
+| P10.5-b | ✅ assh-fs pull -J 支持 | `cmd/sftp_cmd.go` | pull 命令 -J 标志 | P1 |
+| P10.6-a | ✅ proxy -J 支持 | `cmd/proxy.go` | proxy 命令 -J 标志 | P1 |
+| P10.6-b | ✅ tunnel -J 支持 | `cmd/tunnel.go` | tunnel 命令 -J 标志 | P1 |
+| P10.7-a | ✅ jump history 命令 | `cmd/jump.go` | assh jump history [list/--clear/--delete] | P1 |
+| P10.7-b | ✅ 历史自动记录 | `cmd/connect.go` + `cmd/jump.go` | 有 direct 跳板时自动写历史 | P1 |
+| P10.7-c | ✅ -J @id 复用 | `service/connect.go` | history-ref 解析：从历史恢复跳板链+认证 | P1 |
+| P10.8-a | ✅ DI 注入 assh | `main.go` + `cmd/app.go` | JumpService + JumpHistoryRecorder 注入 | P0 |
+| P10.8-b | ✅ DI 注入 assh-fs | `cmd/fs/main.go` + `cmd/bootstrap.go` | assh-fs 的 jump 支持 | P1 |
+| P10.9-a | ✅ Options 默认跳板 | `asshc/service/connect.go` | ConnectByName 检查 Options["jump_hosts"] | P0 |
+| P10.9-b | ✅ Config 隔离规则 | `asshc/service/connect.go` | CLI flags 不传给跳板机 | P0 |
+| P10.9-c | ✅ -J none 禁用 | `asshc/service/connect.go` | `-J none` 跳过跳板逻辑 | P0 |
+| P10.9-d | ✅ IPv6 方括号解析 | `asshc/service/connect.go` | parseJumpChain 识别 `[...]` | P0 |
+| P10.9-e | ✅ 每跳 Keepalive | `asshc/infra/ssh/client.go` | dialThrough 中 setupKeepalive | P0 |
+| P10.9-f | ✅ 每跳错误报告 | `asshc/infra/ssh/client.go` | 带索引的错误包装 ("jump[1] gateway: ...") | P0 |
+| P10.10 | ✅ 资源泄漏修复 | `asshc/infra/ssh/client.go` | ConnectChain 级联关闭父连接 + 移除 ChainClient 死代码 | P0 |
+| P10.11 | ✅ RecordJumpChain 完善 | `asshc/service/jump.go` | 类型检测(server/direct) + 认证信息(Password/KeyFile)记录 | P1 |
+| **验证** | `go build ./... && go test ./... -v` | | 编译+测试全部通过 | P0 |
 
 ### 📝 Phase 11: 远程服务器挂载
 
