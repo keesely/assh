@@ -677,6 +677,7 @@ func (a *App) registerCommands() {
 	a.registerTunnelCommands()
 	a.registerSyncCommands()
 	a.registerHealthCommands()
+	a.registerJumpCommands()
 }
 
 // beforeAction 是全局 Before 钩子，在每次命令执行前调用。
