@@ -10,6 +10,8 @@ import (
 	"assh/asshc/domain"
 	"assh/asshc/port"
 	"assh/asshc/infra/sftp"
+	gsftp "github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 )
 
 type TransferOptions struct {
@@ -22,8 +24,9 @@ type TransferOptions struct {
 }
 
 type TransferService struct {
-	transfer  *sftp.SFTPTransfer
-	repo      port.ServerRepository
+	transfer   *sftp.SFTPTransfer
+	repo       port.ServerRepository
+	connectSvc *ConnectService // optional, for -J jump chain support
 }
 
 func NewTransferService(transfer *sftp.SFTPTransfer, repo port.ServerRepository) *TransferService {
@@ -31,6 +34,27 @@ func NewTransferService(transfer *sftp.SFTPTransfer, repo port.ServerRepository)
 		transfer: transfer,
 		repo:     repo,
 	}
+}
+
+// SetConnectService 设置 ConnectService 引用，用于 -J 跳板链支持。
+func (s *TransferService) SetConnectService(cs *ConnectService) {
+	s.connectSvc = cs
+}
+
+// connectWithChain 通过跳板链建立 SSH 连接。
+// 如果 chainExpr 为空，返回 nil 表示直接连接。
+func (s *TransferService) connectWithChain(name, chainExpr string) (*ssh.Client, error) {
+	if chainExpr == "" {
+		return nil, nil
+	}
+	if s.connectSvc == nil {
+		return nil, fmt.Errorf("jump chain support not available")
+	}
+	client, _, err := s.connectSvc.ConnectChain(name, chainExpr)
+	if err != nil {
+		return nil, fmt.Errorf("jump connection failed: %w", err)
+	}
+	return client, nil
 }
 
 func (s *TransferService) PushFile(ctx context.Context, name, localPath, remotePath string, opts TransferOptions) error {
@@ -321,6 +345,185 @@ func (s *TransferService) PullFileDirect(ctx context.Context, server *domain.Ser
 
 	fmt.Println()
 	return nil
+}
+
+// makeProgressCallback 构建通用的进度回调函数。
+func (s *TransferService) makeProgressCallback(opts TransferOptions) port.TransferProgress {
+	if !opts.Progress {
+		return nil
+	}
+	return func(info port.TransferInfo) {
+		rate := info.Rate
+		if rate == "" {
+			rate = "0B/s"
+		}
+		eta := info.ETA
+		if eta == "" {
+			eta = "ETA ?"
+		}
+		percent := int(info.Progress * 100)
+		fmt.Printf("\r[%s] %3d%% %s %s", info.FileName, percent, rate, eta)
+		if info.Progress >= 1 {
+			fmt.Println()
+		}
+	}
+}
+
+// PushFileWithChain 通过跳板链上传文件。
+// chainExpr 为 -J 参数值，格式与 assh -J 一致：逗号分隔的跳板列表。
+func (s *TransferService) PushFileWithChain(ctx context.Context, name, chainExpr, localPath, remotePath string, opts TransferOptions) error {
+	// 1. 验证本地路径
+	localPath, err := filepath.Abs(localPath)
+	if err != nil {
+		return fmt.Errorf("invalid local path: %w", err)
+	}
+	if !s.localExists(localPath) {
+		return fmt.Errorf("local file does not exist: %s", localPath)
+	}
+	isDir := s.localIsDir(localPath)
+	if isDir && !opts.Recursive {
+		return fmt.Errorf("omitting directory, use -r to upload directory")
+	}
+
+	// 2. 建立跳板连接
+	sshClient, err := s.connectWithChain(name, chainExpr)
+	if err != nil {
+		return err
+	}
+	defer sshClient.Close()
+
+	// 3. 路径标准化
+	remotePath = s.ensureRemoteSlash(remotePath)
+	if isDir {
+		baseName := filepath.Base(localPath)
+		if !strings.HasSuffix(remotePath, "/") {
+			remotePath += "/"
+		}
+		remotePath += baseName
+	} else if strings.HasSuffix(remotePath, "/") {
+		remotePath += filepath.Base(localPath)
+	}
+
+	// 4. 检查远程目录
+	// 对于链连接，使用 sshClient 直接创建 SFTP 客户端检查
+	gsftpClient, err := gsftp.NewClient(sshClient)
+	if err != nil {
+		return fmt.Errorf("sftp client creation failed: %w", err)
+	}
+
+	if !isDirExist(gsftpClient, s.remoteDir(remotePath)) {
+		fmt.Printf("remote directory %s does not exist, create? ", s.remoteDir(remotePath))
+		var answer string
+		fmt.Scanln(&answer)
+		if answer == "y" || answer == "Y" || answer == "yes" {
+			if err := gsftpClient.MkdirAll(s.remoteDir(remotePath)); err != nil {
+				gsftpClient.Close()
+				return fmt.Errorf("create remote directory failed: %w", err)
+			}
+		} else {
+			gsftpClient.Close()
+			return fmt.Errorf("aborted")
+		}
+	}
+	gsftpClient.Close()
+
+	// 5. 传输
+	progress := s.makeProgressCallback(opts)
+	if err := s.transfer.PushWithSSHClient(ctx, sshClient, localPath, remotePath, s.toPortOpts(opts), progress); err != nil {
+		return fmt.Errorf("push failed: %w", err)
+	}
+
+	if opts.VerifyChecksum {
+		fmt.Printf("\nverifying: %s\n", filepath.Base(localPath))
+		if err := s.transfer.VerifyUploadWithSSHClient(sshClient, localPath, remotePath, true); err != nil {
+			return fmt.Errorf("verification failed: %w", err)
+		}
+		fmt.Printf("  size match\n")
+	}
+
+	return nil
+}
+
+// PullFileWithChain 通过跳板链下载文件。
+// chainExpr 为 -J 参数值，格式与 assh -J 一致。
+func (s *TransferService) PullFileWithChain(ctx context.Context, name, chainExpr, remotePath, localPath string, opts TransferOptions) error {
+	// 1. 建立跳板连接（先连接，需要用于 Exists/IsDir 检查）
+	sshClient, err := s.connectWithChain(name, chainExpr)
+	if err != nil {
+		return err
+	}
+	defer sshClient.Close()
+
+	// 2. 创建 SFTP 客户端用于检查
+	gsftpClient, err := gsftp.NewClient(sshClient)
+	if err != nil {
+		return fmt.Errorf("sftp client creation failed: %w", err)
+	}
+
+	// 3. 验证远程路径
+	remotePath = s.normalizeRemotePath(remotePath)
+	if !exists(gsftpClient, remotePath) {
+		gsftpClient.Close()
+		return fmt.Errorf("remote path does not exist: %s", remotePath)
+	}
+	remoteIsDir := isDir(gsftpClient, remotePath)
+	if remoteIsDir && !opts.Recursive {
+		gsftpClient.Close()
+		return fmt.Errorf("omitting directory, use -r to download directory")
+	}
+
+	// 4. 处理本地路径
+	localPath, err = filepath.Abs(localPath)
+	if err != nil {
+		gsftpClient.Close()
+		return fmt.Errorf("invalid local path: %w", err)
+	}
+	if remoteIsDir {
+		baseName := s.remoteBaseName(remotePath)
+		localPath = filepath.Join(localPath, baseName)
+	} else if s.localExists(localPath) && s.localIsDir(localPath) {
+		localPath = filepath.Join(localPath, filepath.Base(remotePath))
+	}
+	if !s.localExists(filepath.Dir(localPath)) {
+		if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+			gsftpClient.Close()
+			return fmt.Errorf("create local directory failed: %w", err)
+		}
+	}
+	gsftpClient.Close()
+
+	// 5. 传输
+	progress := s.makeProgressCallback(opts)
+	if err := s.transfer.PullWithSSHClient(ctx, sshClient, remotePath, localPath, s.toPortOpts(opts), progress); err != nil {
+		return fmt.Errorf("pull failed: %w", err)
+	}
+
+	fmt.Println()
+	return nil
+}
+
+// isDirExist 检查远程路径是否存在且为目录（使用已有 SFTP 客户端）。
+func isDirExist(client *gsftp.Client, path string) bool {
+	info, err := client.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}
+
+// exists 检查远程路径是否存在（使用已有 SFTP 客户端）。
+func exists(client *gsftp.Client, path string) bool {
+	_, err := client.Stat(path)
+	return err == nil
+}
+
+// isDir 检查远程路径是否为目录（使用已有 SFTP 客户端）。
+func isDir(client *gsftp.Client, path string) bool {
+	info, err := client.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }
 
 func (s *TransferService) ListRemote(name, remotePath string) ([]port.FileInfo, error) {
