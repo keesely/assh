@@ -1052,7 +1052,25 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 | P10.11 | ✅ RecordJumpChain 完善 | `asshc/service/jump.go` | 类型检测(server/direct) + 认证信息(Password/KeyFile)记录 | P1 |
 | **验证** | `go build ./... && go test ./... -v` | | 编译+测试全部通过 | P0 |
 
-### 📝 Phase 11: 远程服务器挂载
+### 📝 Phase 11: 自动更新/升级 (高优先级)
+
+目标：实现版本检查、手动/自动升级、强制更新
+
+依赖： Phase 4 (CLI)
+
+**优先级提升说明**：自动更新机制是保障用户始终运行最新安全版本的关键基础设施，因此将本阶段从原有 Phase 12 提前至 Phase 11。
+
+| 任务 | 说明 |
+|------|------|
+| P11.1 版本检查接口 | `asshc/port/updater.go` — VersionChecker 接口 |
+| P11.2 更新检查命令 | `assh version --check` 或 `assh upgrade --check` |
+| P11.3 升级命令 | `assh upgrade` — 下载并安装新版本 |
+| P11.4 强制更新 | `assh upgrade --force` — 强制更新到指定版本 |
+| P11.5 更新源配置 | 支持自定义更新源（URL/GitHub Release） |
+| P11.6 回滚支持 | 升级失败时回滚到上一版本 |
+| **验证**: `go test ./asshc/... -v` |
+
+### 📝 Phase 12: 远程服务器挂载
 
 目标：使用 sshfs/webdav/samba 挂载远程服务器文件系统到本地
 
@@ -1060,28 +1078,12 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
 | 任务 | 说明 |
 |------|------|
-| P11.1 挂载接口 | `asshc/port/mounter.go` — FileMounter 接口 |
-| P11.2 SSHFS 挂载 | `asshc/infra/mount/sshfs.go` — sshfs 封装 |
-| P11.3 WebDAV 挂载 | `asshc/infra/mount/webdav.go` — WebDAV 客户端 |
-| P11.4 SMB 挂载 | `asshc/infra/mount/smb.go` — SMB/CIFS 客户端 |
-| P11.5 挂载服务 | `asshc/service/mount.go` — MountService |
-| P11.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
-| **验证**: `go test ./asshc/... -v` |
-
-### 📝 Phase 12: 自动更新/升级
-
-目标：实现版本检查、手动/自动升级、强制更新
-
-依赖： Phase 4 (CLI)
-
-| 任务 | 说明 |
-|------|------|
-| P12.1 版本检查接口 | `asshc/port/updater.go` — VersionChecker 接口 |
-| P12.2 更新检查命令 | `assh version --check` 或 `assh upgrade --check` |
-| P12.3 升级命令 | `assh upgrade` — 下载并安装新版本 |
-| P12.4 强制更新 | `assh upgrade --force` — 强制更新到指定版本 |
-| P12.5 更新源配置 | 支持自定义更新源（URL/GitHub Release） |
-| P12.6 回滚支持 | 升级失败时回滚到上一版本 |
+| P12.1 挂载接口 | `asshc/port/mounter.go` — FileMounter 接口 |
+| P12.2 SSHFS 挂载 | `asshc/infra/mount/sshfs.go` — sshfs 封装 |
+| P12.3 WebDAV 挂载 | `asshc/infra/mount/webdav.go` — WebDAV 客户端 |
+| P12.4 SMB 挂载 | `asshc/infra/mount/smb.go` — SMB/CIFS 客户端 |
+| P12.5 挂载服务 | `asshc/service/mount.go` — MountService |
+| P12.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
 | **验证**: `go test ./asshc/... -v` |
 
 ### 📝 Phase 13: 远程命令执行增强
@@ -1374,8 +1376,8 @@ Phase 0 (骨架)
                     ├── Phase 8 (云同步)
                     ├── Phase 9 (健康检查)
                     ├── Phase 10 (跳板机)
-                    ├── Phase 11 (远程挂载)
-                    ├── Phase 12 (自动更新)
+                    ├── Phase 11 (自动更新/升级) ← 高优先级
+                    ├── Phase 12 (远程挂载)
                     ├── Phase 13 (命令执行增强)
                     └── NEXT-001 (代理/隧道增强) ← 基于 Phase 7 + Phase 10
                           └── 实验阶段 (Phase X)
