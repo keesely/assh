@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"assh/asshc/domain"
+	"assh/asshc/port"
 	"assh/config"
 	"assh/log"
 	"golang.org/x/crypto/ssh"
@@ -40,6 +41,9 @@ type Connector struct {
 	mu           sync.Mutex
 	chainParents map[*ssh.Client][]*ssh.Client // 跳板链目标→父连接映射
 }
+
+// 编译期接口合规检查
+var _ port.SSHConnector = (*Connector)(nil)
 
 // NewConnector 创建 Connector 实例（不含 passphrase，用于向后兼容）。
 // 密钥备份优先策略不可用，备份密钥解密不可用。

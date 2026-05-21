@@ -238,45 +238,39 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 						fmt.Println("Goodbye!")
 						return nil
 					case "help", "?":
-						fmt.Println(`Available commands:
-  ls [path]           - list remote directory
-  cd <path>           - change remote directory
-  pwd                 - print working directory
-  get <remote> [local] - download file
-  put <local> [remote] - upload file
-  mkdir <path>        - create remote directory
-  rmdir <path>        - remove remote directory
-  rm <path>           - remove remote file
-  lls                 - list local directory
-  lcd <path>          - change local directory
-  lpwd                - print local working directory
-  !<command>          - execute local command
-  help                - show this help
-  quit                - exit`)
+						printSFTPHelp()
 					case "pwd":
 						fmt.Println(remoteDir)
 					case "lpwd":
 						fmt.Println(localDir)
 					case "ls":
-						handleSftpLs(sftpClient, remoteDir, args)
+						handleLs(sftpClient, remoteDir, args)
 					case "lls":
-						handleSftpLls(localDir, args)
+						handleLls(localDir, args)
 					case "cd":
-						remoteDir = handleSftpCd(sftpClient, remoteDir, args)
+						remoteDir = handleCd(sftpClient, remoteDir, args)
 					case "lcd":
-						localDir = handleSftpLcd(localDir, args)
+						localDir = handleLcd(localDir, args)
 					case "get":
-						handleSftpGet(transferSvc, server, sftpClient, remoteDir, localDir, args)
+						handleGet(transferSvc, server, sftpClient, remoteDir, localDir, args)
 					case "put":
-						handleSftpPut(transferSvc, server, sftpClient, remoteDir, localDir, args)
+						handlePut(transferSvc, server, sftpClient, remoteDir, localDir, args)
 					case "mkdir":
-						handleSftpMkdir(sftpClient, remoteDir, args)
+						handleMkdir(sftpClient, remoteDir, args)
 					case "rmdir":
-						handleSftpRmdir(sftpClient, remoteDir, args)
+						handleRmdir(sftpClient, remoteDir, args)
 					case "rm":
-						handleSftpRm(sftpClient, remoteDir, args)
+						handleRm(sftpClient, remoteDir, args)
+					case "rename":
+						handleRename(sftpClient, remoteDir, args)
+					case "ln":
+						handleLn(sftpClient, remoteDir, args)
+					case "df":
+						handleDf(sftpClient, remoteDir)
+					case "chmod":
+						handleChmod(sftpClient, remoteDir, args)
 					case "!":
-						handleSftpLocalCmd(args)
+						handleLocalCmd(args)
 					default:
 						fmt.Printf("Unknown command: %s\n", cmd)
 					}
@@ -286,27 +280,6 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 			Flags: []cli.Flag{},
 		},
 	}
-}
-
-// recordDirectConnectForApp 是给 assh-fs 使用的小写别名，逻辑与 connect.go 一致。
-func (a *App) recordDirectConnectForApp(host string, port int, user, authFingerprint string) {
-	if a.knownRecorder == nil {
-		return
-	}
-	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
-	ks := &domain.KnownServer{
-		ID:              id,
-		Host:            host,
-		Port:            port,
-		User:            user,
-		AuthFingerprint: authFingerprint,
-	}
-	recorder := a.knownRecorder
-	go func() {
-		if err := recorder.RecordDirectConnect(ks); err != nil {
-			log.Debugf("failed to record direct connect: %v", err)
-		}
-	}()
 }
 
 func fsPushAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder, connectSvc *service.ConnectService) func(*cli.Context) error {
@@ -685,7 +658,7 @@ func (a *App) registerCommands() {
 func (a *App) beforeAction(c *cli.Context) error {
 	if c.Bool("version") {
 		fmt.Println(a.version)
-		os.Exit(0)
+		return cli.NewExitError("", 0)
 	}
 	if c.Bool("verbose") {
 		log.LogLevel = log.DEBUG
@@ -1171,162 +1144,7 @@ func joinPath(cwd, p string) string {
 	return filepath.Join(cwd, p)
 }
 
-// SFTP interactive helper functions
-func handleSftpLs(client *sftp.Client, cwd string, args []string) {
-	path := cwd
-	if len(args) > 0 {
-		path = joinPath(cwd, args[0])
-	}
-	entries, err := client.ReadDir(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ls failed: %v\n", err)
-		return
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			fmt.Printf("drwxr-xr-x %5d %s/\n", e.Size(), e.Name())
-		} else {
-			fmt.Printf("-rw-r--r-- %5d %s\n", e.Size(), e.Name())
-		}
-	}
-}
 
-func handleSftpLls(cwd string, args []string) {
-	path := cwd
-	if len(args) > 0 {
-		path = args[0]
-	}
-	entries, err := os.ReadDir(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "lls failed: %v\n", err)
-		return
-	}
-	for _, e := range entries {
-		info, _ := e.Info()
-		if e.IsDir() {
-			fmt.Printf("drwxr-xr-x %5d %s/\n", info.Size(), e.Name())
-		} else {
-			fmt.Printf("-rw-r--r-- %5d %s\n", info.Size(), e.Name())
-		}
-	}
-}
-
-func handleSftpCd(client *sftp.Client, cwd string, args []string) string {
-	if len(args) == 0 {
-		return "/"
-	}
-	path := joinPath(cwd, args[0])
-	_, err := client.Stat(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cd failed: %v\n", err)
-		return cwd
-	}
-	return path
-}
-
-func handleSftpLcd(cwd string, args []string) string {
-	if len(args) == 0 {
-		home, _ := os.UserHomeDir()
-		return home
-	}
-	path := args[0]
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(cwd, path)
-	}
-	if err := os.Chdir(path); err != nil {
-		fmt.Fprintf(os.Stderr, "lcd failed: %v\n", err)
-		return cwd
-	}
-	newDir, _ := os.Getwd()
-	return newDir
-}
-
-func handleSftpGet(transferSvc *service.TransferService, server *domain.Server, client *sftp.Client, remoteDir, localDir string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: get <remote> [local]")
-		return
-	}
-	remotePath := joinPath(remoteDir, args[0])
-	localPath := args[1]
-	if localPath == "" {
-		localPath = filepath.Join(localDir, args[0])
-	}
-	opts := service.TransferOptions{Progress: true}
-	ctx := context.Background()
-	if err := transferSvc.PullFile(ctx, server.Name, remotePath, localPath, opts); err != nil {
-		fmt.Fprintf(os.Stderr, "get failed: %v\n", err)
-	} else {
-		fmt.Printf("Downloaded: %s -> %s\n", remotePath, localPath)
-	}
-}
-
-func handleSftpPut(transferSvc *service.TransferService, server *domain.Server, client *sftp.Client, remoteDir, localDir string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: put <local> [remote]")
-		return
-	}
-	localPath := args[0]
-	if !filepath.IsAbs(localPath) {
-		localPath = filepath.Join(localDir, localPath)
-	}
-	remotePath := args[1]
-	if remotePath == "" {
-		remotePath = joinPath(remoteDir, filepath.Base(localPath))
-	} else if !filepath.IsAbs(remotePath) {
-		remotePath = joinPath(remoteDir, remotePath)
-	}
-	opts := service.TransferOptions{Progress: true}
-	ctx := context.Background()
-	if err := transferSvc.PushFile(ctx, server.Name, localPath, remotePath, opts); err != nil {
-		fmt.Fprintf(os.Stderr, "put failed: %v\n", err)
-	} else {
-		fmt.Printf("Uploaded: %s -> %s\n", localPath, remotePath)
-	}
-}
-
-func handleSftpMkdir(client *sftp.Client, cwd string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: mkdir <path>")
-		return
-	}
-	path := joinPath(cwd, args[0])
-	if err := client.MkdirAll(path); err != nil {
-		fmt.Fprintf(os.Stderr, "mkdir failed: %v\n", err)
-	} else {
-		fmt.Printf("Created directory: %s\n", path)
-	}
-}
-
-func handleSftpRmdir(client *sftp.Client, cwd string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: rmdir <path>")
-		return
-	}
-	path := joinPath(cwd, args[0])
-	if err := client.Remove(path); err != nil {
-		fmt.Fprintf(os.Stderr, "rmdir failed: %v\n", err)
-	} else {
-		fmt.Printf("Removed directory: %s\n", path)
-	}
-}
-
-func handleSftpRm(client *sftp.Client, cwd string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: rm <path>")
-		return
-	}
-	path := joinPath(cwd, args[0])
-	if err := client.Remove(path); err != nil {
-		fmt.Fprintf(os.Stderr, "rm failed: %v\n", err)
-	} else {
-		fmt.Printf("Removed file: %s\n", path)
-	}
-}
-
-func handleSftpLocalCmd(args []string) {
-	// 复用 handleLocalCmd 的白名单验证
-	handleLocalCmd(args)
-}
 
 // init 初始化 CLI 帮助模板和环境目录。
 // 在帮助文本末尾添加环境变量说明，并确保数据目录存在。
@@ -1338,6 +1156,10 @@ ENVIRONMENT:
 
 `, cli.AppHelpTemplate)
 
-	_ = config.EnsureDir(config.DataPath)
-	_ = os.MkdirAll("/tmp", 0755)
+	if err := config.EnsureDir(config.DataPath); err != nil {
+		log.Warnf("failed to ensure data directory %s: %v", config.DataPath, err)
+	}
+	if err := os.MkdirAll("/tmp", 0755); err != nil {
+		log.Warnf("failed to create /tmp directory: %v", err)
+	}
 }

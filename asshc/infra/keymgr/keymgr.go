@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 
 	"assh/asshc/domain"
+	"assh/asshc/port"
 	"assh/config"
 )
 
@@ -29,6 +30,9 @@ type KeyManager struct {
 	passphrase []byte    // account password（用于私钥加密），nil 表示未设置
 	stdin      io.Reader // 用于 ReadKeyFromStdin，默认 os.Stdin
 }
+
+// 编译期接口合规检查
+var _ port.KeyManager = (*KeyManager)(nil)
 
 // New 创建并初始化 KeyManager。
 // keysDir 为密钥存储目录路径（支持 ~/ 前缀），passphrase 为 account password。

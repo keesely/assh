@@ -62,7 +62,7 @@ func (r *JumpRecorder) List(limit int) ([]*domain.JumpHistory, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeAndLog(rows, "rows")
 
 	var results []*domain.JumpHistory
 	for rows.Next() {

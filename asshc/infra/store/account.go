@@ -42,7 +42,7 @@ func (s *Store) ListAccounts() ([]*domain.CloudAccount, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeAndLog(rows, "rows")
 
 	var accounts []*domain.CloudAccount
 	for rows.Next() {
@@ -163,7 +163,7 @@ func (s *Store) GetSyncHistory(limit int) ([]*domain.SyncHistory, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer closeAndLog(rows, "rows")
 
 	var histories []*domain.SyncHistory
 	for rows.Next() {
@@ -233,7 +233,10 @@ func (s *Store) scanSyncHistory(scanner interface{ Scan(dest ...interface{}) err
 		return nil, err
 	}
 
-	t, _ := time.Parse(time.RFC3339, ts)
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		log.Warnf("failed to parse sync history timestamp %q: %v", ts, err)
+	}
 	return &domain.SyncHistory{
 		ID:        id,
 		Direction: domain.SyncDirection(direction),

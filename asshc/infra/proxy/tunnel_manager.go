@@ -36,6 +36,9 @@ type tunnelManager struct {
 	done         chan struct{}
 }
 
+// 编译期接口合规检查
+var _ port.TunnelManager = (*tunnelManager)(nil)
+
 // NewTunnelManager creates a new tunnel manager.
 func NewTunnelManager() *tunnelManager {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -192,52 +195,6 @@ func (m *tunnelManager) Client() *ssh.Client {
 	return m.sshClient
 }
 
-// reconnectLoop attempts to reconnect using connectFn and restarts all forwards.
-func (m *tunnelManager) reconnectLoop(ctx context.Context, connectFn func() (*ssh.Client, error)) {
-	defer func() {
-		m.cancel()
-		close(m.done)
-	}()
-
-	retries := 0
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		client, err := connectFn()
-		if err == nil {
-			m.mu.Lock()
-			m.sshClient = client
-			m.mu.Unlock()
-
-			if err := m.StartAll(client); err != nil {
-				log.Warnf("reconnect: failed to restart some forwards: %v", err)
-			}
-			log.Infof("reconnect successful, all forwards restarted")
-			return
-		}
-
-		retries++
-		if m.reconnectCfg.MaxRetries > 0 && retries >= m.reconnectCfg.MaxRetries {
-			log.Errorf("reconnect max retries reached (%d)", m.reconnectCfg.MaxRetries)
-			m.StopAll()
-			return
-		}
-
-		waitDur := m.reconnectCfg.Interval + m.reconnectCfg.Backoff*time.Duration(retries-1)
-		log.Debugf("reconnect attempt %d failed, retrying in %v", retries, waitDur)
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(waitDur):
-		}
-	}
-}
-
 // Close cancels the context and waits for the reconnect loop to finish.
 // Uses a timeout to prevent deadlock when reconnect loop doesn't close done channel.
 func (m *tunnelManager) Close() {
@@ -266,6 +223,7 @@ func Daemonize() error {
 	}
 
 	log.Debugf("daemonized child PID: %d", proc.Pid)
+	// Parent process must exit after spawning daemon child — os.Exit is intentional here.
 	os.Exit(0)
 
 	return nil // unreachable

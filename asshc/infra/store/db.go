@@ -8,11 +8,23 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 
+	"assh/asshc/port"
+	"assh/log"
+
 	_ "modernc.org/sqlite"
 )
+
+// closeAndLog 关闭 io.Closer 并在出错时记录警告日志。
+// 用于 defer 中不再需要检查错误的场景（如 rows.Close()、client.Close()）。
+func closeAndLog(c io.Closer, name string) {
+	if err := c.Close(); err != nil {
+		log.Warnf("%s close error: %v", name, err)
+	}
+}
 
 // allowedTables 白名单：防止 PRAGMA table_info SQL 注入。
 var allowedTables = map[string]bool{
@@ -32,6 +44,10 @@ type Store struct {
 	cryptoKey atomic.Value // AES-GCM 加密密钥，首次使用时自动生成（[]byte 类型）
 	keyOnce   sync.Once   // 确保密钥只加载一次
 }
+
+// 编译期接口合规检查
+var _ port.ServerRepository = (*Store)(nil)
+var _ port.KnownServerRecorder = (*Store)(nil)
 
 // NewStore 创建并初始化 SQLite 存储实例。
 // 自动执行数据库迁移（建表），并从 config 表中加载加密密钥。
@@ -183,7 +199,7 @@ func (s *Store) columnExists(table, column string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
+	defer closeAndLog(rows, "rows")
 
 	for rows.Next() {
 		var cid int

@@ -16,6 +16,9 @@ type HealthChecker struct {
 	connector *Connector
 }
 
+// 编译期接口合规检查
+var _ port.HealthChecker = (*HealthChecker)(nil)
+
 // NewHealthChecker 创建 HealthChecker 实例。
 func NewHealthChecker(connector *Connector) *HealthChecker {
 	return &HealthChecker{connector: connector}

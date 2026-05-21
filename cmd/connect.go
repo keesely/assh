@@ -311,7 +311,9 @@ func (a *App) bcAction(c *cli.Context) error {
 	}
 
 	logDir := "/tmp/assh/bclogs"
-	os.MkdirAll(logDir, 0755)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Warnf("failed to create log directory %s: %v", logDir, err)
+	}
 	timestamp := time.Now()
 
 	jumpExpr := c.String("jump")

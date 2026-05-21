@@ -172,21 +172,6 @@ func resolveOutputFiles(outputPath, keyType string) (privPath, pubPath string) {
 	return expanded, pubPath
 }
 
-// expandPathSimple expands ~ to home directory.
-func expandPathSimple(path string) (string, error) {
-	if len(path) > 0 && path[0] == '~' {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		if len(path) > 1 && path[1] == '/' {
-			return home + path[1:], nil
-		}
-		return home, nil
-	}
-	return path, nil
-}
-
 // keygenDirect handles direct connection mode key generation.
 // No server config needed; key saved to data/keys/, tries deploy, records known_servers.
 func (a *App) keygenDirect(host string, port int, user, password, keyType string, bits int, passphrase []byte, comment string) error {

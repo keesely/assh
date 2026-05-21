@@ -8,6 +8,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/port"
+	"assh/log"
 )
 
 // SyncService 提供云同步相关业务逻辑的编排。
@@ -164,23 +165,27 @@ func (s *SyncService) Push(ctx context.Context) (*port.SyncResult, error) {
 	result, err := s.syncer.Push(ctx, syncData)
 	if err != nil {
 		// 记录失败历史
-		_ = s.store.RecordSyncHistory(&domain.SyncHistory{
+		if histErr := s.store.RecordSyncHistory(&domain.SyncHistory{
 			Direction: domain.SyncDirectionPush,
 			Status:    domain.SyncStatusFailed,
 			Message:   err.Error(),
 			Timestamp: s.now(),
-		})
+		}); histErr != nil {
+			log.Warnf("failed to record push failure history: %v", histErr)
+		}
 		return nil, fmt.Errorf("push failed: %w", err)
 	}
 
 	// 6. 记录成功历史
-	_ = s.store.RecordSyncHistory(&domain.SyncHistory{
+	if histErr := s.store.RecordSyncHistory(&domain.SyncHistory{
 		Direction: domain.SyncDirectionPush,
 		Status:    domain.SyncStatusSuccess,
 		Message:   result.Message,
 		Pushed:    len(serverData),
 		Timestamp: s.now(),
-	})
+	}); histErr != nil {
+		log.Warnf("failed to record push success history: %v", histErr)
+	}
 
 	return result, nil
 }
@@ -206,12 +211,14 @@ func (s *SyncService) Pull(ctx context.Context) (*port.SyncResult, error) {
 	// 2. 从云端拉取数据
 	cloudData, err := s.syncer.Pull(ctx)
 	if err != nil {
-		_ = s.store.RecordSyncHistory(&domain.SyncHistory{
+		if recErr := s.store.RecordSyncHistory(&domain.SyncHistory{
 			Direction: domain.SyncDirectionPull,
 			Status:    domain.SyncStatusFailed,
 			Message:   err.Error(),
 			Timestamp: s.now(),
-		})
+		}); recErr != nil {
+			log.Warnf("failed to record sync history: %v", recErr)
+		}
 		return nil, fmt.Errorf("pull failed: %w", err)
 	}
 
@@ -226,12 +233,14 @@ func (s *SyncService) Pull(ctx context.Context) (*port.SyncResult, error) {
 			Timestamp: s.now(),
 		}
 
-		_ = s.store.RecordSyncHistory(&domain.SyncHistory{
+		if recErr := s.store.RecordSyncHistory(&domain.SyncHistory{
 			Direction: domain.SyncDirectionPull,
 			Status:    domain.SyncStatusSuccess,
 			Message:   "no data on cloud",
 			Timestamp: s.now(),
-		})
+		}); recErr != nil {
+			log.Warnf("failed to record sync history: %v", recErr)
+		}
 
 		return result, nil
 	}
@@ -349,7 +358,7 @@ func (s *SyncService) Pull(ctx context.Context) (*port.SyncResult, error) {
 		status = domain.SyncStatusPartial
 	}
 
-	_ = s.store.RecordSyncHistory(&domain.SyncHistory{
+	if recErr := s.store.RecordSyncHistory(&domain.SyncHistory{
 		Direction: domain.SyncDirectionPull,
 		Status:    status,
 		Message:   result.Message,
@@ -357,7 +366,9 @@ func (s *SyncService) Pull(ctx context.Context) (*port.SyncResult, error) {
 		Updated:   updated,
 		Conflicts: conflicts,
 		Timestamp: s.now(),
-	})
+	}); recErr != nil {
+		log.Warnf("failed to record sync history: %v", recErr)
+	}
 
 	return result, nil
 }
