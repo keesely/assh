@@ -100,7 +100,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 }
 
 // NewFSApp creates CLI application for file transfer (assh-fs binary).
-func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder) *App {
+func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, connectSvc *service.ConnectService, jumpSvc *service.JumpService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH-FS - SFTP File Transfer"
 	app.Usage = "SFTP File Transfer Client"
@@ -111,8 +111,10 @@ func NewFSApp(version, build string, transferSvc *service.TransferService, serve
 		cli:           app,
 		version:       version,
 		build:         build,
+		connectSvc:    connectSvc,
 		serverSvc:     serverSvc,
 		knownRecorder: knownRecorder,
+		jumpSvc:       jumpSvc,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
