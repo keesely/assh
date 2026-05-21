@@ -24,33 +24,57 @@ func (s *Store) generateAndStoreKey() error {
 	encoded := base64.StdEncoding.EncodeToString(key)
 	_, err = s.db.Exec("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", keyConfigKey, encoded)
 	if err == nil {
-		s.cryptoKey = key
+		s.keyOnce.Do(func() {}) // 标记已初始化
+		s.cryptoKey.Store(key)
 	}
 	return err
 }
 
-// getCryptoKey 获取 AES 加密密钥，优先从内存缓存中读取。
+// getCryptoKey 获取 AES 加密密钥的副本，优先从内存缓存中读取。
 // 如果缓存为空，从数据库 config 表中查询并缓存。
 // 如果表中没有密钥记录，返回 nil, nil。
+// 使用 sync.Once 确保并发安全。返回的是副本，调用方可安全使用。
 func (s *Store) getCryptoKey() ([]byte, error) {
-	if s.cryptoKey != nil {
-		return s.cryptoKey, nil
+	// 先尝试从缓存获取（返回副本，防止外部修改内部状态）
+	if key, ok := s.cryptoKey.Load().([]byte); ok && key != nil {
+		cp := make([]byte, len(key))
+		copy(cp, key)
+		return cp, nil
 	}
 
-	var encoded string
-	err := s.db.QueryRow("SELECT value FROM config WHERE key = ?", keyConfigKey).Scan(&encoded)
-	if err == nil {
-		key, err := base64.StdEncoding.DecodeString(encoded)
+	// 使用 sync.Once 确保只加载一次
+	var loadErr error
+	s.keyOnce.Do(func() {
+		var encoded string
+		err := s.db.QueryRow("SELECT value FROM config WHERE key = ?", keyConfigKey).Scan(&encoded)
 		if err == nil {
-			s.cryptoKey = key
+			key, err := base64.StdEncoding.DecodeString(encoded)
+			if err == nil {
+				s.cryptoKey.Store(key)
+				return
+			}
+			loadErr = err
+			return
 		}
-		return key, err
+
+		if errors.Is(err, sql.ErrNoRows) {
+			// 没有密钥记录，不存储任何值
+			return
+		}
+		loadErr = err
+	})
+
+	if loadErr != nil {
+		return nil, loadErr
 	}
 
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+	// 再次尝试从缓存获取（返回副本）
+	if key, ok := s.cryptoKey.Load().([]byte); ok && key != nil {
+		cp := make([]byte, len(key))
+		copy(cp, key)
+		return cp, nil
 	}
-	return nil, err
+	return nil, nil
 }
 
 // generateRandomKey 生成指定长度的密码学安全随机字节序列。

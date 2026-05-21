@@ -97,6 +97,25 @@ func (s *ProxyService) StartProxy(name string, opts ProxyOptions) error {
 	return s.startProxyWithClient(client, opts)
 }
 
+// StartProxyWithChain 通过跳板链启动代理。
+// chainExpr 为 -J 参数值，格式与 assh -J 一致。
+func (s *ProxyService) StartProxyWithChain(name, chainExpr string, opts ProxyOptions) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.sshClient != nil {
+		return fmt.Errorf("proxy already running")
+	}
+
+	client, _, err := s.connectSvc.ConnectChain(name, chainExpr)
+	if err != nil {
+		return fmt.Errorf("connect to %s via chain: %w", name, err)
+	}
+	s.sshClient = client
+
+	return s.startProxyWithClient(client, opts)
+}
+
 func (s *ProxyService) StartDirectProxy(host string, port int, user, password, keyFile string, opts ProxyOptions) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -349,6 +368,30 @@ func (s *ProxyService) StartTunnel(name string, forwards []ForwardSpec, opts Pro
 	}
 	s.sshClient = client
 
+	return s.startTunnelWithClient(client, forwards, opts)
+}
+
+// StartTunnelWithChain 通过跳板链启动端口转发隧道。
+// chainExpr 为 -J 参数值，格式与 assh -J 一致。
+func (s *ProxyService) StartTunnelWithChain(name, chainExpr string, forwards []ForwardSpec, opts ProxyOptions) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.sshClient != nil {
+		return fmt.Errorf("tunnel already active")
+	}
+
+	client, _, err := s.connectSvc.ConnectChain(name, chainExpr)
+	if err != nil {
+		return fmt.Errorf("connect to %s via chain: %w", name, err)
+	}
+	s.sshClient = client
+
+	return s.startTunnelWithClient(client, forwards, opts)
+}
+
+// startTunnelWithClient is the shared tunnel implementation.
+func (s *ProxyService) startTunnelWithClient(client *ssh.Client, forwards []ForwardSpec, opts ProxyOptions) error {
 	for _, spec := range forwards {
 		var fw port.PortForward
 		if spec.Reverse {

@@ -100,7 +100,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 }
 
 // NewFSApp creates CLI application for file transfer (assh-fs binary).
-func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder) *App {
+func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, connectSvc *service.ConnectService, jumpSvc *service.JumpService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH-FS - SFTP File Transfer"
 	app.Usage = "SFTP File Transfer Client"
@@ -111,8 +111,10 @@ func NewFSApp(version, build string, transferSvc *service.TransferService, serve
 		cli:           app,
 		version:       version,
 		build:         build,
+		connectSvc:    connectSvc,
 		serverSvc:     serverSvc,
 		knownRecorder: knownRecorder,
+		jumpSvc:       jumpSvc,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -124,6 +126,7 @@ func NewFSApp(version, build string, transferSvc *service.TransferService, serve
 // registerFSCommands registers file transfer commands.
 func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc *service.ServerService) {
 	kr := a.knownRecorder
+	connectSvc := a.connectSvc
 	a.cli.Commands = []cli.Command{
 		{
 			Name:   "version",
@@ -133,7 +136,7 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 		{
 			Name:   "push",
 			Usage:  "Push local file to remote server",
-			Action: fsPushAction(transferSvc, serverSvc, kr),
+			Action: fsPushAction(transferSvc, serverSvc, kr, connectSvc),
 			Flags: []cli.Flag{
 				cli.BoolFlag{Name: "r, recursive", Usage: "upload directory recursively"},
 				cli.BoolFlag{Name: "e, resume", Usage: "resume interrupted transfer"},
@@ -148,12 +151,14 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 				cli.StringFlag{Name: "P, password", Usage: "password (direct connection)"},
 				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path (direct connection)"},
 				cli.StringFlag{Name: "k, key", Usage: "key file path (alias for -i)"},
+				// Jump chain flag (Phase 10)
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
 			},
 		},
 		{
 			Name:   "pull",
 			Usage:  "Pull remote file to local",
-			Action: fsPullAction(transferSvc, serverSvc, kr),
+			Action: fsPullAction(transferSvc, serverSvc, kr, connectSvc),
 			Flags: []cli.Flag{
 				cli.BoolFlag{Name: "r, recursive", Usage: "download directory recursively"},
 				cli.BoolFlag{Name: "e, resume", Usage: "resume interrupted transfer"},
@@ -168,6 +173,8 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 				cli.StringFlag{Name: "P, password", Usage: "password (direct connection)"},
 				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path (direct connection)"},
 				cli.StringFlag{Name: "k, key", Usage: "key file path (alias for -i)"},
+				// Jump chain flag (Phase 10)
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
 			},
 		},
 		{
@@ -231,45 +238,39 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 						fmt.Println("Goodbye!")
 						return nil
 					case "help", "?":
-						fmt.Println(`Available commands:
-  ls [path]           - list remote directory
-  cd <path>           - change remote directory
-  pwd                 - print working directory
-  get <remote> [local] - download file
-  put <local> [remote] - upload file
-  mkdir <path>        - create remote directory
-  rmdir <path>        - remove remote directory
-  rm <path>           - remove remote file
-  lls                 - list local directory
-  lcd <path>          - change local directory
-  lpwd                - print local working directory
-  !<command>          - execute local command
-  help                - show this help
-  quit                - exit`)
+						printSFTPHelp()
 					case "pwd":
 						fmt.Println(remoteDir)
 					case "lpwd":
 						fmt.Println(localDir)
 					case "ls":
-						handleSftpLs(sftpClient, remoteDir, args)
+						handleLs(sftpClient, remoteDir, args)
 					case "lls":
-						handleSftpLls(localDir, args)
+						handleLls(localDir, args)
 					case "cd":
-						remoteDir = handleSftpCd(sftpClient, remoteDir, args)
+						remoteDir = handleCd(sftpClient, remoteDir, args)
 					case "lcd":
-						localDir = handleSftpLcd(localDir, args)
+						localDir = handleLcd(localDir, args)
 					case "get":
-						handleSftpGet(transferSvc, server, sftpClient, remoteDir, localDir, args)
+						handleGet(transferSvc, server, sftpClient, remoteDir, localDir, args)
 					case "put":
-						handleSftpPut(transferSvc, server, sftpClient, remoteDir, localDir, args)
+						handlePut(transferSvc, server, sftpClient, remoteDir, localDir, args)
 					case "mkdir":
-						handleSftpMkdir(sftpClient, remoteDir, args)
+						handleMkdir(sftpClient, remoteDir, args)
 					case "rmdir":
-						handleSftpRmdir(sftpClient, remoteDir, args)
+						handleRmdir(sftpClient, remoteDir, args)
 					case "rm":
-						handleSftpRm(sftpClient, remoteDir, args)
+						handleRm(sftpClient, remoteDir, args)
+					case "rename":
+						handleRename(sftpClient, remoteDir, args)
+					case "ln":
+						handleLn(sftpClient, remoteDir, args)
+					case "df":
+						handleDf(sftpClient, remoteDir)
+					case "chmod":
+						handleChmod(sftpClient, remoteDir, args)
 					case "!":
-						handleSftpLocalCmd(args)
+						handleLocalCmd(args)
 					default:
 						fmt.Printf("Unknown command: %s\n", cmd)
 					}
@@ -281,96 +282,70 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 	}
 }
 
-// recordDirectConnectForApp 是给 assh-fs 使用的小写别名，逻辑与 connect.go 一致。
-func (a *App) recordDirectConnectForApp(host string, port int, user, authFingerprint string) {
-	if a.knownRecorder == nil {
-		return
-	}
-	id := domain.ComputeKnownServerID(user, host, port, authFingerprint)
-	ks := &domain.KnownServer{
-		ID:              id,
-		Host:            host,
-		Port:            port,
-		User:            user,
-		AuthFingerprint: authFingerprint,
-	}
-	recorder := a.knownRecorder
-	go func() {
-		if err := recorder.RecordDirectConnect(ks); err != nil {
-			log.Debugf("failed to record direct connect: %v", err)
-		}
-	}()
-}
+func fsPushAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder, connectSvc *service.ConnectService) func(*cli.Context) error {
+		return func(c *cli.Context) error {
+			if c.NArg() < 3 {
+				return cli.ShowSubcommandHelp(c)
+			}
 
-func fsPushAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder) func(*cli.Context) error {
-	return func(c *cli.Context) error {
-		if c.NArg() < 3 {
-			return cli.ShowSubcommandHelp(c)
-		}
+			// Check for direct connection parameters (F12)
+			host := c.String("H")
+			user := c.String("u")
+			port := c.Int("p")
+			password := c.String("P")
+			identityFile := c.String("i")
+			if identityFile == "" {
+				identityFile = c.String("k")
+			}
+			jumpChain := c.String("J")
 
-		// Check for direct connection parameters (F12)
-		host := c.String("H")
-		user := c.String("u")
-		port := c.Int("p")
-		password := c.String("P")
-		identityFile := c.String("i")
-		if identityFile == "" {
-			identityFile = c.String("k")
-		}
+			var name string
+			var localPath string
+			var remotePath string
 
-		var name string
-		var localPath string
-		var remotePath string
+			// If -J is provided, first arg is always the target (server name or user@host)
+			if jumpChain != "" {
+				name = c.Args()[0]
+				localPath = c.Args()[1]
+				remotePath = c.Args()[2]
+			} else if host != "" {
+				name = "__direct__"  // Special marker for direct connection
+				localPath = c.Args()[0]
+				remotePath = c.Args()[1]
+			} else {
+				name = c.Args()[0]
+				localPath = c.Args()[1]
+				remotePath = c.Args()[2]
+			}
 
-		// If -H is provided, use direct connection mode
-		if host != "" {
-			name = "__direct__"  // Special marker for direct connection
-			localPath = c.Args()[0]
-			remotePath = c.Args()[1]
-		} else {
-			name = c.Args()[0]
-			localPath = c.Args()[1]
-			remotePath = c.Args()[2]
-		}
+			opts := service.TransferOptions{
+				Recursive:      c.Bool("r"),
+				Resume:         c.Bool("e") || c.Bool("resume"),
+				Concurrency:    c.Int("c"),
+				Progress:       true,
+				VerifyChecksum: c.Bool("S") || c.Bool("checksum"),
+			}
 
-		opts := service.TransferOptions{
-			Recursive:      c.Bool("r"),
-			Resume:         c.Bool("e") || c.Bool("resume"),
-			Concurrency:    c.Int("c"),
-			Progress:       true,
-			VerifyChecksum: c.Bool("S") || c.Bool("checksum"),
-		}
+			if c.Bool("f") || c.Bool("force") {
+				opts.Overwrite = "force"
+			} else if c.Bool("skip") {
+				opts.Overwrite = "skip"
+			}
 
-		if c.Bool("f") || c.Bool("force") {
-			opts.Overwrite = "force"
-		} else if c.Bool("skip") {
-			opts.Overwrite = "skip"
-		}
+			ctx := context.Background()
 
-ctx := context.Background()
+			// F14: Glob pattern expansion for local files
+			matches, err := filepath.Glob(localPath)
+			if err != nil {
+				return fmt.Errorf("invalid glob pattern: %w", err)
+			}
 
-		// F14: Glob pattern expansion for local files
-		matches, err := filepath.Glob(localPath)
-		if err != nil {
-			return fmt.Errorf("invalid glob pattern: %w", err)
-		}
-
-		// Handle glob matches (flatten to target directory)
-		hasGlobChars := strings.ContainsAny(localPath, "*?[]")
-		if hasGlobChars && len(matches) > 0 {
-			// Glob pattern matched multiple files
-			fmt.Printf("Found %d files matching pattern, uploading...\n", len(matches))
-			for _, file := range matches {
-				// Get filename for remote path
-				fileName := filepath.Base(file)
-				destPath := remotePath
-				if !strings.HasSuffix(remotePath, "/") {
-					destPath = remotePath + "/" + fileName
-				} else {
-					destPath = remotePath + fileName
-				}
-
-				if host != "" {
+			// Helper: push a single file through the selected connection mode
+			pushOne := func(file, destPath string) error {
+				switch {
+				case jumpChain != "":
+					return transferSvc.PushFileWithChain(ctx, name, jumpChain, file, destPath, opts)
+				case host != "":
 					server := &domain.Server{
 						Name: "direct-" + host,
 						Host: host,
@@ -381,54 +356,53 @@ ctx := context.Background()
 							KeyFile:   identityFile,
 						},
 					}
-					if err := transferSvc.PushFileDirect(ctx, server, file, destPath, opts); err != nil {
-						return fmt.Errorf("push %s failed: %w", file, err)
+					return transferSvc.PushFileDirect(ctx, server, file, destPath, opts)
+				default:
+					return transferSvc.PushFile(ctx, name, file, destPath, opts)
+				}
+			}
+
+			// Handle glob matches (flatten to target directory)
+			hasGlobChars := strings.ContainsAny(localPath, "*?[]")
+			if hasGlobChars && len(matches) > 0 {
+				// Glob pattern matched multiple files
+				fmt.Printf("Found %d files matching pattern, uploading...\n", len(matches))
+				for _, file := range matches {
+					// Get filename for remote path
+					fileName := filepath.Base(file)
+					destPath := remotePath
+					if !strings.HasSuffix(remotePath, "/") {
+						destPath = remotePath + "/" + fileName
+					} else {
+						destPath = remotePath + fileName
 					}
-				} else {
-					if err := transferSvc.PushFile(ctx, name, file, destPath, opts); err != nil {
+
+					if err := pushOne(file, destPath); err != nil {
 						return fmt.Errorf("push %s failed: %w", file, err)
 					}
 				}
+				fmt.Println("push completed")
+				return nil
+			} else if hasGlobChars && len(matches) == 0 {
+				return fmt.Errorf("no matching files for pattern: %s", localPath)
 			}
-			fmt.Println("push completed")
-			return nil
-		} else if hasGlobChars && len(matches) == 0 {
-			return fmt.Errorf("no matching files for pattern: %s", localPath)
-		}
 
-		// Direct connection mode
-		if host != "" {
-			// Create a temporary server config for direct connection
-			server := &domain.Server{
-				Name: "direct-" + host,
-				Host: host,
-				Port: port,
-				User: user,
-				Auth: &domain.Auth{
-					Password: password,
-					KeyFile:   identityFile,
-				},
-			}
-			if err := transferSvc.PushFileDirect(ctx, server, localPath, remotePath, opts); err != nil {
+			// Single file transfer
+			if err := pushOne(localPath, remotePath); err != nil {
 				return fmt.Errorf("push failed: %w", err)
 			}
-			// 记录直连到 known_servers 表（预计算 authFingerprint 避免明文密码传播）
-			if kr != nil {
+
+			// 记录直连到 known_servers 表（非跳板直连模式）
+			if host != "" && jumpChain == "" && kr != nil {
 				recordDirectConnectAsync(kr, host, port, user, domain.ComputeAuthFingerprint(password, identityFile))
 			}
-		} else {
-			// Normal mode - use server name lookup
-			if err := transferSvc.PushFile(ctx, name, localPath, remotePath, opts); err != nil {
-				return fmt.Errorf("push failed: %w", err)
-			}
+
+			fmt.Println("push completed")
+			return nil
 		}
-
-		fmt.Println("push completed")
-		return nil
 	}
-}
 
-func fsPullAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder) func(*cli.Context) error {
+	func fsPullAction(transferSvc *service.TransferService, serverSvc *service.ServerService, kr transferport.KnownServerRecorder, connectSvc *service.ConnectService) func(*cli.Context) error {
 	return func(c *cli.Context) error {
 		if c.NArg() < 2 {
 			return cli.ShowSubcommandHelp(c)
@@ -443,13 +417,21 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 		if identityFile == "" {
 			identityFile = c.String("k")
 		}
+		jumpChain := c.String("J")
 
 		var name string
 		var remotePath string
 		var localPath string
 
-		// If -H is provided, use direct connection mode
-		if host != "" {
+		// If -J is provided, first arg is the target (server name or user@host)
+		if jumpChain != "" {
+			name = c.Args()[0]
+			remotePath = c.Args()[1]
+			localPath = "."
+			if c.NArg() >= 3 {
+				localPath = c.Args()[2]
+			}
+		} else if host != "" {
 			name = "__direct__"
 			remotePath = c.Args()[0]
 			localPath = c.Args()[1]
@@ -481,6 +463,28 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 
 		ctx := context.Background()
 
+		// Helper: pull a single file through the selected connection mode
+		pullOne := func(remoteFile, localDest string) error {
+			switch {
+			case jumpChain != "":
+				return transferSvc.PullFileWithChain(ctx, name, jumpChain, remoteFile, localDest, opts)
+			case host != "":
+				server := &domain.Server{
+					Name: "direct-" + host,
+					Host: host,
+					Port: port,
+					User: user,
+					Auth: &domain.Auth{
+						Password: password,
+						KeyFile:   identityFile,
+					},
+				}
+				return transferSvc.PullFileDirect(ctx, server, remoteFile, localDest, opts)
+			default:
+				return transferSvc.PullFile(ctx, name, remoteFile, localDest, opts)
+			}
+		}
+
 		// F20: Remote glob pattern expansion for pull
 		hasGlobChars := strings.ContainsAny(remotePath, "*?[]")
 		if hasGlobChars {
@@ -490,7 +494,7 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 			// List remote directory
 			var files []transferport.FileInfo
 			var err error
-			if host != "" {
+			if host != "" && jumpChain == "" {
 				server := &domain.Server{
 					Name: "direct-" + host,
 					Host: host,
@@ -538,53 +542,22 @@ func fsPullAction(transferSvc *service.TransferService, serverSvc *service.Serve
 					localDest = localPath + fileName
 				}
 
-				if host != "" {
-					server := &domain.Server{
-						Name: "direct-" + host,
-						Host: host,
-						Port: port,
-						User: user,
-						Auth: &domain.Auth{
-							Password: password,
-							KeyFile:   identityFile,
-						},
-					}
-					if err := transferSvc.PullFileDirect(ctx, server, fullRemotePath, localDest, opts); err != nil {
-						return fmt.Errorf("pull %s failed: %w", fileName, err)
-					}
-				} else {
-					if err := transferSvc.PullFile(ctx, name, fullRemotePath, localDest, opts); err != nil {
-						return fmt.Errorf("pull %s failed: %w", fileName, err)
-					}
+				if err := pullOne(fullRemotePath, localDest); err != nil {
+					return fmt.Errorf("pull %s failed: %w", fileName, err)
 				}
 			}
 			fmt.Println("pull completed")
 			return nil
 		}
 
-		// Direct connection mode
-		if host != "" {
-			server := &domain.Server{
-				Name: "direct-" + host,
-				Host: host,
-				Port: port,
-				User: user,
-				Auth: &domain.Auth{
-					Password: password,
-					KeyFile:   identityFile,
-				},
-			}
-			if err := transferSvc.PullFileDirect(ctx, server, remotePath, localPath, opts); err != nil {
-				return fmt.Errorf("pull failed: %w", err)
-			}
-			// 记录直连到 known_servers 表（预计算 authFingerprint 避免明文密码传播）
-			if kr != nil {
-				recordDirectConnectAsync(kr, host, port, user, domain.ComputeAuthFingerprint(password, identityFile))
-			}
-		} else {
-			if err := transferSvc.PullFile(ctx, name, remotePath, localPath, opts); err != nil {
-				return fmt.Errorf("pull failed: %w", err)
-			}
+		// Single file transfer
+		if err := pullOne(remotePath, localPath); err != nil {
+			return fmt.Errorf("pull failed: %w", err)
+		}
+
+		// 记录直连到 known_servers 表（非跳板直连模式）
+		if host != "" && jumpChain == "" && kr != nil {
+			recordDirectConnectAsync(kr, host, port, user, domain.ComputeAuthFingerprint(password, identityFile))
 		}
 
 		fmt.Println("pull completed")
@@ -677,6 +650,7 @@ func (a *App) registerCommands() {
 	a.registerTunnelCommands()
 	a.registerSyncCommands()
 	a.registerHealthCommands()
+	a.registerJumpCommands()
 }
 
 // beforeAction 是全局 Before 钩子，在每次命令执行前调用。
@@ -684,7 +658,7 @@ func (a *App) registerCommands() {
 func (a *App) beforeAction(c *cli.Context) error {
 	if c.Bool("version") {
 		fmt.Println(a.version)
-		os.Exit(0)
+		return cli.NewExitError("", 0)
 	}
 	if c.Bool("verbose") {
 		log.LogLevel = log.DEBUG
@@ -1110,11 +1084,51 @@ func handleChmod(client *sftp.Client, cwd string, args []string) {
 	}
 }
 
+// allowedLocalCmds 白名单：SFTP 交互模式下允许执行的本地命令
+var allowedLocalCmds = map[string]bool{
+	"ls":    true,
+	"ll":    true,
+	"dir":   true,
+	"cat":   true,
+	"head":  true,
+	"tail":  true,
+	"pwd":   true,
+	"echo":  true,
+	"grep":  true,
+	"wc":    true,
+	"sort":  true,
+	"uniq":  true,
+	"file":  true,
+	"stat":  true,
+	"du":    true,
+	"df":    true,
+	"which": true,
+	"env":   true,
+	"set":   true,
+}
+
 func handleLocalCmd(args []string) {
 	if len(args) == 0 {
 		return
 	}
-	cmd := exec.Command(args[0], args[1:]...)
+
+	cmdName := args[0]
+	if !allowedLocalCmds[cmdName] {
+		fmt.Fprintf(os.Stderr, "Error: command '%s' is not allowed in SFTP interactive mode\n", cmdName)
+		fmt.Fprintf(os.Stderr, "Allowed commands: ")
+		first := true
+		for cmd := range allowedLocalCmds {
+			if !first {
+				fmt.Fprintf(os.Stderr, ", ")
+			}
+			fmt.Fprintf(os.Stderr, "%s", cmd)
+			first = false
+		}
+		fmt.Fprintf(os.Stderr, "\n")
+		return
+	}
+
+	cmd := exec.Command(cmdName, args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
@@ -1130,167 +1144,7 @@ func joinPath(cwd, p string) string {
 	return filepath.Join(cwd, p)
 }
 
-// SFTP interactive helper functions
-func handleSftpLs(client *sftp.Client, cwd string, args []string) {
-	path := cwd
-	if len(args) > 0 {
-		path = joinPath(cwd, args[0])
-	}
-	entries, err := client.ReadDir(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ls failed: %v\n", err)
-		return
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			fmt.Printf("drwxr-xr-x %5d %s/\n", e.Size(), e.Name())
-		} else {
-			fmt.Printf("-rw-r--r-- %5d %s\n", e.Size(), e.Name())
-		}
-	}
-}
 
-func handleSftpLls(cwd string, args []string) {
-	path := cwd
-	if len(args) > 0 {
-		path = args[0]
-	}
-	entries, err := os.ReadDir(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "lls failed: %v\n", err)
-		return
-	}
-	for _, e := range entries {
-		info, _ := e.Info()
-		if e.IsDir() {
-			fmt.Printf("drwxr-xr-x %5d %s/\n", info.Size(), e.Name())
-		} else {
-			fmt.Printf("-rw-r--r-- %5d %s\n", info.Size(), e.Name())
-		}
-	}
-}
-
-func handleSftpCd(client *sftp.Client, cwd string, args []string) string {
-	if len(args) == 0 {
-		return "/"
-	}
-	path := joinPath(cwd, args[0])
-	_, err := client.Stat(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cd failed: %v\n", err)
-		return cwd
-	}
-	return path
-}
-
-func handleSftpLcd(cwd string, args []string) string {
-	if len(args) == 0 {
-		home, _ := os.UserHomeDir()
-		return home
-	}
-	path := args[0]
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(cwd, path)
-	}
-	if err := os.Chdir(path); err != nil {
-		fmt.Fprintf(os.Stderr, "lcd failed: %v\n", err)
-		return cwd
-	}
-	newDir, _ := os.Getwd()
-	return newDir
-}
-
-func handleSftpGet(transferSvc *service.TransferService, server *domain.Server, client *sftp.Client, remoteDir, localDir string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: get <remote> [local]")
-		return
-	}
-	remotePath := joinPath(remoteDir, args[0])
-	localPath := args[1]
-	if localPath == "" {
-		localPath = filepath.Join(localDir, args[0])
-	}
-	opts := service.TransferOptions{Progress: true}
-	ctx := context.Background()
-	if err := transferSvc.PullFile(ctx, server.Name, remotePath, localPath, opts); err != nil {
-		fmt.Fprintf(os.Stderr, "get failed: %v\n", err)
-	} else {
-		fmt.Printf("Downloaded: %s -> %s\n", remotePath, localPath)
-	}
-}
-
-func handleSftpPut(transferSvc *service.TransferService, server *domain.Server, client *sftp.Client, remoteDir, localDir string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: put <local> [remote]")
-		return
-	}
-	localPath := args[0]
-	if !filepath.IsAbs(localPath) {
-		localPath = filepath.Join(localDir, localPath)
-	}
-	remotePath := args[1]
-	if remotePath == "" {
-		remotePath = joinPath(remoteDir, filepath.Base(localPath))
-	} else if !filepath.IsAbs(remotePath) {
-		remotePath = joinPath(remoteDir, remotePath)
-	}
-	opts := service.TransferOptions{Progress: true}
-	ctx := context.Background()
-	if err := transferSvc.PushFile(ctx, server.Name, localPath, remotePath, opts); err != nil {
-		fmt.Fprintf(os.Stderr, "put failed: %v\n", err)
-	} else {
-		fmt.Printf("Uploaded: %s -> %s\n", localPath, remotePath)
-	}
-}
-
-func handleSftpMkdir(client *sftp.Client, cwd string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: mkdir <path>")
-		return
-	}
-	path := joinPath(cwd, args[0])
-	if err := client.MkdirAll(path); err != nil {
-		fmt.Fprintf(os.Stderr, "mkdir failed: %v\n", err)
-	} else {
-		fmt.Printf("Created directory: %s\n", path)
-	}
-}
-
-func handleSftpRmdir(client *sftp.Client, cwd string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: rmdir <path>")
-		return
-	}
-	path := joinPath(cwd, args[0])
-	if err := client.Remove(path); err != nil {
-		fmt.Fprintf(os.Stderr, "rmdir failed: %v\n", err)
-	} else {
-		fmt.Printf("Removed directory: %s\n", path)
-	}
-}
-
-func handleSftpRm(client *sftp.Client, cwd string, args []string) {
-	if len(args) == 0 {
-		fmt.Println("Usage: rm <path>")
-		return
-	}
-	path := joinPath(cwd, args[0])
-	if err := client.Remove(path); err != nil {
-		fmt.Fprintf(os.Stderr, "rm failed: %v\n", err)
-	} else {
-		fmt.Printf("Removed file: %s\n", path)
-	}
-}
-
-func handleSftpLocalCmd(args []string) {
-	if len(args) == 0 {
-		return
-	}
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Run()
-}
 
 // init 初始化 CLI 帮助模板和环境目录。
 // 在帮助文本末尾添加环境变量说明，并确保数据目录存在。
@@ -1302,6 +1156,10 @@ ENVIRONMENT:
 
 `, cli.AppHelpTemplate)
 
-	_ = config.EnsureDir(config.DataPath)
-	_ = os.MkdirAll("/tmp", 0755)
+	if err := config.EnsureDir(config.DataPath); err != nil {
+		log.Warnf("failed to ensure data directory %s: %v", config.DataPath, err)
+	}
+	if err := os.MkdirAll("/tmp", 0755); err != nil {
+		log.Warnf("failed to create /tmp directory: %v", err)
+	}
 }

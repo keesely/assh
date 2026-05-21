@@ -7,6 +7,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/port"
+	"assh/log"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -14,9 +15,10 @@ import (
 // 支持通过已保存的服务器名称连接和直接指定连接参数两种方式。
 // 依赖 SSHConnector（建立连接）和 SSHSession（执行命令）两个接口。
 type ConnectService struct {
-	connector port.SSHConnector
-	session   port.SSHSession
-	repo      port.ServerRepository
+	connector   port.SSHConnector
+	session     port.SSHSession
+	repo        port.ServerRepository
+	jumpRecorder port.JumpHistoryRecorder // P10.7-c: 用于 -J @id 历史复用
 }
 
 // NewConnectService 创建 ConnectService 实例，注入所有依赖。
@@ -32,8 +34,15 @@ func NewConnectService(
 	}
 }
 
+// SetJumpRecorder 设置跳板历史记录器，用于 -J @id 复用。
+func (s *ConnectService) SetJumpRecorder(r port.JumpHistoryRecorder) {
+	s.jumpRecorder = r
+}
+
 // ConnectByName 根据已保存的服务器名称建立 SSH 连接。
 // 从存储中查询服务器配置，然后使用配置信息建立连接。
+// 如果服务器配置了 Options["jump_hosts"]（如 "bastion,gateway"），
+// 自动通过跳板链连接，不需要手动指定 -J 参数。
 func (s *ConnectService) ConnectByName(name string) (*ssh.Client, error) {
 	if name == "" {
 		return nil, domain.ErrInvalidName
@@ -47,7 +56,30 @@ func (s *ConnectService) ConnectByName(name string) (*ssh.Client, error) {
 		return nil, domain.ErrNotFound
 	}
 
+	// P10.9-a: 检查服务器是否配置了默认跳板链
+	if jumpExpr, ok := getJumpHostsFromOptions(server); ok && jumpExpr != "" {
+		client, _, err := s.ConnectChain(name, jumpExpr)
+		return client, err
+	}
+
 	return s.connector.Connect(server)
+}
+
+// getJumpHostsFromOptions 从服务器配置的 Options 中读取默认跳板链表达式。
+// 通过 assh set <name> -o jump_hosts=bastion,gateway 配置。
+func getJumpHostsFromOptions(server *domain.Server) (string, bool) {
+	if server.Options == nil {
+		return "", false
+	}
+	v, ok := server.Options["jump_hosts"]
+	if !ok {
+		return "", false
+	}
+	switch val := v.(type) {
+	case string:
+		return val, val != ""
+	}
+	return "", false
 }
 
 // ConnectDirect 使用直接指定的参数建立 SSH 连接，不依赖已保存的配置。
@@ -197,8 +229,42 @@ func (s *ConnectService) parseJumpChain(chainExpr string) ([]*domain.Server, err
 
 		switch {
 		case strings.HasPrefix(token, "@"):
-			// history ref: @id
-			// TODO: 从 jump_history 读取并恢复，实现 P10.7 时完成
+			// history ref: @id — 从 jump_history 读取并恢复跳板链
+			idStr := token[1:]
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid jump history ID: %q", token)
+			}
+			if s.jumpRecorder == nil {
+				return nil, fmt.Errorf("jump history recorder not available (required for @id)")
+			}
+			jh, err := s.jumpRecorder.Get(id)
+			if err != nil {
+				return nil, fmt.Errorf("get jump history #%d: %w", id, err)
+			}
+			// 将 JumpHopAuth 列表转换为 *domain.Server 列表
+			for _, hop := range jh.PathData {
+				server := &domain.Server{
+					Host: hop.Host,
+					Port: hop.Port,
+					User: hop.User,
+					Auth: &domain.Auth{
+						Password: hop.Password,
+						KeyFile:  hop.KeyFile,
+					},
+				}
+				// 如果是服务器引用，优先从 DB 读取完整配置
+				if hop.Type == "server" && hop.ServerRef != "" {
+					if dbServer, err := s.repo.Get(hop.ServerRef); err == nil && dbServer != nil {
+						server = dbServer
+					}
+				}
+				chain = append(chain, server)
+			}
+			// 递增使用次数
+			if incErr := s.jumpRecorder.IncrementUse(id); incErr != nil {
+				log.Debugf("failed to increment jump history #%d use count: %v", id, incErr)
+			}
 		case strings.Contains(token, "@"):
 			// direct: user@host[:port]
 			parts := strings.SplitN(token, "@", 2)

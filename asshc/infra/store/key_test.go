@@ -41,6 +41,8 @@ func TestGetExistingKey(t *testing.T) {
 	if err := store1.generateAndStoreKey(); err != nil {
 		t.Fatalf("generateAndStoreKey failed: %v", err)
 	}
+	// 保存 key1 后再关闭（Close 会清零内存中的密钥）
+	key1, _ := store1.getCryptoKey()
 	store1.Close()
 
 	store2, err := NewStore(dbPath)
@@ -49,7 +51,6 @@ func TestGetExistingKey(t *testing.T) {
 	}
 	defer store2.Close()
 
-	key1, _ := store1.getCryptoKey()
 	key2, err := store2.getCryptoKey()
 	if err != nil {
 		t.Fatalf("getCryptoKey failed: %v", err)

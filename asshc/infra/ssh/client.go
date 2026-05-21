@@ -13,10 +13,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"assh/asshc/domain"
+	"assh/asshc/port"
 	"assh/config"
+	"assh/log"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -29,9 +32,18 @@ const DefaultTimeout = 10 * time.Second
 // Connector 实现 port.SSHConnector 接口，负责 SSH 连接的建立和关闭。
 // 认证尝试顺序：SSH Agent → 密钥文件 → 密码。
 // 支持密钥备份优先策略（data/keys/）和加密密钥自动解密。
+//
+// 跳板链追踪：ConnectChain 返回的 *ssh.Client 关闭时，会自动级联关闭
+// 所有上游跳板机连接（参见 Close 方法）。
 type Connector struct {
 	accountPassphrase []byte // 用于解密 data/keys/ 中加密的备份密钥
+
+	mu           sync.Mutex
+	chainParents map[*ssh.Client][]*ssh.Client // 跳板链目标→父连接映射
 }
+
+// 编译期接口合规检查
+var _ port.SSHConnector = (*Connector)(nil)
 
 // NewConnector 创建 Connector 实例（不含 passphrase，用于向后兼容）。
 // 密钥备份优先策略不可用，备份密钥解密不可用。
@@ -46,6 +58,15 @@ func NewConnectorWithPassphrase(accountPassphrase []byte) *Connector {
 	return &Connector{
 		accountPassphrase: accountPassphrase,
 	}
+}
+
+// ClearSensitiveData 清零 Connector 中的敏感数据（如 accountPassphrase）。
+// 应在不再需要 Connector 时调用，防止敏感数据在内存中残留。
+func (c *Connector) ClearSensitiveData() {
+	for i := range c.accountPassphrase {
+		c.accountPassphrase[i] = 0
+	}
+	c.accountPassphrase = nil
 }
 
 // Connect 根据服务器配置建立 SSH 连接。
@@ -117,10 +138,30 @@ func (c *Connector) keepAlive(client *ssh.Client, interval time.Duration) {
 }
 
 // Close 关闭 SSH 连接，client 为 nil 时不做操作。
+// 如果 client 是通过 ConnectChain 返回的跳板链目标连接，
+// 会按"目标→最后一跳→...→第一跳"顺序级联关闭所有上游连接。
+// 直连（Connect）返回的 client 直接关闭，不做额外操作。
 func (c *Connector) Close(client *ssh.Client) error {
-	if client != nil {
-		return client.Close()
+	if client == nil {
+		return nil
 	}
+
+	// 先关闭目标连接
+	client.Close()
+
+	// 检查是否有跳板链父连接需要级联关闭
+	c.mu.Lock()
+	parents, ok := c.chainParents[client]
+	delete(c.chainParents, client)
+	c.mu.Unlock()
+
+	if ok {
+		// 按倒序关闭所有跳板连接：最后一跳 → ... → 第一跳
+		for i := len(parents) - 1; i >= 0; i-- {
+			parents[i].Close()
+		}
+	}
+
 	return nil
 }
 
@@ -160,25 +201,15 @@ func (c *Connector) ConnectChain(target *domain.Server, chain []*domain.Server) 
 		return nil, fmt.Errorf("target %s: %w", target.Host, err)
 	}
 
-	return targetClient, nil
-}
-
-// ChainClient 包装 SSH 客户端，包含目标连接和所有跳板机连接。
-// Close 时按"目标 → 最后一跳 → ... → 第一跳"顺序级联关闭。
-type ChainClient struct {
-	*ssh.Client
-	parents []*ssh.Client
-}
-
-// Close 级联关闭所有连接。
-func (c *ChainClient) Close() error {
-	// 先关闭目标连接
-	c.Client.Close()
-	// 再按倒序关闭所有跳板连接
-	for i := len(c.parents) - 1; i >= 0; i-- {
-		c.parents[i].Close()
+	// 注册跳板链追踪：Close 时会级联关闭所有上游连接
+	c.mu.Lock()
+	if c.chainParents == nil {
+		c.chainParents = make(map[*ssh.Client][]*ssh.Client)
 	}
-	return nil
+	c.chainParents[targetClient] = parents
+	c.mu.Unlock()
+
+	return targetClient, nil
 }
 
 // dialThrough 通过已有客户端拨号到目标服务器。
@@ -366,6 +397,8 @@ func (c *Connector) getHostKeyCallback(server *domain.Server) ssh.HostKeyCallbac
 	// 检查是否跳过 host key 验证
 	if skip, ok := server.Options["insecure_skip_hostkey"]; ok {
 		if v, ok := skip.(bool); ok && v {
+			log.Warnf("⚠️  Host key verification disabled for %s (insecure_skip_hostkey=true)", server.Name)
+			log.Warnf("   This should only be used in trusted networks")
 			return ssh.InsecureIgnoreHostKey()
 		}
 	}

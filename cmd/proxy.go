@@ -27,6 +27,7 @@ func proxyFlags() []cli.Flag {
 		cli.StringFlag{Name: "P, password", Usage: "password (direct connection)"},
 		cli.StringFlag{Name: "i, identity-file", Usage: "identity file path (direct connection)"},
 		cli.StringFlag{Name: "k, key", Usage: "key file path (alias for -i)"},
+		cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
 	}
 }
 
@@ -79,6 +80,7 @@ Examples:
 
 func (a *App) proxyAction(c *cli.Context) error {
 	host := c.String("H")
+	jumpChain := c.String("J")
 
 	opts := service.ProxyOptions{
 		SOCKS5Addr:    c.String("socks5"),
@@ -124,6 +126,11 @@ func (a *App) proxyAction(c *cli.Context) error {
 
 	if a.proxySvc == nil {
 		return fmt.Errorf("proxy service not available")
+	}
+
+	// 跳板链模式
+	if jumpChain != "" {
+		return a.proxySvc.StartProxyWithChain(serverName, jumpChain, opts)
 	}
 
 	return a.proxySvc.StartProxy(serverName, opts)

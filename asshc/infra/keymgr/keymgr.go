@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 
 	"assh/asshc/domain"
+	"assh/asshc/port"
 	"assh/config"
 )
 
@@ -29,6 +30,9 @@ type KeyManager struct {
 	passphrase []byte    // account password（用于私钥加密），nil 表示未设置
 	stdin      io.Reader // 用于 ReadKeyFromStdin，默认 os.Stdin
 }
+
+// 编译期接口合规检查
+var _ port.KeyManager = (*KeyManager)(nil)
 
 // New 创建并初始化 KeyManager。
 // keysDir 为密钥存储目录路径（支持 ~/ 前缀），passphrase 为 account password。
@@ -115,4 +119,12 @@ func (m *KeyManager) ReadKeyFromStdin() (savedPath string, fingerprint string, e
 	return destPath, fp, nil
 }
 
+// ClearSensitiveData 清零 KeyManager 中的敏感数据（如 passphrase）。
+// 应在不再需要 KeyManager 时调用，防止敏感数据在内存中残留。
+func (m *KeyManager) ClearSensitiveData() {
+	for i := range m.passphrase {
+		m.passphrase[i] = 0
+	}
+	m.passphrase = nil
+}
 
