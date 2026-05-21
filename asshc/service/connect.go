@@ -41,6 +41,8 @@ func (s *ConnectService) SetJumpRecorder(r port.JumpHistoryRecorder) {
 
 // ConnectByName 根据已保存的服务器名称建立 SSH 连接。
 // 从存储中查询服务器配置，然后使用配置信息建立连接。
+// 如果服务器配置了 Options["jump_hosts"]（如 "bastion,gateway"），
+// 自动通过跳板链连接，不需要手动指定 -J 参数。
 func (s *ConnectService) ConnectByName(name string) (*ssh.Client, error) {
 	if name == "" {
 		return nil, domain.ErrInvalidName
@@ -54,7 +56,30 @@ func (s *ConnectService) ConnectByName(name string) (*ssh.Client, error) {
 		return nil, domain.ErrNotFound
 	}
 
+	// P10.9-a: 检查服务器是否配置了默认跳板链
+	if jumpExpr, ok := getJumpHostsFromOptions(server); ok && jumpExpr != "" {
+		client, _, err := s.ConnectChain(name, jumpExpr)
+		return client, err
+	}
+
 	return s.connector.Connect(server)
+}
+
+// getJumpHostsFromOptions 从服务器配置的 Options 中读取默认跳板链表达式。
+// 通过 assh set <name> -o jump_hosts=bastion,gateway 配置。
+func getJumpHostsFromOptions(server *domain.Server) (string, bool) {
+	if server.Options == nil {
+		return "", false
+	}
+	v, ok := server.Options["jump_hosts"]
+	if !ok {
+		return "", false
+	}
+	switch val := v.(type) {
+	case string:
+		return val, val != ""
+	}
+	return "", false
 }
 
 // ConnectDirect 使用直接指定的参数建立 SSH 连接，不依赖已保存的配置。

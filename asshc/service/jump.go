@@ -19,17 +19,38 @@ func NewJumpService(recorder port.JumpHistoryRecorder) *JumpService {
 // targetExpr: 目标表达式（服务器名或 "user@host:port"）
 // pathText: 人类可读的跳板路径文本
 // hops: 跳板链中的服务器列表
+//
+// 跳板类型识别规则：
+//   - hop.Name != "" → type "server"（从 DB 读取的已保存服务器），ServerRef = hop.Name
+//   - hop.Name == "" → type "direct"（user@host[:port] 格式直接指定），无 ServerRef
+//
+// 认证信息（Password/KeyFile）从 hop.Auth 中记录，用于 -J @id 恢复时复用。
 func (s *JumpService) RecordJumpChain(targetExpr, pathText string, hops []*domain.Server) error {
 	// 转换 hops 为 JumpHopAuth 列表
 	pathData := make([]domain.JumpHopAuth, len(hops))
 	for i, hop := range hops {
-		pathData[i] = domain.JumpHopAuth{
-			Type:      "server",
-			ServerRef: hop.Name,
-			Host:      hop.Host,
-			Port:      hop.Port,
-			User:      hop.User,
+		auth := domain.JumpHopAuth{
+			Host: hop.Host,
+			Port: hop.Port,
+			User: hop.User,
 		}
+
+		if hop.Name != "" {
+			// 已保存的服务器引用
+			auth.Type = "server"
+			auth.ServerRef = hop.Name
+		} else {
+			// user@host[:port] 直接指定
+			auth.Type = "direct"
+		}
+
+		// 记录认证信息（用于 -J @id 恢复时复用）
+		if hop.Auth != nil {
+			auth.Password = hop.Auth.Password
+			auth.KeyFile = hop.Auth.KeyFile
+		}
+
+		pathData[i] = auth
 	}
 
 	jh := &domain.JumpHistory{
