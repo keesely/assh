@@ -1128,7 +1128,7 @@ type SSHSession interface {
 
 ### 📝 Phase 14: Proxy & Tunnel 增强计划 (Planned)
 
-目标：修复已知代理/隧道问题，重构 proxy/tunnel 参数体系，提供更灵活可靠的代理模式
+目标：修复已知代理/隧道问题，重构 proxy/tunnel 参数体系，引入 SQLite 服务管理持久化，提供灵活的代理和隧道服务生命周期管理
 
 **状态说明**：Phase 7 (Proxy & Tunnel) 已完成基础功能交付，但存在以下已知问题和改进空间：
 
@@ -1139,6 +1139,8 @@ type SSHSession interface {
 | tunnel 命令冗余 | 需要 `assh tunnel start myserver -L 8080:localhost:80` | 去除 `start` 子命令，直接 `assh tunnel myserver -L 8080:localhost:80` |
 | 缺少传输层类型指定 | 端口转发仅支持 TCP | 新增 `--listen` 参数，支持 `tcp`/`http` 枚举值 |
 | 端口参数不支持自动补全 | `8080::80` 中间为空 host 时报错 | 空 host 自动补全为 `127.0.0.1` |
+| 运行中的服务无持久化记录 | 服务启动后无数据库记录，重连/重启后无法自动恢复 | SQLite 持久化服务记录，支持自动重连恢复 |
+| 无统一服务管理入口 | 启动/停止/列表分散在不同命令 | 统一 `assh service` 命令组，集中管理所有代理和隧道服务 |
 
 | 编号 | 任务 | 文件 | 说明 | 优先级 |
 |------|------|------|------|--------|
@@ -1147,25 +1149,125 @@ type SSHSession interface {
 | P14.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 |
 | P14.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80 | P0 |
 | P14.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 |
+| P14.6 | **服务领域实体 + 存储接口** | `asshc/domain/service.go` + `asshc/port/servicemgr.go` | 定义 `ServiceInstance` 领域实体（ID/类型/服务器/端口/状态/配置快照/创建时间等），`ServiceRepository` 接口（CRUD + ListByStatus + ListByType） | P0 |
+| P14.7 | **SQLite 持久化实现** | `asshc/infra/store/service.go` | 新建 `services` 表存储服务记录，AES-GCM 加密敏感配置（如密码/认证信息），支持状态标记（running/stopped/failed）、自动时间戳、服务名唯一索引 | P0 |
+| P14.8 | **ServiceManager 接口 + 实现** | `asshc/port/servicemgr.go` + `asshc/infra/service/mgr.go` | 定义 `ServiceManager` 接口（Start/Stop/Restart/Status/List），实现包括：代理服务管理器（ProxyManager）和隧道服务管理器（TunnelManager），统一生命周期控制 | P0 |
+| P14.9 | **ServiceManager 服务编排** | `asshc/service/servicemgr.go` | `ManageService` 编排层，组装 StartService/StopService/ListServices/RestartService，联动 ServiceRepository 持久化状态变更 | P0 |
+| P14.10 | **assh service 命令组** | `cmd/service.go` | 统一服务管理命令：`assh service list [--type proxy/tunnel] [--status running/stopped]`、`assh service start <id>`、`assh service stop <id>`、`assh service restart <id>`、`assh service rm <id>`；支持 `--all` 批量操作 | P0 |
+| P14.11 | **数据库迁移** | `asshc/infra/store/db.go` | `migrate()` 新增 `services` 建表 | P0 |
+| P14.12 | **DI 注入** | `main.go` + `cmd/app.go` | ServiceManager + ManageService 创建注入 | P0 |
+| P14.13 | **自动重连/恢复** | `asshc/service/servicemgr.go` | 启动时自动恢复状态为 running 的服务（按类型调用对应 Manager.Start），支持退避重试 | P1 |
 | **验证** | `go build ./... && go test ./... -v` | | | |
+
+**设计说明**：
+
+```go
+// domain/service.go — 服务领域实体
+type ServiceType string
+const (
+    ServiceTypeProxy  ServiceType = "proxy"
+    ServiceTypeTunnel ServiceType = "tunnel"
+)
+
+type ServiceStatus string
+const (
+    ServiceStatusRunning ServiceStatus = "running"
+    ServiceStatusStopped ServiceStatus = "stopped"
+    ServiceStatusFailed  ServiceStatus = "failed"
+)
+
+type ServiceInstance struct {
+    ID          string            `json:"id"`          // UUID / 自增 ID
+    Name        string            `json:"name"`         // 服务名称（唯一）
+    Type        ServiceType       `json:"type"`         // proxy / tunnel
+    ServerName  string            `json:"server_name"`  // 关联服务器
+    Status      ServiceStatus     `json:"status"`       // 运行状态
+    Config      ServiceConfig     `json:"config"`       // 服务配置快照（加密存储）
+    PID         int               `json:"pid,omitempty"` // 守护进程 PID
+    CreatedAt   time.Time         `json:"created_at"`
+    UpdatedAt   time.Time         `json:"updated_at"`
+}
+
+type ServiceConfig struct {
+    ListenType   string   `json:"listen_type,omitempty"`   // tcp/http（用于 tunnel --listen）
+    LocalAddr    string   `json:"local_addr,omitempty"`    // 本地地址
+    RemoteAddr   string   `json:"remote_addr,omitempty"`   // 远程地址
+    Reverse      bool     `json:"reverse"`                 // 是否反向
+    Auth         string   `json:"auth,omitempty"`          // 认证信息（加密）
+    Ports        string   `json:"ports,omitempty"`         // 端口映射规则
+    AutoReconnect string  `json:"auto_reconnect,omitempty"`// 自动重连配置
+}
+```
+
+```go
+// port/servicemgr.go — 服务管理器接口
+type ServiceManager interface {
+    Start(instance *domain.ServiceInstance) error
+    Stop(id string) error
+    Restart(id string) error
+    Status(id string) (domain.ServiceStatus, error)
+    List(filter ServiceFilter) ([]*domain.ServiceInstance, error)
+}
+
+type ServiceFilter struct {
+    Type   domain.ServiceType
+    Status domain.ServiceStatus
+    Server string
+}
+
+// ServiceRepository 接口（CRUD + 持久化）
+type ServiceRepository interface {
+    Create(instance *domain.ServiceInstance) error
+    Get(id string) (*domain.ServiceInstance, error)
+    Update(instance *domain.ServiceInstance) error
+    Delete(id string) error
+    List(filter ServiceFilter) ([]*domain.ServiceInstance, error)
+}
+```
+
+**数据库设计**：
+```sql
+CREATE TABLE IF NOT EXISTS services (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    name               TEXT NOT NULL UNIQUE,
+    type               TEXT NOT NULL CHECK(type IN ('proxy','tunnel')),
+    server_name        TEXT NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'stopped' CHECK(status IN ('running','stopped','failed')),
+    config_encrypted   BLOB,              -- AES-GCM 加密的服务配置快照
+    pid                INTEGER DEFAULT 0,
+    created_at         TEXT DEFAULT (datetime('now')),
+    updated_at         TEXT DEFAULT (datetime('now'))
+);
+```
 
 **使用预览** (变更后):
 
 ```bash
-# 代理：参数统一
-assh proxy myserver --http :8080              # 目标端启动 HTTP Server，转发数据
-assh proxy myserver --tcp :9090               # 目标端启动 TCP 服务，转发数据
-assh proxy myserver --socks :1080             # 启用 SOCKS 代理
+# 代理：参数统一 + 自动注册服务
+assh proxy myserver --http :8080              # 目标端启动 HTTP Server，挂载为 service
+assh proxy myserver --tcp :9090               # 目标端启动 TCP 服务，挂载为 service
+assh proxy myserver --socks :1080             # 启用 SOCKS 代理，自动注册服务
 assh proxy myserver --reverse --http :8080    # 反向：本地端启动 HTTP Server
 assh proxy myserver --reverse --tcp --ports 80:3000  # 反向 TCP 端口映射
 
-# 隧道：简化命令 + --listen + 自动补全
+# 隧道：简化命令 + --listen + 自动补全 + 自动注册服务
 assh tunnel myserver -L 8080:web:80           # 本地转发（原 assh tunnel start ...）
 assh tunnel myserver --listen tcp -R 8080:web:80    # 远程 TCP 监听转发
 assh tunnel myserver --listen http -R 8080:web:80   # 远程 HTTP 监听转发
 assh tunnel myserver -L 80::80                 # 等价于 -L 80:127.0.0.1:80
-assh tunnel stop <id>
-assh tunnel list
+
+# 统一服务管理
+assh service list                             # 列出所有已注册的代理/隧道服务
+assh service list --type proxy                # 仅列表代理服务
+assh service list --status running            # 仅列出运行中的服务
+assh service start <id>                       # 启动指定服务
+assh service stop <id>                        # 停止指定服务（等价于 tunnel stop / proxy 退出）
+assh service restart <id>                     # 重启指定服务
+assh service rm <id>                          # 删除服务注册记录
+
+# 批量操作
+assh service stop --all                       # 停止所有运行中的服务
+assh service restart --type tunnel            # 重启所有隧道服务
 ```
 
 ---
