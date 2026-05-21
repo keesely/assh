@@ -1008,8 +1008,8 @@ assh health list --detail
 
 目标：实现 SSH 多跳跳板机支持，覆盖登录/命令执行/文件传输/端口转发全场景
 
-> **安全修复 (v2.0.1, 2026-05-19)**: P0/P1/P2 安全修复已合并到此分支。
-> 详见 [SECURITYS.md](SECURITYS.md) 和 [hotfix-plan.md](hotfix-plan.md)。
+> **安全审计修复 (v2.0.1, 2026-05-22)**: Batch 1/2/4 (CRITICAL×4 + HIGH×7 + MEDIUM×9) 已合并到此分支。
+> 详见 [docs/securitys/fix-plan-2026-05-22.md](securitys/fix-plan-2026-05-22.md)。
 
 设计文档：[Phase10-Design.md](Phase10-Design.md)
 ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
