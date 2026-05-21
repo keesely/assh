@@ -16,10 +16,11 @@
 7. [密钥管理](#7-密钥管理)
 8. [代理与隧道](#8-代理与隧道)
 9. [云同步](#9-云同步)
-10. [健康检查](#10-健康检查)
-11. [配置参考](#11-配置参考)
-12. [命令速查表](#12-命令速查表)
-13. [常见问题与技巧](#13-常见问题与技巧)
+10. [跳板机](#10-跳板机)
+11. [健康检查](#11-健康检查)
+12. [配置参考](#12-配置参考)
+13. [命令速查表](#13-命令速查表)
+14. [常见问题与技巧](#14-常见问题与技巧)
 
 ---
 
@@ -36,6 +37,7 @@
 | 代理 & 隧道 | SOCKS5/HTTP CONNECT/AutoProxy/端口转发 | `assh proxy/tunnel` | Phase 7 |
 | 云同步 | 七牛云加密同步服务器配置 | `assh sync` | Phase 8 |
 | 健康检查 | SSH 连接延迟 + 系统指标采集 | `assh health` | Phase 9 |
+| 跳板机 | 多跳 SSH 连接、历史复用 | `assh login -J / jump` | Phase 10 |
 | 加密存储 | AES-256-GCM + SQLite，自动密钥管理 | 内置 | Phase 2 |
 | 版本回滚 | 配置变更自动快照，支持任意版本回滚 | `assh rollback` | Phase 4 |
 
@@ -51,7 +53,8 @@ SSH 连接/管理      文件系统操作
 ├── keygen
 ├── proxy/tunnel
 ├── sync
-└── health
+├── health
+└── jump
     │
     └── 共用核心层 (asshc/)
 ```
@@ -986,7 +989,115 @@ assh sync history
 
 ---
 
-## 10. 健康检查
+## 10. 跳板机
+
+ASSH 自 v2.0.1 起支持多跳 SSH 连接（Jump Host），通过 `-J` 参数或服务器的 `options.jump` 配置实现。
+
+### 10.1 基本用法
+
+```bash
+# 通过跳板机登录目标服务器
+assh login myserver -J jump-server
+
+# 多跳：依次通过多个跳板机
+assh login myserver -J jump1,jump2
+
+# 直连模式使用跳板机
+assh login root@target-host -J root@jump-host
+
+# 在 Options 中配置默认跳板机
+assh set myserver -o jump=jump-server
+# 配置后直接 assh login myserver 会自动使用跳板机
+```
+
+### 10.2 跳板机认证
+
+跳板机支持与目标服务器独立认证，可以配置不同的用户、密码或密钥：
+
+```bash
+# 不同用户
+assh login target -J admin@jump-server
+
+# 跳板机使用密钥，目标使用密码
+assh login target -P targetpass -J jump-server -i ~/.ssh/id_rsa
+
+# 跳板机指定端口
+assh login target -J jump-server:2222
+```
+
+### 10.3 跳板历史管理
+
+`assh jump` 命令管理跳板连接历史，方便复用之前成功的跳板配置：
+
+```bash
+# 查看跳板历史
+assh jump history
+
+# 查看指定次数（默认 20 条）
+assh jump history --limit 50
+
+# 查看历史详情（JSON 格式）
+assh jump history --json
+
+# 清除历史记录
+assh jump history --clear
+```
+
+### 10.4 跳板机工作流程
+
+跳板机连接的认证流程：
+
+1. **解析跳板规格** — 从 `-J` 参数或 `options.jump` 读取跳板服务器列表
+2. **递归连接** — 从离目标最远的跳板开始依次建立 SSH 连接
+3. **认证链** — 每个跳板独立认证（密码/密钥/Agent）
+4. **建立隧道** — 最终通过最后一级跳板的 TCP 隧道连接目标服务器
+5. **历史记录** — 连接成功后自动记录跳板路径
+
+### 10.5 跳板机与代理组合
+
+跳板机可以和代理/隧道功能组合使用：
+
+```bash
+# 通过跳板机建立 SOCKS5 代理
+assh proxy myserver --socks5 :1080 -J jump-server
+
+# 通过跳板机建立端口转发
+assh tunnel start myserver -L 8080:web:80 -J jump-server
+
+# 批量命令通过跳板机
+assh run myserver "uptime" -J jump-server
+```
+
+### 10.6 跳板机示例集合
+
+```bash
+# === 常见场景 ===
+
+# 场景：通过企业堡垒机访问内网服务器
+assh login internal-server -J bastion.company.com
+
+# 场景：多层级网络（办公网 → 跳板 → 生产网）
+assh login prod-db -J office-jump,prod-jump
+
+# 场景：跳板机认证信息不同
+assh login target-srv -J admin@jump:2222 -i ~/.ssh/office-key
+
+# 场景：配置默认跳板机
+assh set myserver -o jump=default-jump
+# 以后直接登录
+assh login myserver
+
+# 场景：查看最近的跳板历史
+assh jump history --limit 10
+
+# 场景：通过跳板机做健康检查
+assh health check internal-server -J jump-server
+
+# 场景：通过跳板机同步文件
+assh-fs push internal-server ./file /remote/ -J jump-server
+```
+
+---
 
 ASSH 支持通过 SSH 连接对服务器进行健康检查，采集关键系统指标。
 
@@ -1090,7 +1201,7 @@ assh health check root@10.0.0.1:2222
 
 ---
 
-## 11. 配置参考
+## 12. 配置参考
 
 ### 11.1 存储路径
 
@@ -1187,7 +1298,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 
 ---
 
-## 12. 命令速查表
+## 13. 命令速查表
 
 ### 12.1 assh 命令
 
@@ -1216,6 +1327,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `sync history` | 同步历史 | — | `assh sync history` |
 | `health check` | 健康检查 | `<server>[,server2,...]` | `assh health check web-01` |
 | `health list` | 批量检查 | `--group --concurrency --detail` | `assh health list --detail` |
+| `jump history` | 跳板历史 | `--limit --json --clear` | `assh jump history` |
 | `version` | 版本信息 | — | `assh version` |
 
 ### 12.2 assh-fs 命令
@@ -1231,11 +1343,12 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | 命令行模式 | 操作 |
 |-----------|------|
 | `assh <name>` | 直接登录（等价于 `assh login <name>`） |
+| `assh <name> -J <jump>` | 通过跳板机登录 |
 | `-qv` | 组合短参数（等价的 `-q -v`） |
 
 ---
 
-## 13. 常见问题与技巧
+## 14. 常见问题与技巧
 
 ### 13.1 首次运行
 
