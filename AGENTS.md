@@ -4,7 +4,8 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.1 (Phase 11 自动更新/升级 验收完成 2026/05/26 | Phase 10 跳板机支持 P1 完成 2026/05/22 | 安全审计 Batch 1/2/4 完成 2026/05/22 | 实验 X1 进行中 2026/05/17)
+- **Version**: v2.0.1 (Phase 0-11 完成, 稳定版 2026/05/26)
+- **下一版本**: v2.1.0 (Phase 12-13 + NEXT-001, 预览版 v2.1.0-rc1)
 - **上一稳定版本**: v2.0.0 (Phase 9 完成)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.25.0+
@@ -101,7 +102,7 @@ asshv2/
 ### 分支命名规范
 
 ```
-dev/v2.0.1-phase-X  # 阶段开发分支 (如 dev/v2.0.1-phase-10)
+dev/v2.1.0-phase-X  # 阶段开发分支 (如 dev/v2.1.0-phase-12)
 feat/<feature>      # 特性分支 (如 feat/config, feat/ssh)
 bugfix/<issue>     # Bug 修复分支
 ```

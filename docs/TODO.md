@@ -1,7 +1,16 @@
 # TODO.md
 
 > 开发任务计划 - 按 Phase 分阶段实施
-> 最后更新: 2026-05-26 (v2.0.1 发布)
+> 最后更新: 2026-05-27 (v2.0.1 稳定版发布, v2.1.0 规划中)
+
+## 版本路线图
+
+| 版本 | 包含 Phase | 状态 |
+|------|-----------|------|
+| v2.0.0 | Phase 0-9 | ✅ 已发布 |
+| v2.0.1 | Phase 0-11 (自动更新/升级) | ✅ 当前稳定版 |
+| v2.1.0 | Phase 12-13 + NEXT-001 | 📋 规划中 |
+| v2.1.0-rc1 | v2.0.1 稳定 + 预览 | 🏷️ 预览版标签 |
 
 ## 开发阶段
 
@@ -1168,7 +1177,7 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 - 代码质量: `go build` + `go vet` + `go test` 全部通过
 - 架构边界: port/service/infra 三层分离，DI 注入正确
 
-### 📝 Phase 12: 远程服务器挂载
+### 📝 Phase 12: 远程服务器挂载 (v2.1.0)
 
 目标：使用 sshfs/webdav/samba 挂载远程服务器文件系统到本地
 
@@ -1184,7 +1193,7 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 | P12.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
 | **验证**: `go test ./asshc/... -v` |
 
-### 📝 Phase 13: 远程命令执行增强
+### 📝 Phase 13: 远程命令执行增强 (v2.1.0)
 
 目标：增强 `run` 和 `bc` 命令，添加超时、输出格式化、stdout/stderr 分离等功能
 
@@ -1232,7 +1241,7 @@ type SSHSession interface {
 }
 ```
 
-### 📝 NEXT-001: Proxy & Tunnel 增强计划 (Planned)
+### 📝 NEXT-001: Proxy & Tunnel 增强计划 (v2.1.0)
 
 目标：修复已知代理/隧道问题，重构 proxy/tunnel 参数体系，引入 SQLite 服务管理持久化，提供灵活的代理和隧道服务生命周期管理
 
