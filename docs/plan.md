@@ -251,8 +251,8 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 | 8 | 云同步 (Qiniu) | 无 | 6 |
 | 9 | 服务器健康检查 | ssh + CLI | 4 |
 | 10 | 跳板机支持 | ssh | 5 |
-| 11 | 远程挂载 (sshfs/webdav/samba) | ssh | 6 |
-| 12 | 自动更新/升级 | CLI | 4 |
+| **11** | **自动更新/升级** | **CLI** | **4** |
+| 12 | 远程挂载 (sshfs/webdav/samba) | ssh | 6 |
 | 13 | 远程命令执行增强 | Phase 3 + Phase 4 | 6 |
 | NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | Phase 7 + Phase 10 | 8 |
 | X | 实验阶段: 虚拟命令 | CLI + 实验性 | 4 |
