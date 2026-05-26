@@ -1066,49 +1066,49 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P11.1-a UpdateInfo 实体 | `asshc/domain/update.go` | UpdateInfo 结构体（Version/ReleaseDate/ReleaseNotes/DownloadURL/SHA256/FileSize/Mandatory） | ⬜ |
-| P11.1-b UpdateError 错误定义 | `asshc/domain/errors.go` | 新增：ErrUpdateNotFound/ErrUpdateFailed/ErrRollbackFailed/ErrVerificationFailed/ErrNetworkError | ⬜ |
-| **验证** | `go vet ./asshc/domain/...` | | |
+| P11.1-a UpdateInfo 实体 | `asshc/domain/update.go` | UpdateInfo 结构体（Version/ReleaseDate/ReleaseNotes/DownloadURL/SHA256/FileSize/Mandatory） | ✅ |
+| P11.1-b UpdateError 错误定义 | `asshc/domain/errors.go` | 新增：ErrUpdateNotFound/ErrUpdateFailed/ErrRollbackFailed/ErrVerificationFailed/ErrNetworkError | ✅ |
+| **验证** | `go vet ./asshc/domain/...` | | ✅ |
 
 #### P11.2 接口层 — `asshc/port/`
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P11.2-a VersionChecker 接口 | `asshc/port/updater.go` | VersionChecker 接口定义（CheckUpdate/GetCurrentVersion） | ⬜ |
-| P11.2-b Updater 接口 | `asshc/port/updater.go` | Updater 接口定义（Download/Verify/Install/Rollback） | ⬜ |
-| P11.2-c DownloadProgress 类型 | `asshc/port/updater.go` | DownloadProgress 回调类型 | ⬜ |
-| **验证** | `go vet ./asshc/port/...` | | |
+| P11.2-a VersionChecker 接口 | `asshc/port/updater.go` | VersionChecker 接口定义（CheckUpdate/GetCurrentVersion） | ✅ |
+| P11.2-b Downloader + Installer 接口 | `asshc/port/updater.go` | 拆分接口：Downloader（Download/Verify）+ Installer（Install/Rollback/GetBackupDir） | ✅ |
+| P11.2-c DownloadProgress 类型 | `asshc/port/updater.go` | DownloadProgress 回调类型 | ✅ |
+| **验证** | `go vet ./asshc/port/...` | | ✅ |
 
 #### P11.3 基础设施层 — `asshc/infra/updater/`
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P11.3-a GitHub Release 检查 | `asshc/infra/updater/github.go` | GitHubChecker 实现 VersionChecker 接口 | ⬜ |
-| P11.3-b HTTP 下载器 | `asshc/infra/updater/downloader.go` | HTTPDownloader 实现 Updater.Download | ⬜ |
-| P11.3-c SHA256 验证 | `asshc/infra/updater/downloader.go` | 实现 Updater.Verify | ⬜ |
-| P11.3-d 二进制安装器 | `asshc/infra/updater/installer.go` | BinaryInstaller 实现 Updater.Install | ⬜ |
-| P11.3-e 回滚机制 | `asshc/infra/updater/installer.go` | 实现 Updater.Rollback（备份恢复） | ⬜ |
+| P11.3-a GitHub 版本检查 | `asshc/infra/updater/github.go` | GitHubChecker 实现 VersionChecker 接口（从 version.txt 检查） | ✅ |
+| P11.3-b HTTP 下载器 | `asshc/infra/updater/downloader.go` | HTTPDownloader 实现 Downloader 接口（Download/Verify） | ✅ |
+| P11.3-c SHA256 验证 | `asshc/infra/updater/downloader.go` | 实现 Verify 方法 | ✅ |
+| P11.3-d 二进制安装器 | `asshc/infra/updater/installer.go` | BinaryInstaller 实现 Installer 接口（Install/Rollback/GetBackupDir） | ✅ |
+| P11.3-e 回滚机制 | `asshc/infra/updater/installer.go` | 实现 Rollback（备份恢复） | ✅ |
 | P11.3-f 单元测试 | `asshc/infra/updater/*_test.go` | mock HTTP 测试 GitHub 检查、下载、验证、安装、回滚 | ⬜ |
-| **验证** | `go test ./asshc/infra/updater/... -v` | | |
+| **验证** | `go test ./asshc/infra/updater/... -v` | | ⬜ |
 
 #### P11.4 服务层 — `asshc/service/`
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P11.4-a UpgradeService | `asshc/service/upgrade.go` | 服务编排层（CheckUpdate/Upgrade/Rollback/GetVersion） | ⬜ |
+| P11.4-a UpgradeService | `asshc/service/upgrade.go` | 服务编排层（CheckUpdate/Upgrade/Rollback/GetVersion） | ✅ |
 | P11.4-b 自动检查逻辑 | `asshc/service/upgrade.go` | 启动时检查（可配置）、定时检查、静默下载 | ⬜ |
-| P11.4-c 单元测试 | `asshc/service/upgrade_test.go` | mock VersionChecker + Updater 测试 | ⬜ |
-| **验证** | `go test ./asshc/service/... -v` | | |
+| P11.4-c 单元测试 | `asshc/service/upgrade_test.go` | mock VersionChecker + Downloader + Installer 测试 | ⬜ |
+| **验证** | `go test ./asshc/service/... -v` | | ⬜ |
 
 #### P11.5 CLI 命令 — `cmd/`
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P11.5-a upgrade 命令 | `cmd/upgrade.go` | `assh upgrade` 命令定义（--check/--version/--force/--rollback/--source/--yes） | ⬜ |
+| P11.5-a upgrade 命令 | `cmd/upgrade.go` | `assh upgrade` 命令定义（--check/--version/--force/--rollback/--source/--yes） | ✅ |
 | P11.5-b version --check | `cmd/version.go` (修改) | `assh version --check` 检查更新 | ⬜ |
-| P11.5-c 进度显示 | `cmd/upgrade.go` | 下载进度条显示（百分比、速率、ETA） | ⬜ |
-| P11.5-d 交互确认 | `cmd/upgrade.go` | 升级前确认（显示版本信息、发布说明） | ⬜ |
-| **验证** | `go build ./... && go vet ./...` | | |
+| P11.5-c 进度显示 | `cmd/upgrade.go` | 下载进度条显示（百分比、速率、ETA） | ✅ |
+| P11.5-d 交互确认 | `cmd/upgrade.go` | 升级前确认（显示版本信息、发布说明） | ✅ |
+| **验证** | `go build ./... && go vet ./...` | | ✅ |
 
 #### P11.6 配置存储
 
@@ -1116,16 +1116,16 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 |------|------|------|:----:|
 | P11.6-a 更新配置 | `asshc/infra/store/config.go` (扩展) | 新增配置项：update_source/update_auto_check/last_update_check | ⬜ |
 | P11.6-b 备份目录 | `config/path.go` (扩展) | 新增 BackupsDir/TmpDir 常量 | ⬜ |
-| **验证** | `go test ./asshc/infra/store/... -v` | | |
+| **验证** | `go test ./asshc/infra/store/... -v` | | ⬜ |
 
 #### P11.7 DI 注入
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P11.7-a UpgradeService 创建 | `main.go` | 创建 VersionChecker + Updater + UpgradeService | ⬜ |
-| P11.7-b App 签名变更 | `cmd/app.go` | NewApp 增加 `*service.UpgradeService` 参数 | ⬜ |
-| P11.7-c CLI 命令注册 | `cmd/app.go` | registerUpgradeCommands() 注册 upgrade 命令 | ⬜ |
-| **验证** | `go build ./... && go vet ./...` | | |
+| P11.7-a UpgradeService 创建 | `main.go` | 创建 VersionChecker + Downloader + Installer + UpgradeService | ✅ |
+| P11.7-b App 签名变更 | `cmd/app.go` | NewApp 增加 `*service.UpgradeService` 参数 | ✅ |
+| P11.7-c CLI 命令注册 | `cmd/app.go` | registerUpgradeCommands() 注册 upgrade 命令 | ✅ |
+| **验证** | `go build ./... && go vet ./...` | | ✅ |
 
 #### Phase 11 验收清单
 
