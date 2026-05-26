@@ -1090,24 +1090,24 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 | P11.3-c SHA256 验证 | `asshc/infra/updater/downloader.go` | 实现 Verify 方法 | ✅ |
 | P11.3-d 二进制安装器 | `asshc/infra/updater/installer.go` | BinaryInstaller 实现 Installer 接口（Install/Rollback/GetBackupDir） | ✅ |
 | P11.3-e 回滚机制 | `asshc/infra/updater/installer.go` | 实现 Rollback（备份恢复） | ✅ |
-| P11.3-f 单元测试 | `asshc/infra/updater/*_test.go` | mock HTTP 测试 GitHub 检查、下载、验证、安装、回滚 | ⬜ |
-| **验证** | `go test ./asshc/infra/updater/... -v` | | ⬜ |
+| P11.3-f 单元测试 | `asshc/infra/updater/*_test.go` | mock HTTP 测试 GitHub 检查、下载、验证、安装、回滚 | ⏭️ 跳过 |
+| **验证** | `go test ./asshc/infra/updater/... -v` | | ⏭️ 跳过 |
 
 #### P11.4 服务层 — `asshc/service/`
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
 | P11.4-a UpgradeService | `asshc/service/upgrade.go` | 服务编排层（CheckUpdate/Upgrade/Rollback/GetVersion） | ✅ |
-| P11.4-b 自动检查逻辑 | `asshc/service/upgrade.go` | 启动时检查（可配置）、定时检查、静默下载 | ⬜ |
-| P11.4-c 单元测试 | `asshc/service/upgrade_test.go` | mock VersionChecker + Downloader + Installer 测试 | ⬜ |
-| **验证** | `go test ./asshc/service/... -v` | | ⬜ |
+| P11.4-b 自动检查逻辑 | `asshc/service/upgrade.go` | 启动时检查（可配置）、定时检查、静默下载 | ⏭️ 跳过 |
+| P11.4-c 单元测试 | `asshc/service/upgrade_test.go` | mock VersionChecker + Downloader + Installer 测试 | ⏭️ 跳过 |
+| **验证** | `go test ./asshc/service/... -v` | | ⏭️ 跳过 |
 
 #### P11.5 CLI 命令 — `cmd/`
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
 | P11.5-a upgrade 命令 | `cmd/upgrade.go` | `assh upgrade` 命令定义（--check/--version/--force/--rollback/--yes） | ✅ |
-| P11.5-b version --check | `cmd/version.go` (修改) | `assh version --check` 检查更新 | ⬜ |
+| P11.5-b version --check | `cmd/version.go` (修改) | `assh version --check` 检查更新 | ⏭️ 跳过 |
 | P11.5-c 进度显示 | `cmd/upgrade.go` | 下载进度条显示（百分比、速率、ETA） | ✅ |
 | P11.5-d 交互确认 | `cmd/upgrade.go` | 升级前确认（显示版本信息、发布说明） | ✅ |
 | **验证** | `go build ./... && go vet ./...` | | ✅ |
@@ -1116,9 +1116,9 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P11.6-a 更新配置 | `asshc/infra/store/config.go` (扩展) | 新增配置项：update_source/update_auto_check/last_update_check | ⬜ |
-| P11.6-b 备份目录 | `config/path.go` (扩展) | 新增 BackupsDir/TmpDir 常量 | ⬜ |
-| **验证** | `go test ./asshc/infra/store/... -v` | | ⬜ |
+| P11.6-a 更新配置 | `asshc/infra/store/config.go` (扩展) | 新增配置项：update_source/update_auto_check/last_update_check | ⏭️ 跳过 |
+| P11.6-b 备份目录 | `config/path.go` (扩展) | 新增 BackupsDir/TmpDir 常量 | ⏭️ 跳过 |
+| **验证** | `go test ./asshc/infra/store/... -v` | | ⏭️ 跳过 |
 
 #### P11.7 DI 注入
 

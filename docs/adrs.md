@@ -128,7 +128,7 @@ YYYY-MM-DD
 - `assh-fs`：文件系统工具独立二进制（push/pull/sftp 交互）
 - 共享核心：`asshc/` 下所有 domain/port/service/infra 模块
 - 共享初始化：`cmd/bootstrap.go` 提供 `NewAppComponents()`
-- 短期承载 SFTP 文件传输，未来可扩展挂载功能（Phase 11）
+- 短期承载 SFTP 文件传输，未来可扩展挂载功能（Phase 12）
 
 详细内容见对应 ADR 文件。
 

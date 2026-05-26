@@ -5,9 +5,9 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 ## 项目状态 & 技术选型
 
 - **Version**: v2.0.1 (Phase 11 自动更新/升级 验收完成 2026/05/26 | Phase 10 跳板机支持 P1 完成 2026/05/22 | 安全审计 Batch 1/2/4 完成 2026/05/22 | 实验 X1 进行中 2026/05/17)
-- **上一稳定版本**: v2.0.1 (安全审计修复: CRITICAL×4 + HIGH×7 + MEDIUM×9 完成 2026/05/22)
+- **上一稳定版本**: v2.0.0 (Phase 9 完成)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
-- **Go Version**: 1.22.0+
+- **Go Version**: 1.25.0+
 - **Encrypt**: RSA + AES
 - **数据库**: SQLite (modernc.org/sqlite, 纯 Go 无 CGO)
 - **日志库**: zerolog v1.32.0
@@ -55,6 +55,13 @@ asshv2/
 │   ├── connect.go       # SSH 连接命令
 │   ├── sftp_cmd.go      # push/pull/FS 命令定义（assh-fs 共享）
 │   ├── bootstrap.go     # 公共初始化逻辑（DB/Service）
+│   ├── proxy.go         # proxy CLI 命令
+│   ├── tunnel.go        # tunnel CLI 命令
+│   ├── keygen.go        # 密钥生成命令
+│   ├── sync.go          # 云同步命令
+│   ├── health.go        # 健康检查命令
+│   ├── jump.go          # 跳板机命令
+│   ├── upgrade.go       # 自动更新命令 (Phase 11)
 │   └── fs/
 │       └── main.go      # assh-fs 入口（DI 组合根）
 ├── asshc/               # 核心业务（assh + assh-fs 共享）
@@ -83,7 +90,7 @@ asshv2/
 | **8** | **云同步 (Qiniu)** | **✅ 完成 (2026-05-16)** |
 | **9** | **服务器健康检查** | **✅ 完成 (2026-05-17)** |
 | 10 | 跳板机支持 | ✅ P0+P1 完成 (2026-05-22) |
-| **11** | **自动更新/升级** | **🆕 进行中 (2026-05-26)** |
+| **11** | **自动更新/升级** | **✅ 完成 (2026-05-26)** |
 | 12 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ |
 | 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ⏳ |
 | NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | ⏳ 计划中 |
@@ -160,6 +167,13 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/port/jump.go` — JumpHistoryRecorder 接口 (Phase 10)
 - [x] `asshc/infra/store/jump.go` — JumpRecorder 存储实现 (CRUD + AES-GCM, Phase 10)
 - [x] `asshc/service/jump.go` — JumpService 跳板历史管理 (Phase 10)
+- [x] `asshc/domain/update.go` — UpdateInfo + UpdatePlatform 领域实体 (Phase 11)
+- [x] `asshc/port/updater.go` — VersionChecker + Downloader + Installer 接口 (Phase 11)
+- [x] `asshc/infra/updater/github.go` — GitHubChecker 实现 VersionChecker (Phase 11)
+- [x] `asshc/infra/updater/downloader.go` — HTTPDownloader 实现 Downloader (Phase 11)
+- [x] `asshc/infra/updater/installer.go` — BinaryInstaller 实现 Installer (Phase 11)
+- [x] `asshc/service/upgrade.go` — UpgradeService 编排层 (Phase 11)
+- [x] `cmd/upgrade.go` — upgrade CLI 命令 (Phase 11)
 
 ## 开发命令
 
@@ -175,7 +189,7 @@ bugfix/<issue>     # Bug 修复分支
 
 ## 文档
 
-- [项目需求文档](docs/demand.md) - 项目需求原始文档(草稿)
+- [项目需求文档](docs/DEMAND.md) - 项目需求原始文档(草稿)
 - [项目重构计划](docs/plan.md) - v2.0.0 重构计划
 - [开发任务](docs/TODO.md) - 分阶段任务清单
 - [Bug 追踪](docs/bugs.md) - 已知问题和修复记录

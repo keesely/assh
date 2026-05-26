@@ -278,7 +278,7 @@ func Panic(args ...interface{}) / Panicf(format string, args ...interface{})
 
 ## 版本管理
 
-- 当前版本：v2.0.0-dev (开发中)
+- 当前版本：v2.0.1 (Phase 11 完成)
 - 语义版本：semver
 - 标签格式：v2.0.0, v2.0.1, ...
 

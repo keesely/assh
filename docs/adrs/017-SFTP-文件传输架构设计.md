@@ -93,7 +93,7 @@ assh-fs (文件系统工具二进制)
 
 **拆分理由**：
 1. 职责分离：SSH 客户端（交互式 shell/命令执行）与文件传输工具（批量/后台传输）是不同的使用场景
-2. 未来可扩展：`assh-fs` 后续可加入挂载功能（Phase 11 sshfs/webdav/samba），保持二进制单一职责
+2. 未来可扩展：`assh-fs` 后续可加入挂载功能（Phase 12 sshfs/webdav/samba），保持二进制单一职责
 3. 关注点隔离：文件传输特有的依赖（pkg/sftp）、flag 参数（大量短参冲突）不影响 assh 主二进制
 4. 复用核心：两个二进制共享 `asshc/` 下所有 domain/port/service/infra 模块，通过 `cmd/bootstrap.go` 统一初始化
 
@@ -120,7 +120,7 @@ assh-fs (文件系统工具二进制)
 - 进度显示回调机制已在接口层预留
 - **二进制拆分**：`assh` 和 `assh-fs` 互不干扰，各自的 flag 命名无冲突顾虑
 - **体积控制**：SFTP 相关依赖仅链接到 `assh-fs`，`assh` 主二进制体积不受影响
-- **未来扩展**：Phase 11 挂载功能可直接添加到 `assh-fs`，无需修改 `assh`
+- **未来扩展**：Phase 12 挂载功能可直接添加到 `assh-fs`，无需修改 `assh`
 
 ### 负面影响
 - `-e`（原 `--resume`）作为唯一可用的短参，需注意未来扩展
