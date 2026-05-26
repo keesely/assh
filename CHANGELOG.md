@@ -1,5 +1,70 @@
 # Changelog
 
+## v2.0.1 (2026-05-26)
+
+### Phase 11: 自动更新/升级
+
+**完成时间**: 2026-05-26 | **ADR**: ADR-031 | **设计**: [Phase11-AutoUpdate-Design.md](docs/worklogs/2026-05-26-Phase11-AutoUpdate-Design.md)
+
+#### 领域层 (`asshc/domain/`)
+- `update.go` — UpdateInfo + UpdatePlatform 结构体
+- `errors.go` — 新增 6 个错误 (ErrUpdateNotFound/ErrUpdateFailed/ErrRollbackFailed/ErrVerificationFailed/ErrNetworkError/ErrAlreadyLatest)
+
+#### 接口层 (`asshc/port/`)
+- `updater.go` — VersionChecker + Downloader + Installer 接口定义
+
+#### 基础设施层 (`asshc/infra/updater/`)
+- `github.go` — GitHubChecker 实现 VersionChecker
+  - 从 `raw.githubusercontent.com/{owner}/{repo}/master/{versionFile}` 获取版本
+  - 从 `api.github.com/repos/{owner}/{repo}/releases/tags/v{version}` 获取 Release 信息
+  - findAsset 查找适配平台资产
+  - isNewerVersion + parseVersion 版本比较
+  - findSHA256FromAssets + downloadAndParseSHA256 SHA256 校验
+  - userAgentTransport User-Agent 头
+- `downloader.go` — HTTPDownloader 实现 Downloader
+  - 进度回调 (progressWriter)
+  - SHA256 验证
+  - io.LimitReader 文件大小限制 (默认1GB)
+- `installer.go` — BinaryInstaller 实现 Installer
+  - 备份机制 (backup)
+  - 原子替换 (replace)
+  - 跨文件系统替换 (replaceCrossDevice)
+  - 回滚 (Rollback)
+  - Windows 特殊处理 (replaceWindows)
+  - getCurrentVersion 正则提取版本号
+
+#### 服务编排层 (`asshc/service/`)
+- `upgrade.go` — UpgradeService
+  - NewUpgradeService(checker, downloader, installer)
+  - CheckUpdate / Upgrade / Rollback / GetBackupDir
+  - UpgradeOptions: Version/Force/Yes/UpdateInfo
+
+#### CLI 命令 (`cmd/`)
+- `upgrade.go` — upgrade 命令
+  - 标志: --check/-c, --version/-v, --force/-f, --rollback/-r, --yes/-y
+  - handleCheck / handleRollback / handleUpgrade
+  - formatSize 辅助函数
+
+#### DI 注入
+- `main.go` — 创建 VersionChecker + Downloader + Installer + UpgradeService
+  - NewGitHubChecker("keesely", "assh", Version, "version.txt")
+  - NewHTTPDownloader(tmpDir)
+  - NewBinaryInstaller(os.Executable(), backupDir, 3)
+- `cmd/app.go` — App 新增 upgradeSvc 字段, NewApp 签名变更, registerUpgradeCommands
+
+#### 安全修复
+- SHA256 校验链路修复 (从 Release assets 获取 SHA256 文件)
+- 跨文件系统替换修复 (copy + rename 策略)
+- 可执行文件路径修复 (os.Executable)
+- 死代码参数移除 (--source)
+- User-Agent 头添加
+- 文件大小限制 (io.LimitReader)
+- parseVersion 错误处理 (strconv.Atoi)
+
+#### 验证
+- 编译 ✅ vet ✅ 测试 ✅
+- 代码审查修复 ✅
+
 ## v2.0.1 (2026-05-22)
 
 ### 安全审计修复 (Batch 1/2/4)
