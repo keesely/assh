@@ -1052,7 +1052,7 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 | P10.11 | ✅ RecordJumpChain 完善 | `asshc/service/jump.go` | 类型检测(server/direct) + 认证信息(Password/KeyFile)记录 | P1 |
 | **验证** | `go build ./... && go test ./... -v` | | 编译+测试全部通过 | P0 |
 
-### 🆕 Phase 11: 自动更新/升级 (进行中, 2026-05-26)
+### ✅ Phase 11: 自动更新/升级 (验收完成, 2026-05-26)
 
 目标：实现版本检查、手动/自动升级、强制更新
 
@@ -1061,6 +1061,7 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 **优先级提升说明**：自动更新机制是保障用户始终运行最新安全版本的关键基础设施，因此将本阶段从原有 Phase 12 提前至 Phase 11。
 
 **设计文档**: [2026-05-26-Phase11-AutoUpdate-Design.md](worklogs/2026-05-26-Phase11-AutoUpdate-Design.md)
+**验收报告**: [2026-05-26-Phase11-AutoUpdate-Acceptance.md](worklogs/2026-05-26-Phase11-AutoUpdate-Acceptance.md)
 
 #### P11.1 领域实体
 
