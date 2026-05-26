@@ -12,7 +12,7 @@ import (
 	"assh/asshc/domain"
 )
 
-// BinaryInstaller 实现 Updater 接口的安装和回滚功能。
+// BinaryInstaller 实现 Installer 接口的安装和回滚功能。
 //
 // 安装策略：
 //   - 备份当前二进制到备份目录

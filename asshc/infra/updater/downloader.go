@@ -15,7 +15,7 @@ import (
 	"assh/asshc/port"
 )
 
-// HTTPDownloader 实现 Updater 接口的下载和验证功能。
+// HTTPDownloader 实现 Downloader 接口的下载和验证功能。
 type HTTPDownloader struct {
 	client  *http.Client
 	tempDir string // 临时下载目录
@@ -117,22 +117,6 @@ func (d *HTTPDownloader) Verify(filePath string, expectedSHA256 string) error {
 	}
 
 	return nil
-}
-
-// Install 安装更新（由 installer 实现）。
-func (d *HTTPDownloader) Install(ctx context.Context, filePath string) error {
-	// 委托给 BinaryInstaller
-	return fmt.Errorf("install not implemented in downloader")
-}
-
-// Rollback 回滚到上一版本（由 installer 实现）。
-func (d *HTTPDownloader) Rollback() error {
-	return fmt.Errorf("rollback not implemented in downloader")
-}
-
-// GetBackupDir 获取备份目录路径（由 installer 实现）。
-func (d *HTTPDownloader) GetBackupDir() string {
-	return ""
 }
 
 // progressWriter 包装 io.Writer，添加进度回调。

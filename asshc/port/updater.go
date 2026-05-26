@@ -28,8 +28,8 @@ type VersionChecker interface {
 	GetPlatform() domain.UpdatePlatform
 }
 
-// Updater 定义更新操作接口。
-type Updater interface {
+// Downloader 定义下载操作接口。
+type Downloader interface {
 	// Download 下载指定版本的更新包。
 	// 参数：
 	//   - ctx: 上下文，用于控制超时和取消
@@ -47,7 +47,10 @@ type Updater interface {
 	// 返回：
 	//   - error: 验证失败时返回错误
 	Verify(filePath string, expectedSHA256 string) error
+}
 
+// Installer 定义安装操作接口。
+type Installer interface {
 	// Install 安装更新（原子替换当前二进制）。
 	// 参数：
 	//   - ctx: 上下文

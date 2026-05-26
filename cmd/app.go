@@ -63,11 +63,12 @@ type App struct {
 	syncSvc        *service.SyncService          // 云同步服务
 	healthSvc      *service.HealthService        // 健康检查服务
 	jumpSvc        *service.JumpService          // 跳板历史服务
+	upgradeSvc     *service.UpgradeService       // 自动更新服务 (Phase 11)
 }
 
 // NewApp 创建 CLI 应用，注入所有 service 依赖。
 // 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc/keygen）。
-func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService, syncSvc *service.SyncService, healthSvc *service.HealthService, jumpSvc *service.JumpService) *App {
+func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService, syncSvc *service.SyncService, healthSvc *service.HealthService, jumpSvc *service.JumpService, upgradeSvc *service.UpgradeService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
 	app.Usage = "An SSH Client"
@@ -87,6 +88,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 		syncSvc:       syncSvc,
 		healthSvc:     healthSvc,
 		jumpSvc:       jumpSvc,
+		upgradeSvc:    upgradeSvc,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
@@ -651,6 +653,7 @@ func (a *App) registerCommands() {
 	a.registerSyncCommands()
 	a.registerHealthCommands()
 	a.registerJumpCommands()
+	a.registerUpgradeCommands()
 }
 
 // beforeAction 是全局 Before 钩子，在每次命令执行前调用。

@@ -10,18 +10,21 @@ import (
 
 // UpgradeService 编排层，负责自动更新/升级的业务逻辑。
 type UpgradeService struct {
-	checker  port.VersionChecker
-	updater  port.Updater
+	checker    port.VersionChecker
+	downloader port.Downloader
+	installer  port.Installer
 }
 
 // NewUpgradeService 创建新的升级服务。
 // 参数：
 //   - checker: 版本检查器
-//   - updater: 更新器
-func NewUpgradeService(checker port.VersionChecker, updater port.Updater) *UpgradeService {
+//   - downloader: 下载器
+//   - installer: 安装器
+func NewUpgradeService(checker port.VersionChecker, downloader port.Downloader, installer port.Installer) *UpgradeService {
 	return &UpgradeService{
-		checker: checker,
-		updater: updater,
+		checker:    checker,
+		downloader: downloader,
+		installer:  installer,
 	}
 }
 
@@ -90,20 +93,20 @@ func (s *UpgradeService) Upgrade(ctx context.Context, options UpgradeOptions, pr
 	}
 
 	// 2. 下载新版本
-	downloadPath, err := s.updater.Download(ctx, updateInfo, progress)
+	downloadPath, err := s.downloader.Download(ctx, updateInfo, progress)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}
 
 	// 3. 验证下载文件
 	if updateInfo.SHA256 != "" {
-		if err := s.updater.Verify(downloadPath, updateInfo.SHA256); err != nil {
+		if err := s.downloader.Verify(downloadPath, updateInfo.SHA256); err != nil {
 			return nil, err
 		}
 	}
 
 	// 4. 安装更新
-	if err := s.updater.Install(ctx, downloadPath); err != nil {
+	if err := s.installer.Install(ctx, downloadPath); err != nil {
 		return nil, fmt.Errorf("install failed: %w", err)
 	}
 
@@ -112,10 +115,10 @@ func (s *UpgradeService) Upgrade(ctx context.Context, options UpgradeOptions, pr
 
 // Rollback 回滚到上一版本。
 func (s *UpgradeService) Rollback() error {
-	return s.updater.Rollback()
+	return s.installer.Rollback()
 }
 
 // GetBackupDir 获取备份目录路径。
 func (s *UpgradeService) GetBackupDir() string {
-	return s.updater.GetBackupDir()
+	return s.installer.GetBackupDir()
 }

@@ -21,6 +21,7 @@ import (
 	sshinfra "assh/asshc/infra/ssh"
 	"assh/asshc/infra/store"
 	qiniusync "assh/asshc/infra/sync/qiniu"
+	"assh/asshc/infra/updater"
 	"assh/asshc/port"
 	"assh/asshc/service"
 	"assh/config"
@@ -93,8 +94,18 @@ func main() {
 	// 10. 创建跳板历史服务（Phase 10）
 	jumpSvc := service.NewJumpService(repo.JumpRecorder())
 
-	// 11. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc, jumpSvc)
+	// 11. 创建自动更新服务（Phase 11）
+	// 版本检查器：从 GitHub 仓库的 version.txt 文件检查最新版本
+	// 更新器：HTTP 下载器 + 二进制安装器
+	versionChecker := updater.NewGitHubChecker("keesely", "assh", Version, "version.txt")
+	backupDir := filepath.Join(filepath.Dir(dbPath), "backups")
+	tmpDir := filepath.Join(filepath.Dir(dbPath), "tmp")
+	downloader := updater.NewHTTPDownloader(tmpDir)
+	installer := updater.NewBinaryInstaller(os.Args[0], backupDir, 3)
+	upgradeSvc := service.NewUpgradeService(versionChecker, downloader, installer)
+
+	// 12. 创建 CLI 应用并运行
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc, jumpSvc, upgradeSvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
