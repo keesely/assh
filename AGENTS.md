@@ -1,11 +1,11 @@
 # An SSH Client
 
-ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快速使用。当前版本：`v2.0.0`
+ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快速使用。当前版本：`v2.0.1`
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.0 (Phase 8 云同步 完成 2026/05/16 → Phase 9 服务器健康检查 进行中 2026/05/17)
-- **上一稳定版本**: v2.0.0 (Phase 8 完成)
+- **Version**: v2.0.1 (Phase 11 自动更新/升级 验收完成 2026/05/26 | Phase 10 跳板机支持 P1 完成 2026/05/22 | 安全审计 Batch 1/2/4 完成 2026/05/22 | 实验 X1 进行中 2026/05/17)
+- **上一稳定版本**: v2.0.1 (安全审计修复: CRITICAL×4 + HIGH×7 + MEDIUM×9 完成 2026/05/22)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.22.0+
 - **Encrypt**: RSA + AES
@@ -29,7 +29,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 assh (main.go)              assh-fs (cmd/fs/main.go)
   SSH 连接/管理              文件系统操作（SFTP + 挂载）
   ├── login/run/bc          ├── push/pull
-  ├── server add/set/...    └── <server> (交互式 FS)
+  ├── add/set/ls/info/rm/mv/rollback    └── <server> (交互式 FS)
   │                                    │
   └────────── 共用核心层 ──────────────┘
         ┌──────────────────┐
@@ -68,7 +68,7 @@ asshv2/
 └── CHANGELOG.md
 ```
 
-### 开发阶段 (Phase 0-13 + 实验阶段)
+### 开发阶段 (Phase 0-13 + NEXT-001 + 实验阶段)
 
 | Phase | 内容 | 状态 |
 |-------|------|------|
@@ -81,17 +81,20 @@ asshv2/
 | **6** | **密钥管理 (Key Management)** | **✅ 完成 (2026-05-13)** |
 | **7** | **代理 & 隧道 (SOCKS5/端口转发/SSH隧道)** | **✅ 完成 (2026-05-13)** |
 | **8** | **云同步 (Qiniu)** | **✅ 完成 (2026-05-16)** |
-| **9** | **服务器健康检查** | **🔄 进行中 (2026-05-17)** |
-| 10 | 跳板机/堡垒机支持 | ⏳ |
-| 11 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ |
-| 12 | 自动更新/升级 | ⏳ |
-| **13** | **远程命令执行增强 (超时/输出格式化/变量替换)** | ⏳ |
-| X | 实验阶段：虚拟命令投放与执行 | ⏳ |
+| **9** | **服务器健康检查** | **✅ 完成 (2026-05-17)** |
+| 10 | 跳板机支持 | ✅ P0+P1 完成 (2026-05-22) |
+| **11** | **自动更新/升级** | **🆕 进行中 (2026-05-26)** |
+| 12 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ |
+| 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ⏳ |
+| NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | ⏳ 计划中 |
+| X1 | 实验：AI 安全检查 | ⏳ 排队中 (2026-05-17) |
+| X2 | 实验：虚拟命令投放与执行 | ⏳ 排队中 |
+| X3 | 实验：堡垒机管理 | ⏳ 排队中 |
 
 ### 分支命名规范
 
 ```
-dev/v2.0.0-phase-X  # 阶段开发分支 (如 dev/v2.0.0-phase-2)
+dev/v2.0.1-phase-X  # 阶段开发分支 (如 dev/v2.0.1-phase-10)
 feat/<feature>      # 特性分支 (如 feat/config, feat/ssh)
 bugfix/<issue>     # Bug 修复分支
 ```
@@ -149,6 +152,14 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/infra/store/account.go` — 云账户 CRUD + AES-GCM 加密存储
 - [x] `asshc/service/sync.go` — SyncService + SyncStore 接口 + Push/Pull 合并逻辑
 - [x] `cmd/sync.go` — sync CLI 命令 (account set/show/delete/test + push/pull/history)
+- [x] `asshc/port/health.go` — HealthChecker 接口 + HealthResult/HealthDetails DTOs (Phase 9)
+- [x] `asshc/infra/ssh/health.go` — SSH 健康检查实现（连接延迟 + 系统信息采集）
+- [x] `asshc/service/health.go` — HealthService 编排层（单机/分组/全量 + 并发）
+- [x] `cmd/health.go` — health CLI 命令 (check/list)
+- [x] `asshc/domain/jump.go` — JumpHistory 领域实体 + JumpHopAuth (Phase 10)
+- [x] `asshc/port/jump.go` — JumpHistoryRecorder 接口 (Phase 10)
+- [x] `asshc/infra/store/jump.go` — JumpRecorder 存储实现 (CRUD + AES-GCM, Phase 10)
+- [x] `asshc/service/jump.go` — JumpService 跳板历史管理 (Phase 10)
 
 ## 开发命令
 

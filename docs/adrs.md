@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 29 |
+| accepted | 31 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -43,7 +43,9 @@
 | ADR-026 | SSH 连接密钥备份优先策略 | accepted | 2026-05-13 |
 | ADR-027 | 简化 SSH 认证策略 — 去除两轮认证回退 | accepted | 2026-05-13 |
 | ADR-028 | 代理 & 隧道架构设计（SOCKS5/端口转发/隧道管理） | accepted | 2026-05-13 |
-| ADR-029 | Smart Proxy 智能代理系统（正向代理+AutoProxy规则+透明日志+多端口规则） | proposed | 2026-05-13 |
+| ADR-029 | Smart Proxy 智能代理系统（正向代理+AutoProxy规则+透明日志+多端口规则） | accepted | 2026-05-13 |
+| ADR-030 | 跳板机多跳架构设计 | accepted | 2026-05-19 |
+| ADR-031 | 自动更新/升级架构设计（GitHub Release + 原子更新 + 回滚） | accepted | 2026-05-26 |
 
 ## 新增 ADR
 
@@ -153,3 +155,13 @@ YYYY-MM-DD
 | ADR-029 | **Smart Proxy 智能代理系统**：正向代理统一 SOCKS5+HTTP 入口、AutoProxy 规则引擎（GFWList 兼容）、透明日志（全链路请求/响应记录）、多端口规则（批量参数配置） | 新增 port/rules.go、port/logger.go、infra/proxy/rules/、infra/proxy/http_connect.go、infra/proxy/logger.go，扩展 service/proxy.go、cmd/proxy.go |
 
 详细内容见 [ADR-028](adrs/028-proxy-tunnel-architecture.md) 和 [ADR-029](adrs/029-smart-proxy-system.md)。
+
+## Phase 10 ADR 变更摘要
+
+本次 Phase 10 引入的关键架构决策：
+
+| ADR | 变更 | 影响 |
+|-----|------|------|
+| ADR-030 | **跳板机多跳架构设计**：基于 ssh.Dial→client.Dial→ssh.NewClientConn 链式连接、ChainClient 全链路 cleanup、JumpHistory 领域实体+AES-GCM 加密 path_data、jump_history 数据库表、parseJumpChain 链式表达式解析（server名/direct/`@id`/IPv6/`-J none`）、Config 隔离规则（CLI flags 不传递跳板机）、Options["jump_hosts"] 默认跳板、每跳 Keepalive+错误报告 | 新增 domain/jump.go、port/connector.go(ConnectChain 扩展)、port/jump.go、infra/ssh/client.go(ConnectChain+chainClient)、infra/store/db.go(jump_history 表)、infra/store/jump.go、service/connect.go(ConnectChain+parseJumpChain)、service/jump.go、cmd/connect.go(-J 标志) |
+
+详细内容见 [ADR-030](adrs/030-jump-host-multi-hop.md)。

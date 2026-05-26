@@ -1,6 +1,7 @@
 # TODO.md
 
 > 开发任务计划 - 按 Phase 分阶段实施
+> 最后更新: 2026-05-26
 
 ## 开发阶段
 
@@ -728,7 +729,7 @@ assh-fs push -H 192.168.1.1 -u root -P mypass /local/file /remote/
 
 ---
 
-### 🔄 Phase 6: 密钥管理 (Key Management)
+### ✅ Phase 6: 密钥管理 (Key Management)
 
 目标：实现 SSH 密钥自动生成、加密存储、轮换管理，支持 `-K`/`--keygen` 快捷生成
 
@@ -950,7 +951,7 @@ assh sync pull
 assh sync history [-n 10]
 ```
 
-### 🔄 Phase 9: 服务器健康检查 — 进行中 (2026-05-17)
+### ✅ Phase 9: 服务器健康检查 — 完成 (2026-05-17)
 
 目标：实现服务器批量健康检查和单一检查功能
 
@@ -958,29 +959,216 @@ assh sync history [-n 10]
 
 | 编号 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|:----:|
-| P9.1 | 健康检查接口 | `asshc/port/health.go` | HealthChecker 接口定义 | ⬜ |
-| P9.2 | SSH 健康检查 | `asshc/infra/ssh/health.go` | 连接检测、延迟检测实现 | ⬜ |
-| P9.3 | 健康检查服务 | `asshc/service/health.go` | HealthService 编排层 | ⬜ |
-| P9.4 | 检查命令 | `cmd/health.go` | health check/list 命令 | ⬜ |
-| P9.5 | 列表检查 | — | 批量检查服务器组，支持并发 | ⬜ |
-| P9.6 | 单一检查 | — | 指定单个服务器检查并输出详细结果 | ⬜ |
-| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ⬜ |
+| P9.1 | 健康检查接口 | `asshc/port/health.go` | HealthChecker 接口 + HealthResult/HealthDetails DTOs + HealthStatus 枚举 | ✅ |
+| P9.2 | SSH 健康检查 | `asshc/infra/ssh/health.go` | 连接延迟检测 + 远程系统信息采集（uptime/load/memory/disk） | ✅ |
+| P9.3 | 健康检查服务 | `asshc/service/health.go` | HealthService 编排层（CheckServer/CheckGroup/CheckAll/CheckServers + 并发） | ✅ |
+| P9.4 | 检查命令 | `cmd/health.go` | health check/list 命令 | ✅ |
+| P9.5 | 列表检查 | `cmd/health.go` | 批量检查服务器组，支持并发（--concurrency） | ✅ |
+| P9.6 | 单一检查 | `cmd/health.go` | 指定单个服务器检查并输出详细结果（--detail） | ✅ |
+| P9.7 | DI 注入 | `main.go` + `cmd/app.go` | HealthChecker + HealthService 创建+注入 | ✅ |
+| **验证** | `go build ./... && go test ./...` | | **编译+测试全部通过** | ✅ |
 
-### 📝 Phase 10: 跳板机/堡垒机支持
+**命令使用**：
+```bash
+# 单一服务器检查
+assh health check myserver
 
-目标：实现 SSH 跳板机（Jump Server/Bastion）配置和连接
+# 单一服务器详细检查（含系统信息）
+assh health check myserver --detail
+
+# 多服务器检查（逗号分隔）
+assh health check server1,server2,server3
+
+# 检查所有服务器
+assh health list
+
+# 检查指定分组
+assh health list --group prod
+
+# 指定并发数
+assh health list --concurrency 10
+
+# 详细模式（含系统信息）
+assh health list --detail
+```
+
+**输出格式**：
+```
+✓ myserver (192.168.1.10:22)
+  Status:   healthy
+  Latency:  45.2ms
+  Checked:  2026-05-17 15:04:05
+  --- System Info ---
+  Uptime:   up 30 days
+  Load:     0.15 0.20 0.18
+  Memory:   2.1G/8.0G
+  Disk:     15G/100G (15%)
+```
+
+### ✅ Phase 10: 跳板机支持 (P0+P1 完成, 2026-05-22)
+
+目标：实现 SSH 多跳跳板机支持，覆盖登录/命令执行/文件传输/端口转发全场景
+
+> **安全审计修复 (v2.0.1, 2026-05-22)**: Batch 1/2/4 (CRITICAL×4 + HIGH×7 + MEDIUM×9) 已合并到此分支。
+> 详见 [docs/securitys/fix-plan-2026-05-22.md](securitys/fix-plan-2026-05-22.md)。
+
+设计文档：[Phase10-Design.md](Phase10-Design.md)
+ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
 依赖：Phase 3 (ssh)
 
-| 任务 | 说明 |
-|------|------|
-| P10.1 跳板机配置 | Server 结构增加 `JumpHost`/`Bastion` 字段 |
-| P10.2 跳板机连接 | `ConnectService` 支持多跳连接（ssh -A 转发） |
-| P10.3 跳板机命令 | `assh jump` 或在 server 配置中指定 jump host |
-| P10.4 连接穿透 | 通过跳板机访问内网服务器 |
-| **验证**: `go test ./asshc/... -v` |
+**完成总结** (2026-05-22):
+- P0 (11 个任务): ✅ Core 跳板链连接 + 资源泄漏修复 + Options 默认跳板 + Keepalive + 错误报告 + IPv6
+- P1 (7 个任务): ✅ assh-fs -J / proxy/tunnel -J / jump history 命令 / -J @id 复用 / assh-fs DI / RecordJumpChain 认证完善
 
-### 📝 Phase 11: 远程服务器挂载
+| 编号 | 任务 | 文件 | 说明 | 优先级 |
+|------|------|------|------|--------|
+| P10.1-a | ✅ JumpHistory 领域实体 | `asshc/domain/jump.go` | JumpHistory + JumpHopAuth 类型 | P0 |
+| P10.1-b | ✅ SSHConnector 接口扩展 | `asshc/port/connector.go` | 新增 ConnectChain(target, chain) | P0 |
+| P10.1-c | ✅ JumpHistoryRecorder 接口 | `asshc/port/jump.go` | Record/List/Get/Delete/Clear/IncrementUse | P0 |
+| P10.2-a | ✅ 多跳连接实现 | `asshc/infra/ssh/client.go` | ConnectChain + chainClient + buildConfig 提取 | P0 |
+| P10.2-b | ✅ 数据库迁移 | `asshc/infra/store/db.go` | jump_history 表 | P0 |
+| P10.2-c | ✅ JumpHistory 存储 | `asshc/infra/store/jump.go` | CRUD + AES-GCM 加密 | P0 |
+| P10.3-a | ✅ ConnectChain 服务 | `asshc/service/connect.go` | ConnectChain + parseJumpChain | P0 |
+| P10.3-b | ✅ JumpService | `asshc/service/jump.go` | RecordJumpChain + List/Delete/Clear | P0 |
+| P10.4-a | ✅ login -J 支持 | `cmd/connect.go` | loginAction 识别 -J/--jump | P0 |
+| P10.4-b | ✅ run -J 支持 | `cmd/connect.go` | runAction 识别 -J | P0 |
+| P10.4-c | ✅ bc -J 支持 | `cmd/connect.go` | bcAction 识别 -J | P0 |
+| P10.5-a | ✅ assh-fs push -J 支持 | `cmd/sftp_cmd.go` | push 命令 -J 标志 | P1 |
+| P10.5-b | ✅ assh-fs pull -J 支持 | `cmd/sftp_cmd.go` | pull 命令 -J 标志 | P1 |
+| P10.6-a | ✅ proxy -J 支持 | `cmd/proxy.go` | proxy 命令 -J 标志 | P1 |
+| P10.6-b | ✅ tunnel -J 支持 | `cmd/tunnel.go` | tunnel 命令 -J 标志 | P1 |
+| P10.7-a | ✅ jump history 命令 | `cmd/jump.go` | assh jump history [list/--clear/--delete] | P1 |
+| P10.7-b | ✅ 历史自动记录 | `cmd/connect.go` + `cmd/jump.go` | 有 direct 跳板时自动写历史 | P1 |
+| P10.7-c | ✅ -J @id 复用 | `service/connect.go` | history-ref 解析：从历史恢复跳板链+认证 | P1 |
+| P10.8-a | ✅ DI 注入 assh | `main.go` + `cmd/app.go` | JumpService + JumpHistoryRecorder 注入 | P0 |
+| P10.8-b | ✅ DI 注入 assh-fs | `cmd/fs/main.go` + `cmd/bootstrap.go` | assh-fs 的 jump 支持 | P1 |
+| P10.9-a | ✅ Options 默认跳板 | `asshc/service/connect.go` | ConnectByName 检查 Options["jump_hosts"] | P0 |
+| P10.9-b | ✅ Config 隔离规则 | `asshc/service/connect.go` | CLI flags 不传给跳板机 | P0 |
+| P10.9-c | ✅ -J none 禁用 | `asshc/service/connect.go` | `-J none` 跳过跳板逻辑 | P0 |
+| P10.9-d | ✅ IPv6 方括号解析 | `asshc/service/connect.go` | parseJumpChain 识别 `[...]` | P0 |
+| P10.9-e | ✅ 每跳 Keepalive | `asshc/infra/ssh/client.go` | dialThrough 中 setupKeepalive | P0 |
+| P10.9-f | ✅ 每跳错误报告 | `asshc/infra/ssh/client.go` | 带索引的错误包装 ("jump[1] gateway: ...") | P0 |
+| P10.10 | ✅ 资源泄漏修复 | `asshc/infra/ssh/client.go` | ConnectChain 级联关闭父连接 + 移除 ChainClient 死代码 | P0 |
+| P10.11 | ✅ RecordJumpChain 完善 | `asshc/service/jump.go` | 类型检测(server/direct) + 认证信息(Password/KeyFile)记录 | P1 |
+| **验证** | `go build ./... && go test ./... -v` | | 编译+测试全部通过 | P0 |
+
+### ✅ Phase 11: 自动更新/升级 (验收完成, 2026-05-26)
+
+目标：实现版本检查、手动/自动升级、强制更新
+
+依赖： Phase 4 (CLI)
+
+**优先级提升说明**：自动更新机制是保障用户始终运行最新安全版本的关键基础设施，因此将本阶段从原有 Phase 12 提前至 Phase 11。
+
+**设计文档**: [2026-05-26-Phase11-AutoUpdate-Design.md](worklogs/2026-05-26-Phase11-AutoUpdate-Design.md)
+**验收报告**: [2026-05-26-Phase11-AutoUpdate-Acceptance.md](worklogs/2026-05-26-Phase11-AutoUpdate-Acceptance.md)
+
+#### P11.1 领域实体
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P11.1-a UpdateInfo 实体 | `asshc/domain/update.go` | UpdateInfo 结构体（Version/ReleaseDate/ReleaseNotes/DownloadURL/SHA256/FileSize/Mandatory） | ✅ |
+| P11.1-b UpdateError 错误定义 | `asshc/domain/errors.go` | 新增：ErrUpdateNotFound/ErrUpdateFailed/ErrRollbackFailed/ErrVerificationFailed/ErrNetworkError | ✅ |
+| **验证** | `go vet ./asshc/domain/...` | | ✅ |
+
+#### P11.2 接口层 — `asshc/port/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P11.2-a VersionChecker 接口 | `asshc/port/updater.go` | VersionChecker 接口定义（CheckUpdate/GetCurrentVersion） | ✅ |
+| P11.2-b Downloader + Installer 接口 | `asshc/port/updater.go` | 拆分接口：Downloader（Download/Verify）+ Installer（Install/Rollback/GetBackupDir） | ✅ |
+| P11.2-c DownloadProgress 类型 | `asshc/port/updater.go` | DownloadProgress 回调类型 | ✅ |
+| **验证** | `go vet ./asshc/port/...` | | ✅ |
+
+#### P11.3 基础设施层 — `asshc/infra/updater/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P11.3-a GitHub 版本检查 | `asshc/infra/updater/github.go` | GitHubChecker 实现 VersionChecker 接口（从 version.txt 检查） | ✅ |
+| P11.3-b HTTP 下载器 | `asshc/infra/updater/downloader.go` | HTTPDownloader 实现 Downloader 接口（Download/Verify） | ✅ |
+| P11.3-c SHA256 验证 | `asshc/infra/updater/downloader.go` | 实现 Verify 方法 | ✅ |
+| P11.3-d 二进制安装器 | `asshc/infra/updater/installer.go` | BinaryInstaller 实现 Installer 接口（Install/Rollback/GetBackupDir） | ✅ |
+| P11.3-e 回滚机制 | `asshc/infra/updater/installer.go` | 实现 Rollback（备份恢复） | ✅ |
+| P11.3-f 单元测试 | `asshc/infra/updater/*_test.go` | mock HTTP 测试 GitHub 检查、下载、验证、安装、回滚 | ⬜ |
+| **验证** | `go test ./asshc/infra/updater/... -v` | | ⬜ |
+
+#### P11.4 服务层 — `asshc/service/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P11.4-a UpgradeService | `asshc/service/upgrade.go` | 服务编排层（CheckUpdate/Upgrade/Rollback/GetVersion） | ✅ |
+| P11.4-b 自动检查逻辑 | `asshc/service/upgrade.go` | 启动时检查（可配置）、定时检查、静默下载 | ⬜ |
+| P11.4-c 单元测试 | `asshc/service/upgrade_test.go` | mock VersionChecker + Downloader + Installer 测试 | ⬜ |
+| **验证** | `go test ./asshc/service/... -v` | | ⬜ |
+
+#### P11.5 CLI 命令 — `cmd/`
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P11.5-a upgrade 命令 | `cmd/upgrade.go` | `assh upgrade` 命令定义（--check/--version/--force/--rollback/--yes） | ✅ |
+| P11.5-b version --check | `cmd/version.go` (修改) | `assh version --check` 检查更新 | ⬜ |
+| P11.5-c 进度显示 | `cmd/upgrade.go` | 下载进度条显示（百分比、速率、ETA） | ✅ |
+| P11.5-d 交互确认 | `cmd/upgrade.go` | 升级前确认（显示版本信息、发布说明） | ✅ |
+| **验证** | `go build ./... && go vet ./...` | | ✅ |
+
+#### P11.6 配置存储
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P11.6-a 更新配置 | `asshc/infra/store/config.go` (扩展) | 新增配置项：update_source/update_auto_check/last_update_check | ⬜ |
+| P11.6-b 备份目录 | `config/path.go` (扩展) | 新增 BackupsDir/TmpDir 常量 | ⬜ |
+| **验证** | `go test ./asshc/infra/store/... -v` | | ⬜ |
+
+#### P11.7 DI 注入
+
+| 任务 | 文件 | 说明 | 状态 |
+|------|------|------|:----:|
+| P11.7-a UpgradeService 创建 | `main.go` | 创建 VersionChecker + Downloader + Installer + UpgradeService | ✅ |
+| P11.7-b App 签名变更 | `cmd/app.go` | NewApp 增加 `*service.UpgradeService` 参数 | ✅ |
+| P11.7-c CLI 命令注册 | `cmd/app.go` | registerUpgradeCommands() 注册 upgrade 命令 | ✅ |
+| **验证** | `go build ./... && go vet ./...` | | ✅ |
+
+#### P11.8 代码审查修复 (2026-05-26)
+
+基于代码审查发现的安全和可靠性问题进行修复：
+
+| 编号 | 问题 | 严重性 | 修复说明 | 状态 |
+|------|------|--------|----------|:----:|
+| C1 | SHA256 校验链路断裂 | 🔴 严重 | 从 Release assets 获取 SHA256 校验文件 | ✅ |
+| C2 | os.Rename 跨文件系统失败 | 🔴 严重 | 支持跨文件系统替换 (copy + rename 策略) | ✅ |
+| C3 | os.Args[0] 路径不可靠 | 🔴 严重 | 使用 os.Executable() 获取规范路径 | ✅ |
+| C4 | --source 死代码参数 | 🔴 严重 | 移除未实现的参数 | ✅ |
+| M1 | 缺少 User-Agent 头 | 🟠 中等 | 添加 User-Agent 头，符合 GitHub API 规范 | ✅ |
+| M3 | 无文件大小限制 | 🟠 中等 | 添加 io.LimitReader 防止磁盘耗尽攻击 | ✅ |
+| M5 | parseVersion 错误处理 | 🟠 中等 | 使用 strconv.Atoi 并检查错误 | ✅ |
+| L1 | 重复 API 调用 | 🟡 低 | 传递预获取的 UpdateInfo 避免重复调用 | ✅ |
+| L3 | getCurrentVersion 总是 unknown | 🟡 低 | 尝试从文件名提取版本号 | ✅ |
+
+**验证**: `go build ./... && go vet ./... && go test ./... -v` ✅
+
+#### Phase 11 验收清单
+
+| # | 场景 | 操作 | 预期 | 状态 |
+|---|------|------|------|:----:|
+| F1 | 检查更新 | `assh upgrade --check` | 显示当前版本和最新版本 | ✅ |
+| F2 | 升级到最新 | `assh upgrade` | 下载并安装最新版本 | ✅ |
+| F3 | 强制升级 | `assh upgrade --force` | 跳过版本检查，强制升级 | ✅ |
+| F4 | 指定版本 | `assh upgrade --version v2.0.2` | 升级到指定版本 | ✅ |
+| F5 | 回滚 | `assh upgrade --rollback` | 回滚到上一版本 | ✅ |
+| F6 | 自动确认 | `assh upgrade -y` | 不提示，直接升级 | ✅ |
+| F7 | 版本检查 | `assh version --check` | 显示版本信息和更新状态 | ⚠️ |
+| F8 | 下载进度 | `assh upgrade` | 显示下载进度条 | ✅ |
+| F9 | 失败回滚 | 模拟安装失败 | 自动回滚到备份版本 | ✅ |
+| **验证** | `go build ./... && go test ./... -v` | | | ✅ |
+
+**验收说明**:
+- F1-F6, F8-F9: 功能实现正确，CLI 命令和参数完整
+- F7: `version` 命令未实现 `--check` 选项（需后续迭代补充）
+- 代码质量: `go build` + `go vet` + `go test` 全部通过
+- 架构边界: port/service/infra 三层分离，DI 注入正确
+
+### 📝 Phase 12: 远程服务器挂载
 
 目标：使用 sshfs/webdav/samba 挂载远程服务器文件系统到本地
 
@@ -988,28 +1176,12 @@ assh sync history [-n 10]
 
 | 任务 | 说明 |
 |------|------|
-| P11.1 挂载接口 | `asshc/port/mounter.go` — FileMounter 接口 |
-| P11.2 SSHFS 挂载 | `asshc/infra/mount/sshfs.go` — sshfs 封装 |
-| P11.3 WebDAV 挂载 | `asshc/infra/mount/webdav.go` — WebDAV 客户端 |
-| P11.4 SMB 挂载 | `asshc/infra/mount/smb.go` — SMB/CIFS 客户端 |
-| P11.5 挂载服务 | `asshc/service/mount.go` — MountService |
-| P11.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
-| **验证**: `go test ./asshc/... -v` |
-
-### 📝 Phase 12: 自动更新/升级
-
-目标：实现版本检查、手动/自动升级、强制更新
-
-依赖： Phase 4 (CLI)
-
-| 任务 | 说明 |
-|------|------|
-| P12.1 版本检查接口 | `asshc/port/updater.go` — VersionChecker 接口 |
-| P12.2 更新检查命令 | `assh version --check` 或 `assh upgrade --check` |
-| P12.3 升级命令 | `assh upgrade` — 下载并安装新版本 |
-| P12.4 强制更新 | `assh upgrade --force` — 强制更新到指定版本 |
-| P12.5 更新源配置 | 支持自定义更新源（URL/GitHub Release） |
-| P12.6 回滚支持 | 升级失败时回滚到上一版本 |
+| P12.1 挂载接口 | `asshc/port/mounter.go` — FileMounter 接口 |
+| P12.2 SSHFS 挂载 | `asshc/infra/mount/sshfs.go` — sshfs 封装 |
+| P12.3 WebDAV 挂载 | `asshc/infra/mount/webdav.go` — WebDAV 客户端 |
+| P12.4 SMB 挂载 | `asshc/infra/mount/smb.go` — SMB/CIFS 客户端 |
+| P12.5 挂载服务 | `asshc/service/mount.go` — MountService |
+| P12.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
 | **验证**: `go test ./asshc/... -v` |
 
 ### 📝 Phase 13: 远程命令执行增强
@@ -1060,22 +1232,233 @@ type SSHSession interface {
 }
 ```
 
-### 📝 实验阶段: 虚拟命令投放与执行测试
+### 📝 NEXT-001: Proxy & Tunnel 增强计划 (Planned)
+
+目标：修复已知代理/隧道问题，重构 proxy/tunnel 参数体系，引入 SQLite 服务管理持久化，提供灵活的代理和隧道服务生命周期管理
+
+**状态说明**：Phase 7 (Proxy & Tunnel) 已完成基础功能交付，但存在以下已知问题和改进空间：
+
+| 问题 | 现状 | 计划变更 |
+|------|------|----------|
+| `--http` / `--http-mode` 无效 | `assh proxy --http :8080` 仅启动 SOCKS5，HTTP CONNECT 未生效 | 修复 HTTP CONNECT 代理启动逻辑 |
+| proxy 参数语义不直观 | `--tcp`/`--http-mode` 仅用于反向模式，`--socks5` 正向固定 | 统一为 `--http`/`--tcp`/`--socks` 三参数，按目标端决定服务类型 |
+| tunnel 命令冗余 | 需要 `assh tunnel start myserver -L 8080:localhost:80` | 去除 `start` 子命令，直接 `assh tunnel myserver -L 8080:localhost:80` |
+| 缺少传输层类型指定 | 端口转发仅支持 TCP | 新增 `--listen` 参数，支持 `tcp`/`http` 枚举值 |
+| 端口参数不支持自动补全 | `8080::80` 中间为空 host 时报错 | 空 host 自动补全为 `127.0.0.1` |
+| 运行中的服务无持久化记录 | 服务启动后无数据库记录，重连/重启后无法自动恢复 | SQLite 持久化服务记录，支持自动重连恢复 |
+| 无统一服务管理入口 | 启动/停止/列表分散在不同命令 | 统一 `assh service` 命令组，集中管理所有代理和隧道服务 |
+
+| 编号 | 任务 | 文件 | 说明 | 优先级 |
+|------|------|------|------|--------|
+| NEXT-001.1 | 🔧 修复 --http/--http-mode 无效 | `cmd/proxy.go` | 当前 `--http` 无法启用 HTTP CONNECT 代理，仅启动 SOCKS5；`--http-mode` 反向模式未正确处理。需修复 listener 编排逻辑，确保 `--http` 正确启动 HTTP CONNECT 处理器 | P0 |
+| NEXT-001.2 | 重构 proxy 参数体系 | `cmd/proxy.go` + `service/proxy.go` | `--http` 在目标端启动 HTTP Server 监听指定端口，将端口数据转发；`--tcp` 在目标端启动 TCP 服务监听指定端口，转发端口数据；`--socks` 启用 SOCKS 代理；目标端根据代理上下文确定（正常为服务器），`--reverse` 时目标端为本地 | P0 |
+| NEXT-001.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 |
+| NEXT-001.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80 | P0 |
+| NEXT-001.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 |
+| NEXT-001.6 | **服务领域实体 + 存储接口** | `asshc/domain/service.go` + `asshc/port/servicemgr.go` | 定义 `ServiceInstance` 领域实体（ID/类型/服务器/端口/状态/配置快照/创建时间等），`ServiceRepository` 接口（CRUD + ListByStatus + ListByType） | P0 |
+| NEXT-001.7 | **SQLite 持久化实现** | `asshc/infra/store/service.go` | 新建 `services` 表存储服务记录，AES-GCM 加密敏感配置（如密码/认证信息），支持状态标记（running/stopped/failed）、自动时间戳、服务名唯一索引 | P0 |
+| NEXT-001.8 | **ServiceManager 接口 + 实现** | `asshc/port/servicemgr.go` + `asshc/infra/service/mgr.go` | 定义 `ServiceManager` 接口（Start/Stop/Restart/Status/List），实现包括：代理服务管理器（ProxyManager）和隧道服务管理器（TunnelManager），统一生命周期控制 | P0 |
+| NEXT-001.9 | **ServiceManager 服务编排** | `asshc/service/servicemgr.go` | `ManageService` 编排层，组装 StartService/StopService/ListServices/RestartService，联动 ServiceRepository 持久化状态变更 | P0 |
+| NEXT-001.10 | **assh service 命令组** | `cmd/service.go` | 统一服务管理命令：`assh service list [--type proxy/tunnel] [--status running/stopped]`、`assh service start <id>`、`assh service stop <id>`、`assh service restart <id>`、`assh service rm <id>`；支持 `--all` 批量操作 | P0 |
+| NEXT-001.11 | **数据库迁移** | `asshc/infra/store/db.go` | `migrate()` 新增 `services` 建表 | P0 |
+| NEXT-001.12 | **DI 注入** | `main.go` + `cmd/app.go` | ServiceManager + ManageService 创建注入 | P0 |
+| NEXT-001.13 | **自动重连/恢复** | `asshc/service/servicemgr.go` | 启动时自动恢复状态为 running 的服务（按类型调用对应 Manager.Start），支持退避重试 | P1 |
+| **验证** | `go build ./... && go test ./... -v` | | | |
+
+**设计说明**：
+
+```go
+// domain/service.go — 服务领域实体
+type ServiceType string
+const (
+    ServiceTypeProxy  ServiceType = "proxy"
+    ServiceTypeTunnel ServiceType = "tunnel"
+)
+
+type ServiceStatus string
+const (
+    ServiceStatusRunning ServiceStatus = "running"
+    ServiceStatusStopped ServiceStatus = "stopped"
+    ServiceStatusFailed  ServiceStatus = "failed"
+)
+
+type ServiceInstance struct {
+    ID          string            `json:"id"`          // UUID / 自增 ID
+    Name        string            `json:"name"`         // 服务名称（唯一）
+    Type        ServiceType       `json:"type"`         // proxy / tunnel
+    ServerName  string            `json:"server_name"`  // 关联服务器
+    Status      ServiceStatus     `json:"status"`       // 运行状态
+    Config      ServiceConfig     `json:"config"`       // 服务配置快照（加密存储）
+    PID         int               `json:"pid,omitempty"` // 守护进程 PID
+    CreatedAt   time.Time         `json:"created_at"`
+    UpdatedAt   time.Time         `json:"updated_at"`
+}
+
+type ServiceConfig struct {
+    ListenType   string   `json:"listen_type,omitempty"`   // tcp/http（用于 tunnel --listen）
+    LocalAddr    string   `json:"local_addr,omitempty"`    // 本地地址
+    RemoteAddr   string   `json:"remote_addr,omitempty"`   // 远程地址
+    Reverse      bool     `json:"reverse"`                 // 是否反向
+    Auth         string   `json:"auth,omitempty"`          // 认证信息（加密）
+    Ports        string   `json:"ports,omitempty"`         // 端口映射规则
+    AutoReconnect string  `json:"auto_reconnect,omitempty"`// 自动重连配置
+}
+```
+
+```go
+// port/servicemgr.go — 服务管理器接口
+type ServiceManager interface {
+    Start(instance *domain.ServiceInstance) error
+    Stop(id string) error
+    Restart(id string) error
+    Status(id string) (domain.ServiceStatus, error)
+    List(filter ServiceFilter) ([]*domain.ServiceInstance, error)
+}
+
+type ServiceFilter struct {
+    Type   domain.ServiceType
+    Status domain.ServiceStatus
+    Server string
+}
+
+// ServiceRepository 接口（CRUD + 持久化）
+type ServiceRepository interface {
+    Create(instance *domain.ServiceInstance) error
+    Get(id string) (*domain.ServiceInstance, error)
+    Update(instance *domain.ServiceInstance) error
+    Delete(id string) error
+    List(filter ServiceFilter) ([]*domain.ServiceInstance, error)
+}
+```
+
+**数据库设计**：
+```sql
+CREATE TABLE IF NOT EXISTS services (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    name               TEXT NOT NULL UNIQUE,
+    type               TEXT NOT NULL CHECK(type IN ('proxy','tunnel')),
+    server_name        TEXT NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'stopped' CHECK(status IN ('running','stopped','failed')),
+    config_encrypted   BLOB,              -- AES-GCM 加密的服务配置快照
+    pid                INTEGER DEFAULT 0,
+    created_at         TEXT DEFAULT (datetime('now')),
+    updated_at         TEXT DEFAULT (datetime('now'))
+);
+```
+
+**使用预览** (变更后):
+
+```bash
+# 代理：参数统一 + 自动注册服务
+assh proxy myserver --http :8080              # 目标端启动 HTTP Server，挂载为 service
+assh proxy myserver --tcp :9090               # 目标端启动 TCP 服务，挂载为 service
+assh proxy myserver --socks :1080             # 启用 SOCKS 代理，自动注册服务
+assh proxy myserver --reverse --http :8080    # 反向：本地端启动 HTTP Server
+assh proxy myserver --reverse --tcp --ports 80:3000  # 反向 TCP 端口映射
+
+# 隧道：简化命令 + --listen + 自动补全 + 自动注册服务
+assh tunnel myserver -L 8080:web:80           # 本地转发（原 assh tunnel start ...）
+assh tunnel myserver --listen tcp -R 8080:web:80    # 远程 TCP 监听转发
+assh tunnel myserver --listen http -R 8080:web:80   # 远程 HTTP 监听转发
+assh tunnel myserver -L 80::80                 # 等价于 -L 80:127.0.0.1:80
+
+# 统一服务管理
+assh service list                             # 列出所有已注册的代理/隧道服务
+assh service list --type proxy                # 仅列表代理服务
+assh service list --status running            # 仅列出运行中的服务
+assh service start <id>                       # 启动指定服务
+assh service stop <id>                        # 停止指定服务（等价于 tunnel stop / proxy 退出）
+assh service restart <id>                     # 重启指定服务
+assh service rm <id>                          # 删除服务注册记录
+
+# 批量操作
+assh service stop --all                       # 停止所有运行中的服务
+assh service restart --type tunnel            # 重启所有隧道服务
+```
+
+---
+
+### 🔬 实验阶段计划
+
+实验阶段（Phase X）用于探索验证前瞻性功能，与主版本线（Phase 0-13 + NEXT-001）并行开发。
+
+**定位**:
+- **实验性**: 验证概念和用户需求，不保证最终进入主版本
+- **独立性**: 每个实验子阶段（X1, X2...）独立开发，互不依赖
+- **低门槛**: 允许快速原型验证，不要求完整三层架构
+- **可升格**: 验证成功后可升格为主版本线的新 Phase
+
+**子阶段总览**:
+
+| 编号 | 内容 | 状态 | 优先级 |
+|------|------|:----:|:------:|
+| X1 | AI 安全检查 — 通过大模型自动生成漏洞检测脚本并执行 | 🆕 进行中 | 高 |
+| X2 | 虚拟命令投放与执行 — 虚拟命令的下发、跟踪和结果收集 | ⏳ 排队中 | 低 |
+| X3 | 堡垒机管理 — 集中式堡垒机节点认证/审计/授权 | ⏳ 排队中 | 低 |
+
+**分支策略**: 实验阶段在 `dev/v2.0.1-phase-10` 分支上开发，独立包路径避免冲突。
+
+### 🆕 X1: AI 安全检查
+
+目标：通过 AI 大模型自动生成漏洞检测脚本并执行安全检查
+
+依赖：Phase 3 (ssh) + Phase 4 (CLI)
+
+> 本阶段为探索性实验，用于验证 AI 驱动的安全检测概念，不保证最终实现。
+
+**设计文档**: `docs/worklogs/2026-05-17-PhaseX-AI-Security-Design.md`
+
+**设计决策**:
+- **AI 接口**: OpenAI 兼容 API (可配置 endpoint/model/api_key/max_tokens/temperature)
+- **输入**: CVE 编号 + 自由文本描述，自动从 NVD NIST 查询 CVE 详情
+- **安全审查**: 双重审查 — 自动规则过滤 + 高风险操作用户确认
+- **执行**: SSH 远程执行 + 本地脚本保存 (`~/.assh/security/scripts/`)
+- **输出**: 终端显示 + Markdown 报告文件
+- **日志**: 完整保存 (脚本 + 执行日志 + 结果 + 时间戳)
+- **目标**: 指定单个服务器 (`-s <server>`)
+
+| 编号 | 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|:----:|
+| X1.1 | AI 配置 | `config/` (合入现有配置) | OpenAI 兼容 API 配置 (endpoint/model/key/params) | ⬜ |
+| X1.2 | AI 接口定义 | `asshc/port/ai.go` | AIProvider 接口 (Generate/SecureCheck) | ⬜ |
+| X1.3 | AI 客户端 | `asshc/infra/ai/openai.go` | OpenAI 兼容 API 调用实现 | ⬜ |
+| X1.4 | CVE 查询 | `asshc/infra/cve/nvd.go` | NVD NIST API CVE 详情自动查询 | ⬜ |
+| X1.5 | 漏洞领域实体 | `asshc/domain/vuln.go` | VulnCheck/Script/Report 等领域类型 | ⬜ |
+| X1.6 | 安全审查引擎 | `asshc/infra/security/scanner.go` | 脚本自动安全审查 (危险命令/路径/操作) | ⬜ |
+| X1.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ⬜ |
+| X1.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ⬜ |
+| X1.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ⬜ |
+| X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ⬜ |
+| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ⬜ |
+
+**命令使用预览**:
+```bash
+# 按 CVE 编号检查
+assh security vuln-check -s myserver "CVE-2024-3094"
+
+# 按漏洞描述检查
+assh security vuln-check -s myserver "检查是否存在未修补的 Log4j 漏洞"
+
+# 查看生成的脚本和报告
+ls ~/.assh/security/scripts/
+```
+
+### ⏳ X2: 虚拟命令投放与执行
 
 目标：实验性功能，测试虚拟命令（模拟命令）的投放和执行机制
 
-依赖： Phase 4 (CLI) + 实验性设计
+依赖：Phase 4 (CLI) + 实验性设计
 
 > 本阶段为探索性实验，用于验证概念和用户需求，不保证最终实现。
 
-| 任务 | 说明 |
-|------|------|
-| X.1 虚拟命令定义 | 定义什么是虚拟命令（不实际执行，仅记录） |
-| X.2 命令投放系统 | 通过配置或远程下发虚拟命令到客户端 |
-| X.3 命令执行跟踪 | 记录虚拟命令的执行状态（pending/running/completed） |
-| X.4 结果收集 | 收集虚拟命令的执行结果并上报 |
-| X.5 实验命令 | `cmd/experiment.go` — 投放、执行、结果查看 |
-| **验证**: 手动测试 |
+| 编号 | 任务 | 文件 | 说明 | 状态 |
+|------|------|------|------|:----:|
+| X2.1 | 虚拟命令定义 | `asshc/domain/vcmd.go` | 定义虚拟命令结构（不实际执行，仅记录） | ⏳ |
+| X2.2 | 命令投放系统 | `asshc/service/vcmd.go` | 通过配置或远程下发虚拟命令到客户端 | ⏳ |
+| X2.3 | 命令执行跟踪 | `asshc/service/vcmd.go` | 记录虚拟命令的执行状态 (pending/running/completed) | ⏳ |
+| X2.4 | 结果收集 | `asshc/service/vcmd.go` | 收集虚拟命令的执行结果并上报 | ⏳ |
+| X2.5 | 实验命令 | `cmd/experiment.go` | 投放、执行、结果查看 | ⏳ |
+| **验证** | 手动测试 | | | ⏳ |
 
 ## 依赖顺序
 
@@ -1091,10 +1474,14 @@ Phase 0 (骨架)
                     ├── Phase 8 (云同步)
                     ├── Phase 9 (健康检查)
                     ├── Phase 10 (跳板机)
-                    ├── Phase 11 (远程挂载)
-                    ├── Phase 12 (自动更新)
-                    └── Phase 13 (命令执行增强)
-                          └── 实验阶段 (虚拟命令)
+                    ├── Phase 11 (自动更新/升级) ← 高优先级
+                    ├── Phase 12 (远程挂载)
+                    ├── Phase 13 (命令执行增强)
+                    └── NEXT-001 (代理/隧道增强) ← 基于 Phase 7 + Phase 10
+                          └── 实验阶段 (Phase X)
+                                ├── X1: AI 安全检查
+                                ├── X2: 虚拟命令投放与执行
+                                └── X3: 堡垒机管理
 ```
 
 ## 验证策略
