@@ -87,8 +87,8 @@ sh build.sh
 
 # 构建产物在 build/ 目录
 ls build/
-# assh-macOS-amd64_v2.0.0.zip
-# assh-linux-amd64_v2.0.0.zip
+# assh-macOS-amd64_v2.0.1.zip
+# assh-linux-amd64_v2.0.1.zip
 # ...
 ```
 
@@ -119,15 +119,15 @@ go run ./cmd/fs/ pull ...        # 直接运行 assh-fs
 
 ```bash
 # 解压对应平台的构建包
-unzip build/assh-linux-amd64_v2.0.0.zip -d ~/bin
+unzip build/assh-linux-amd64_v2.0.1.zip -d ~/bin
 # 或复制到 PATH 目录
-cp build/assh-linux-amd64_v2.0.0/assh /usr/local/bin/
-cp build/assh-linux-amd64_v2.0.0/assh-fs /usr/local/bin/
+cp build/assh-linux-amd64_v2.0.1/assh /usr/local/bin/
+cp build/assh-linux-amd64_v2.0.1/assh-fs /usr/local/bin/
 ```
 
 ### 2.5 系统要求
 
-- **Go 版本**: 1.22.0+
+- **Go 版本**: 1.25.0+
 - **运行环境**: macOS / Linux / Windows（无 CGO 依赖）
 - **存储空间**: 约 20MB（二进制）+ 数据库空间
 
@@ -1101,9 +1101,11 @@ assh-fs push internal-server ./file /remote/ -J jump-server
 
 ---
 
+## 11. 健康检查
+
 ASSH 支持通过 SSH 连接对服务器进行健康检查，采集关键系统指标。
 
-### 10.1 检查指标
+### 11.1 检查指标
 
 健康检查采集以下系统信息：
 
@@ -1119,7 +1121,7 @@ ASSH 支持通过 SSH 连接对服务器进行健康检查，采集关键系统�
 > 单个指标采集失败**不会**阻断整体检查，静默跳过后继续采集其他指标。
 > 所有指标均失败时标记为 unhealthy。
 
-### 10.2 检查单台服务器
+### 11.2 检查单台服务器
 
 ```bash
 # 按名称检查
@@ -1144,7 +1146,7 @@ Memory:     total 7.6Gi, used 3.2Gi, free 4.4Gi
 Disk:       total 98G, used 45G, free 53G (48% used)
 ```
 
-### 10.3 批量检查
+### 11.3 批量检查
 
 ```bash
 # 检查所有服务器
@@ -1177,7 +1179,7 @@ office-proxy| ⏱ timeout | -       | -              | -           | -          
 Summary: 2 healthy, 1 unhealthy, 1 error, 1 timeout
 ```
 
-### 10.4 健康检查示例集合
+### 11.4 健康检查示例集合
 
 ```bash
 # === 常见场景 ===
@@ -1360,7 +1362,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 
 ## 14. 命令速查表
 
-### 12.1 assh 命令
+### 14.1 assh 命令
 
 | 命令 | 功能 | 常用参数 | 示例 |
 |------|------|----------|------|
@@ -1390,7 +1392,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `jump history` | 跳板历史 | `--limit --json --clear` | `assh jump history` |
 | `version` | 版本信息 | — | `assh version` |
 
-### 12.2 assh-fs 命令
+### 14.2 assh-fs 命令
 
 | 命令 | 功能 | 常用参数 | 示例 |
 |------|------|----------|------|
@@ -1398,7 +1400,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `pull` | 拉取文件 | `-r --resume --checksum -H -u -P` | `assh-fs pull myserver /remote/file ./` |
 | `<server>` | 交互式 SFTP | 交互式命令 | `assh-fs myserver` |
 
-### 12.3 快捷键一览
+### 14.3 快捷键一览
 
 | 命令行模式 | 操作 |
 |-----------|------|

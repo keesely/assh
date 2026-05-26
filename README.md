@@ -404,6 +404,7 @@ assh tunnel list          # 列出活跃隧道
 | `sync` | 云同步（push/pull/account/history） | ✅ Phase 8 |
 | `health` | 服务器健康检查（check/list） | ✅ Phase 9 |
 | `jump` | 跳板历史管理（history/list） | ✅ Phase 10 |
+| `upgrade` | 自动更新/升级 | ✅ Phase 11 |
 
 ### assh-fs（文件操作）
 
@@ -441,11 +442,13 @@ assh tunnel list          # 列出活跃隧道
 | 8 | 云同步 (Qiniu) | ✅ 完成 | 2026-05-16 |
 | 9 | 服务器健康检查 | ✅ 完成 | 2026-05-17 |
 | **10** | **跳板机/堡垒机支持** | ✅ **完成** | **2026-05-22** |
-| **11** | **自动更新/升级** (高优先级) | ⏳ 待开始 | — |
+| **11** | **自动更新/升级** | ✅ 完成 | 2026-05-26 |
 | 12 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ 待开始 | — |
 | 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ⏳ 待开始 | — |
 | X1 | 实验：AI 安全检查 | 🆕 进行中 (2026-05-17) | — |
 | X2 | 实验：虚拟命令投放与执行 | ⏳ 待开始 | — |
+| X3 | 堡垒机管理 | ⏳ 排队中 | — |
+| NEXT-001 | 代理/隧道增强 | ⏳ 计划中 | — |
 
 > 📖 **完整使用手册**：[USAGE.md](USAGE.md) — 涵盖所有功能的中文示例驱动文档，含 150+ 场景示例和最佳实践
 
@@ -498,11 +501,6 @@ asshv2/
 │   ├── server.go            # 服务器管理命令（add/set/ls/info/rm/mv/rollback）
 │   ├── connect.go           # SSH 连接命令（login/run/bc）
 │   ├── sftp_cmd.go          # push/pull/FS 命令定义（assh-fs 共享）
-│   ├── proxy.go             # 代理命令（正向/反向/Smart Proxy）
-│   ├── tunnel.go            # 隧道命令（start/stop/list）
-│   ├── keygen.go            # 密钥生成命令
-│   ├── sync.go              # 云同步命令（account/push/pull/history）
-│   ├── health.go            # 健康检查命令（check/list）
 │   ├── bootstrap.go         # 公共初始化逻辑
 │   └── fs/
 │       └── main.go          # assh-fs 入口（DI 组合根）
@@ -511,7 +509,11 @@ asshv2/
 │   ├── domain/              # 领域实体（零依赖）
 │   │   ├── server.go        # Server / Auth 实体
 │   │   ├── errors.go        # 领域错误定义
-│   │   └── changelog.go     # 变更日志条目
+│   │   ├── changelog.go     # 变更日志条目
+│   │   ├── jump.go          # JumpHistory 领域实体
+│   │   ├── sync.go          # CloudAccount / SyncHistory 领域实体
+│   │   ├── update.go        # UpdateInfo / UpdatePlatform 结构体
+│   │   └── known_server.go  # KnownServer 领域实体
 │   ├── port/                # 接口定义（依赖倒置）
 │   │   ├── repository.go    # ServerRepository 接口
 │   │   ├── connector.go     # SSHConnector 接口
@@ -524,6 +526,8 @@ asshv2/
 │   │   ├── keymanager.go    # KeyManager 接口
 │   │   ├── syncer.go        # Syncer 接口（云同步）
 │   │   ├── health.go        # HealthChecker 接口
+│   │   ├── jump.go          # JumpHistoryRecorder 接口
+│   │   ├── updater.go       # VersionChecker / Downloader / Installer 接口
 │   │   └── cryptor.go       # Cryptor 接口
 │   ├── service/             # 用例编排（依赖 port 接口）
 │   │   ├── server.go        # 服务器 CRUD + 版本回滚
@@ -534,13 +538,16 @@ asshv2/
 │   │   ├── key.go           # 密钥管理服务
 │   │   ├── deploy.go        # 公钥部署服务
 │   │   ├── sync.go          # 云同步服务
-│   │   └── health.go        # 健康检查服务
+│   │   ├── health.go        # 健康检查服务
+│   │   ├── jump.go          # 跳板历史管理服务
+│   │   └── upgrade.go       # 自动更新/升级服务
 │   └── infra/               # 接口实现
 │       ├── store/           # SQLite 持久化
 │       │   ├── db.go        # 连接管理 + 自动迁移
 │       │   ├── key.go       # AES-256-GCM 密钥管理
 │       │   ├── server.go    # 服务器 CRUD + 变更日志 + 回滚
-│       │   └── known.go     # known-servers 表（直连记录）
+│       │   ├── known.go     # known-servers 表（直连记录）
+│       │   └── jump.go      # JumpRecorder 跳板历史存储
 │       ├── crypto/          # 加解密实现
 │       │   ├── rsa.go       # RSA 密钥生成/PEM/加解密
 │       │   ├── aes.go       # AES-CBC/CTR/GCM/ECB
@@ -549,7 +556,8 @@ asshv2/
 │       ├── ssh/             # SSH 协议实现
 │       │   ├── client.go    # 连接器（认证链 + Keepalive + 备份密钥优先）
 │       │   ├── session.go   # 会话管理（PTY + 命令执行）
-│       │   └── hostkey.go   # HostKey 校验策略
+│       │   ├── hostkey.go   # HostKey 校验策略
+│       │   └── health.go    # SSH 健康检查实现
 │       ├── sftp/            # SFTP 协议实现
 │       │   ├── client.go    # SFTP 连接封装
 │       │   ├── upload.go    # 文件上传（递归/续传/Glob）
@@ -557,7 +565,8 @@ asshv2/
 │       │   ├── header.go    # 256B Hash Header
 │       │   ├── ops.go       # 远程操作（List/Remove/Mkdir）
 │       │   ├── progress.go  # 进度条显示
-│       │   └── verify.go    # 传输后验证（大小/SHA256）
+│       │   ├── verify.go    # 传输后验证（大小/SHA256）
+│       │   └── transfer.go  # TransferService 传输编排
 │       ├── proxy/           # 代理协议实现
 │       │   ├── socks5.go    # SOCKS5 代理（RFC 1928 + RFC 1929）
 │       │   ├── http_connect.go # HTTP CONNECT 代理（RFC 7231）
@@ -569,6 +578,10 @@ asshv2/
 │       ├── sync/            # 云同步实现
 │       │   └── qiniu/       # 七牛云 Syncer 实现
 │       │       └── qiniu.go
+│       ├── updater/         # 自动更新实现
+│       │   ├── github.go    # GitHub 版本检查
+│       │   ├── downloader.go # HTTP 下载器
+│       │   └── installer.go # 二进制安装器
 │       └── keymgr/          # 密钥管理实现
 │           ├── generate.go  # 密钥生成（RSA/Ed25519/ECDSA）
 │           └── backup.go    # 密钥备份
