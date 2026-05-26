@@ -1104,7 +1104,7 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|:----:|
-| P11.5-a upgrade 命令 | `cmd/upgrade.go` | `assh upgrade` 命令定义（--check/--version/--force/--rollback/--source/--yes） | ✅ |
+| P11.5-a upgrade 命令 | `cmd/upgrade.go` | `assh upgrade` 命令定义（--check/--version/--force/--rollback/--yes） | ✅ |
 | P11.5-b version --check | `cmd/version.go` (修改) | `assh version --check` 检查更新 | ⬜ |
 | P11.5-c 进度显示 | `cmd/upgrade.go` | 下载进度条显示（百分比、速率、ETA） | ✅ |
 | P11.5-d 交互确认 | `cmd/upgrade.go` | 升级前确认（显示版本信息、发布说明） | ✅ |
@@ -1127,6 +1127,24 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 | P11.7-c CLI 命令注册 | `cmd/app.go` | registerUpgradeCommands() 注册 upgrade 命令 | ✅ |
 | **验证** | `go build ./... && go vet ./...` | | ✅ |
 
+#### P11.8 代码审查修复 (2026-05-26)
+
+基于代码审查发现的安全和可靠性问题进行修复：
+
+| 编号 | 问题 | 严重性 | 修复说明 | 状态 |
+|------|------|--------|----------|:----:|
+| C1 | SHA256 校验链路断裂 | 🔴 严重 | 从 Release assets 获取 SHA256 校验文件 | ✅ |
+| C2 | os.Rename 跨文件系统失败 | 🔴 严重 | 支持跨文件系统替换 (copy + rename 策略) | ✅ |
+| C3 | os.Args[0] 路径不可靠 | 🔴 严重 | 使用 os.Executable() 获取规范路径 | ✅ |
+| C4 | --source 死代码参数 | 🔴 严重 | 移除未实现的参数 | ✅ |
+| M1 | 缺少 User-Agent 头 | 🟠 中等 | 添加 User-Agent 头，符合 GitHub API 规范 | ✅ |
+| M3 | 无文件大小限制 | 🟠 中等 | 添加 io.LimitReader 防止磁盘耗尽攻击 | ✅ |
+| M5 | parseVersion 错误处理 | 🟠 中等 | 使用 strconv.Atoi 并检查错误 | ✅ |
+| L1 | 重复 API 调用 | 🟡 低 | 传递预获取的 UpdateInfo 避免重复调用 | ✅ |
+| L3 | getCurrentVersion 总是 unknown | 🟡 低 | 尝试从文件名提取版本号 | ✅ |
+
+**验证**: `go build ./... && go vet ./... && go test ./... -v` ✅
+
 #### Phase 11 验收清单
 
 | # | 场景 | 操作 | 预期 | 状态 |
@@ -1136,11 +1154,10 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 | F3 | 强制升级 | `assh upgrade --force` | 跳过版本检查，强制升级 | ⬜ |
 | F4 | 指定版本 | `assh upgrade --version v2.0.2` | 升级到指定版本 | ⬜ |
 | F5 | 回滚 | `assh upgrade --rollback` | 回滚到上一版本 | ⬜ |
-| F6 | 自定义源 | `assh upgrade --source URL` | 从自定义源下载 | ⬜ |
-| F7 | 自动确认 | `assh upgrade -y` | 不提示，直接升级 | ⬜ |
-| F8 | 版本检查 | `assh version --check` | 显示版本信息和更新状态 | ⬜ |
-| F9 | 下载进度 | `assh upgrade` | 显示下载进度条 | ⬜ |
-| F10 | 失败回滚 | 模拟安装失败 | 自动回滚到备份版本 | ⬜ |
+| F6 | 自动确认 | `assh upgrade -y` | 不提示，直接升级 | ⬜ |
+| F7 | 版本检查 | `assh version --check` | 显示版本信息和更新状态 | ⬜ |
+| F8 | 下载进度 | `assh upgrade` | 显示下载进度条 | ⬜ |
+| F9 | 失败回滚 | 模拟安装失败 | 自动回滚到备份版本 | ⬜ |
 | **验证** | `go build ./... && go test ./... -v` | | | |
 
 ### 📝 Phase 12: 远程服务器挂载
