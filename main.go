@@ -101,7 +101,13 @@ func main() {
 	backupDir := filepath.Join(filepath.Dir(dbPath), "backups")
 	tmpDir := filepath.Join(filepath.Dir(dbPath), "tmp")
 	downloader := updater.NewHTTPDownloader(tmpDir)
-	installer := updater.NewBinaryInstaller(os.Args[0], backupDir, 3)
+	// 使用 os.Executable() 获取规范路径，避免 os.Args[0] 的不确定性
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: failed to get executable path: %v\n", err)
+		os.Exit(1)
+	}
+	installer := updater.NewBinaryInstaller(execPath, backupDir, 3)
 	upgradeSvc := service.NewUpgradeService(versionChecker, downloader, installer)
 
 	// 12. 创建 CLI 应用并运行

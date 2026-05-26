@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,15 +49,34 @@ type GitHubChecker struct {
 //   - current: 当前版本号
 //   - versionFile: 版本文件路径（如 "version.txt"）
 func NewGitHubChecker(owner, repo, current, versionFile string) *GitHubChecker {
+	// 创建带有 User-Agent 的 HTTP 客户端
+	// GitHub API 要求所有请求携带 User-Agent 头
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &userAgentTransport{
+			userAgent: "assh/" + current,
+			transport: http.DefaultTransport,
+		},
+	}
+
 	return &GitHubChecker{
 		owner:       owner,
 		repo:        repo,
 		current:     current,
 		versionFile: versionFile,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client:      client,
 	}
+}
+
+// userAgentTransport 为 HTTP 请求添加 User-Agent 头。
+type userAgentTransport struct {
+	userAgent string
+	transport http.RoundTripper
+}
+
+func (t *userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", t.userAgent)
+	return t.transport.RoundTrip(req)
 }
 
 // CheckUpdate 从 GitHub 仓库中的版本文件检查是否有新版本可用。
@@ -153,12 +173,15 @@ func (c *GitHubChecker) fetchReleaseInfo(version string) (*domain.UpdateInfo, er
 		return nil, fmt.Errorf("%w: no asset found for %s/%s", domain.ErrUpdateNotFound, platform.OS, platform.Arch)
 	}
 
+	// 尝试从 assets 中获取 SHA256 校验文件
+	sha256Hash := c.findSHA256FromAssets(release.Assets, platform.OS, platform.Arch)
+
 	return &domain.UpdateInfo{
 		Version:      version,
 		ReleaseDate:  release.PublishedAt,
 		ReleaseNotes: release.Body,
 		DownloadURL:  asset.BrowserDownloadURL,
-		SHA256:       "", // 从 release notes 或单独文件获取
+		SHA256:       sha256Hash,
 		FileSize:     asset.Size,
 		Mandatory:    false,
 	}, nil
@@ -190,6 +213,78 @@ func (c *GitHubChecker) findAsset(assets []struct {
 	}
 
 	return nil
+}
+
+// findSHA256FromAssets 从 Release assets 中查找 SHA256 校验文件。
+// 查找策略：
+//  1. 查找名为 assh-{os}-{arch}.sha256 或类似格式的文件
+//  2. 读取文件内容，提取 SHA256 哈希值
+func (c *GitHubChecker) findSHA256FromAssets(assets []struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+	Size               int64  `json:"size"`
+}, os, arch string) string {
+	// 构建可能的 SHA256 文件名
+	patterns := []string{
+		fmt.Sprintf("assh-%s-%s.sha256", os, arch),
+		fmt.Sprintf("%s-%s.sha256", os, arch),
+		fmt.Sprintf("assh-%s-%s-checksums.txt", os, arch),
+		"sha256sum.txt",
+		"checksums.txt",
+	}
+
+	for _, asset := range assets {
+		name := strings.ToLower(asset.Name)
+		for _, pattern := range patterns {
+			if strings.Contains(name, pattern) {
+				// 下载并解析 SHA256 文件
+				sha256, err := c.downloadAndParseSHA256(asset.BrowserDownloadURL)
+				if err == nil && sha256 != "" {
+					return sha256
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// downloadAndParseSHA256 下载 SHA256 文件并解析哈希值。
+func (c *GitHubChecker) downloadAndParseSHA256(url string) (string, error) {
+	resp, err := c.client.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	// SHA256 文件格式通常是：{hash}  {filename}
+	lines := strings.SplitN(string(body), "\n", 2)
+	if len(lines) == 0 {
+		return "", fmt.Errorf("empty SHA256 file")
+	}
+
+	// 提取第一行的哈希值（空格前的部分）
+	parts := strings.Fields(lines[0])
+	if len(parts) == 0 {
+		return "", fmt.Errorf("invalid SHA256 format")
+	}
+
+	// 验证是否是有效的 SHA256 哈希（64 个十六进制字符）
+	hash := strings.ToLower(parts[0])
+	if len(hash) != 64 {
+		return "", fmt.Errorf("invalid SHA256 length: %d", len(hash))
+	}
+
+	return hash, nil
 }
 
 // GetCurrentVersion 获取当前版本号。
@@ -232,6 +327,7 @@ func isNewerVersion(current, latest string) bool {
 }
 
 // parseVersion 解析版本号字符串为 [Major, Minor, Patch]。
+// 如果解析失败，返回 [0, 0, 0]。
 func parseVersion(version string) [3]int {
 	var result [3]int
 	parts := strings.SplitN(version, ".", 3)
@@ -240,8 +336,13 @@ func parseVersion(version string) [3]int {
 		if i >= 3 {
 			break
 		}
-		// 忽略解析错误，默认为 0
-		fmt.Sscanf(part, "%d", &result[i])
+		// 使用 strconv.Atoi 并检查错误
+		val, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil {
+			// 解析失败，返回零值
+			return [3]int{0, 0, 0}
+		}
+		result[i] = val
 	}
 
 	return result

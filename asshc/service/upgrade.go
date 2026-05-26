@@ -48,15 +48,16 @@ func (s *UpgradeService) GetPlatform() domain.UpdatePlatform {
 
 // UpgradeOptions 定义升级选项。
 type UpgradeOptions struct {
-	Version string // 指定版本号（为空则升级到最新）
-	Force   bool   // 强制升级（忽略版本检查）
-	Yes     bool   // 自动确认
+	Version    string               // 指定版本号（为空则升级到最新）
+	Force      bool                 // 强制升级（忽略版本检查）
+	Yes        bool                 // 自动确认
+	UpdateInfo *domain.UpdateInfo   // 预先获取的更新信息（避免重复 API 调用）
 }
 
 // Upgrade 执行升级操作。
 //
 // 流程：
-//  1. 检查更新（除非 Force 为 true）
+//  1. 检查更新（除非 Force 为 true 或已有 UpdateInfo）
 //  2. 下载新版本
 //  3. 验证下载文件
 //  4. 安装更新
@@ -73,8 +74,11 @@ func (s *UpgradeService) Upgrade(ctx context.Context, options UpgradeOptions, pr
 	var updateInfo *domain.UpdateInfo
 	var err error
 
-	// 1. 检查更新
-	if options.Force && options.Version != "" {
+	// 1. 获取更新信息
+	if options.UpdateInfo != nil {
+		// 使用预先获取的更新信息（避免重复 API 调用）
+		updateInfo = options.UpdateInfo
+	} else if options.Force && options.Version != "" {
 		// 强制模式：创建指定版本的 UpdateInfo
 		updateInfo = &domain.UpdateInfo{
 			Version: options.Version,

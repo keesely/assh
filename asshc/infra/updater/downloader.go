@@ -85,7 +85,18 @@ func (d *HTTPDownloader) Download(ctx context.Context, info *domain.UpdateInfo, 
 		progress: progress,
 	}
 
-	if _, err := io.Copy(writer, resp.Body); err != nil {
+	// 限制下载大小，防止磁盘耗尽攻击
+	// 如果已知文件大小，使用 LimitReader；否则使用默认限制 (1GB)
+	var reader io.Reader = resp.Body
+	if totalSize > 0 {
+		reader = io.LimitReader(resp.Body, totalSize)
+	} else {
+		// 默认限制 1GB
+		const maxDownloadSize = 1 * 1024 * 1024 * 1024
+		reader = io.LimitReader(resp.Body, maxDownloadSize)
+	}
+
+	if _, err := io.Copy(writer, reader); err != nil {
 		// 下载失败，清理临时文件
 		os.Remove(targetPath)
 		return "", fmt.Errorf("failed to download: %w", err)

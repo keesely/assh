@@ -44,10 +44,6 @@ Examples:
 				Name:  "rollback,r",
 				Usage: "Rollback to previous version",
 			},
-			cli.StringFlag{
-				Name:  "source,s",
-				Usage: "Custom update source URL",
-			},
 			cli.BoolFlag{
 				Name:  "yes,y",
 				Usage: "Auto-confirm (no prompt)",
@@ -155,6 +151,9 @@ func (a *App) handleUpgrade(c *cli.Context) error {
 				return nil
 			}
 		}
+
+		// 传递预先获取的 UpdateInfo，避免重复 API 调用
+		options.UpdateInfo = info
 	}
 
 	// 执行升级

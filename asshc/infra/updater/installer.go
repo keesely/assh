@@ -6,7 +6,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strings"
 	"time"
 
 	"assh/asshc/domain"
@@ -161,10 +163,42 @@ func (i *BinaryInstaller) replace(filePath string) error {
 		return i.replaceWindows(filePath)
 	}
 
-	// Unix 系统：原子替换
+	// Unix 系统：尝试原子替换
+	// 如果跨文件系统，os.Rename 会失败，回退到 copy + delete
 	if err := os.Rename(filePath, i.currentPath); err != nil {
+		// 检查是否是跨文件系统错误 (EXDEV)
+		if linkErr, ok := err.(*os.LinkError); ok && linkErr.Err.Error() == "cross-device link" {
+			return i.replaceCrossDevice(filePath)
+		}
 		return fmt.Errorf("failed to replace: %w", err)
 	}
+
+	return nil
+}
+
+// replaceCrossDevice 跨文件系统替换二进制。
+// 当 os.Rename 因为跨文件系统失败时，使用 copy + delete 策略。
+func (i *BinaryInstaller) replaceCrossDevice(filePath string) error {
+	// 1. 复制新文件到目标位置（临时文件）
+	tmpPath := i.currentPath + ".tmp"
+	if err := copyFile(filePath, tmpPath); err != nil {
+		return fmt.Errorf("failed to copy new binary: %w", err)
+	}
+
+	// 2. 设置权限
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	// 3. 原子重命名临时文件到目标位置
+	if err := os.Rename(tmpPath, i.currentPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename tmp to target: %w", err)
+	}
+
+	// 4. 删除源文件
+	os.Remove(filePath)
 
 	return nil
 }
@@ -295,11 +329,28 @@ func (i *BinaryInstaller) cleanupOldBackups() {
 }
 
 // getCurrentVersion 从当前二进制路径提取版本号。
+// 尝试从文件名中提取版本号，如果失败则返回 "unknown"。
 func (i *BinaryInstaller) getCurrentVersion() string {
 	// 尝试从文件名提取版本
-	// base := filepath.Base(i.currentPath)
-	// 如果文件名包含版本号，提取它
-	// 否则返回 "unknown"
+	base := filepath.Base(i.currentPath)
+	// 移除扩展名
+	base = strings.TrimSuffix(base, filepath.Ext(base))
+
+	// 尝试解析版本号（格式：assh-v2.0.1 或 assh2.0.1）
+	versionPatterns := []string{
+		`v(\d+\.\d+\.\d+)`,     // v2.0.1
+		`(\d+\.\d+\.\d+)`,      // 2.0.1
+		`assh-v(\d+\.\d+\.\d+)`, // assh-v2.0.1
+		`assh(\d+\.\d+\.\d+)`,  // assh2.0.1
+	}
+
+	for _, pattern := range versionPatterns {
+		re := regexp.MustCompile(pattern)
+		if matches := re.FindStringSubmatch(base); len(matches) > 1 {
+			return matches[1]
+		}
+	}
+
 	return "unknown"
 }
 
