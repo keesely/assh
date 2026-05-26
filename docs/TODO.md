@@ -1149,16 +1149,22 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
 | # | 场景 | 操作 | 预期 | 状态 |
 |---|------|------|------|:----:|
-| F1 | 检查更新 | `assh upgrade --check` | 显示当前版本和最新版本 | ⬜ |
-| F2 | 升级到最新 | `assh upgrade` | 下载并安装最新版本 | ⬜ |
-| F3 | 强制升级 | `assh upgrade --force` | 跳过版本检查，强制升级 | ⬜ |
-| F4 | 指定版本 | `assh upgrade --version v2.0.2` | 升级到指定版本 | ⬜ |
-| F5 | 回滚 | `assh upgrade --rollback` | 回滚到上一版本 | ⬜ |
-| F6 | 自动确认 | `assh upgrade -y` | 不提示，直接升级 | ⬜ |
-| F7 | 版本检查 | `assh version --check` | 显示版本信息和更新状态 | ⬜ |
-| F8 | 下载进度 | `assh upgrade` | 显示下载进度条 | ⬜ |
-| F9 | 失败回滚 | 模拟安装失败 | 自动回滚到备份版本 | ⬜ |
-| **验证** | `go build ./... && go test ./... -v` | | | |
+| F1 | 检查更新 | `assh upgrade --check` | 显示当前版本和最新版本 | ✅ |
+| F2 | 升级到最新 | `assh upgrade` | 下载并安装最新版本 | ✅ |
+| F3 | 强制升级 | `assh upgrade --force` | 跳过版本检查，强制升级 | ✅ |
+| F4 | 指定版本 | `assh upgrade --version v2.0.2` | 升级到指定版本 | ✅ |
+| F5 | 回滚 | `assh upgrade --rollback` | 回滚到上一版本 | ✅ |
+| F6 | 自动确认 | `assh upgrade -y` | 不提示，直接升级 | ✅ |
+| F7 | 版本检查 | `assh version --check` | 显示版本信息和更新状态 | ⚠️ |
+| F8 | 下载进度 | `assh upgrade` | 显示下载进度条 | ✅ |
+| F9 | 失败回滚 | 模拟安装失败 | 自动回滚到备份版本 | ✅ |
+| **验证** | `go build ./... && go test ./... -v` | | | ✅ |
+
+**验收说明**:
+- F1-F6, F8-F9: 功能实现正确，CLI 命令和参数完整
+- F7: `version` 命令未实现 `--check` 选项（需后续迭代补充）
+- 代码质量: `go build` + `go vet` + `go test` 全部通过
+- 架构边界: port/service/infra 三层分离，DI 注入正确
 
 ### 📝 Phase 12: 远程服务器挂载
 
