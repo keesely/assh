@@ -134,6 +134,10 @@ func (c *mockConnectorWithDeployFail) Close(client *ssh.Client) error {
 	return nil
 }
 
+func (c *mockConnectorWithDeployFail) ConnectChain(target *domain.Server, chain []*domain.Server) (*ssh.Client, error) {
+	return nil, errors.New("mock SSH connection error for deploy test")
+}
+
 // TestGenerateAndDeploy_EmptyName 验证空服务器名返回 ErrInvalidName。
 func TestGenerateAndDeploy_EmptyName(t *testing.T) {
 	svc := NewKeyService(&mockKeyManager{}, &mockRepo{}, &mockConnector{})

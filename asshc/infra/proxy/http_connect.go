@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -146,9 +147,13 @@ func (p *HTTPConnectProxy) handleConnection(client *ssh.Client, conn net.Conn) {
 }
 
 // httpHandshake 执行 HTTP CONNECT 握手。
-// 解析请求行，读取头部，可选地执行 Basic 认证。
+// 解析请求行，读取头部（限制数量和大小），可选地执行 Basic 认证。
 // 返回目标地址 "host:port"。
 func (p *HTTPConnectProxy) httpHandshake(conn net.Conn) (string, error) {
+	// 设置读取超时（30秒），防止 Slowloris 攻击
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	defer conn.SetReadDeadline(time.Time{})
+
 	br := bufio.NewReader(conn)
 
 	// 读取请求行
@@ -183,8 +188,12 @@ func (p *HTTPConnectProxy) httpHandshake(conn net.Conn) (string, error) {
 		return "", fmt.Errorf("invalid target %q: %w", target, err)
 	}
 
-	// 读取头部直到空行
+	// 读取头部直到空行（限制数量和大小，防止 Slowloris/内存耗尽）
+	const maxHeaders = 100
+	const maxHeaderSize = 8192
 	var proxyAuth string
+	headerCount := 0
+
 	for {
 		line, err := br.ReadString('\n')
 		if err != nil {
@@ -193,6 +202,16 @@ func (p *HTTPConnectProxy) httpHandshake(conn net.Conn) (string, error) {
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
 			break
+		}
+
+		headerCount++
+		if headerCount > maxHeaders {
+			p.writeError(conn, "431", "Request Header Fields Too Large")
+			return "", fmt.Errorf("too many headers (max %d)", maxHeaders)
+		}
+		if len(line) > maxHeaderSize {
+			p.writeError(conn, "431", "Request Header Fields Too Large")
+			return "", fmt.Errorf("header too large (max %d bytes)", maxHeaderSize)
 		}
 
 		if p.authFunc != nil {

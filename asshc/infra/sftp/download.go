@@ -170,7 +170,7 @@ func pullSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Cli
 }
 
 func pullDirectory(ctx context.Context, client *sftp.Client, sshClient *ssh.Client, remoteDir, localDir string, opts DownloadOptions, progress TransferProgress) error {
-	files, err := collectRemoteFiles(client, remoteDir, remoteDir)
+	files, err := collectRemoteFiles(client, remoteDir, remoteDir, 0)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,11 @@ func pullDirectory(ctx context.Context, client *sftp.Client, sshClient *ssh.Clie
 	return nil
 }
 
-func collectRemoteFiles(client *sftp.Client, baseDir, currentDir string) ([]string, error) {
+func collectRemoteFiles(client *sftp.Client, baseDir, currentDir string, depth int) ([]string, error) {
+	if depth > maxDepth {
+		return nil, fmt.Errorf("max directory depth exceeded (%d)", maxDepth)
+	}
+
 	var files []string
 
 	entries, err := client.ReadDir(currentDir)
@@ -213,13 +217,17 @@ func collectRemoteFiles(client *sftp.Client, baseDir, currentDir string) ([]stri
 	for _, entry := range entries {
 		path := currentDir + "/" + entry.Name()
 		if entry.IsDir() {
-			subFiles, err := collectRemoteFiles(client, baseDir, path)
+			subFiles, err := collectRemoteFiles(client, baseDir, path, depth+1)
 			if err != nil {
 				return nil, err
 			}
 			files = append(files, subFiles...)
 		} else {
 			files = append(files, path)
+		}
+
+		if len(files) > maxFiles {
+			return nil, fmt.Errorf("max file count exceeded (%d)", maxFiles)
 		}
 	}
 

@@ -4,10 +4,13 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net"
+	"os"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
+	"assh/asshc/port"
 	"assh/log"
 )
 
@@ -22,6 +25,10 @@ type LocalForward struct {
 	mu         sync.Mutex
 	done       chan struct{}
 }
+
+// 编译期接口合规检查
+var _ port.PortForward = (*LocalForward)(nil)
+var _ port.PortForward = (*RemoteForward)(nil)
 
 // NewLocalForward 创建本地端口转发实例。
 // localAddr: 本地监听地址（如 "127.0.0.1:8080"）
@@ -253,8 +260,8 @@ func (f *RemoteForward) handleConn(remoteConn net.Conn) {
 func generateID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
-		// 极低概率 fallback
-		return fmt.Sprintf("tunnel-%d", &b)
+		// 极低概率 fallback: use timestamp + PID
+		return fmt.Sprintf("tunnel-%d-%d", time.Now().UnixNano(), os.Getpid())
 	}
 	return fmt.Sprintf("%x", b)
 }

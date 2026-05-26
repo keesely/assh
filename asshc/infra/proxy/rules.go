@@ -20,6 +20,9 @@ type ruleEngine struct {
 	defaultProxy bool
 }
 
+// 编译期接口合规检查
+var _ port.RuleEngine = (*ruleEngine)(nil)
+
 // parsedRule represents a single parsed rule from the rules file.
 type parsedRule struct {
 	pattern      string

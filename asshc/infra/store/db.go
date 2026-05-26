@@ -8,10 +8,32 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"sync"
+	"sync/atomic"
+
+	"assh/asshc/port"
+	"assh/log"
 
 	_ "modernc.org/sqlite"
 )
+
+// closeAndLog 关闭 io.Closer 并在出错时记录警告日志。
+// 用于 defer 中不再需要检查错误的场景（如 rows.Close()、client.Close()）。
+func closeAndLog(c io.Closer, name string) {
+	if err := c.Close(); err != nil {
+		log.Warnf("%s close error: %v", name, err)
+	}
+}
+
+// allowedTables 白名单：防止 PRAGMA table_info SQL 注入。
+var allowedTables = map[string]bool{
+	"servers":          true,
+	"cloud_accounts":   true,
+	"jump_history":     true,
+	"config":           true,
+	"server_changelog": true,
+}
 
 // Store 是 SQLite 存储的核心结构，实现 ServerRepository 接口。
 // 管理数据库连接、读写锁、以及 AES 加密密钥。
@@ -19,8 +41,13 @@ type Store struct {
 	dbPath    string      // 数据库文件路径
 	db        *sql.DB     // SQLite 数据库连接
 	mu        sync.RWMutex // 读写锁，保证并发安全
-	cryptoKey []byte      // AES-GCM 加密密钥，首次使用时自动生成
+	cryptoKey atomic.Value // AES-GCM 加密密钥，首次使用时自动生成（[]byte 类型）
+	keyOnce   sync.Once   // 确保密钥只加载一次
 }
+
+// 编译期接口合规检查
+var _ port.ServerRepository = (*Store)(nil)
+var _ port.KnownServerRecorder = (*Store)(nil)
 
 // NewStore 创建并初始化 SQLite 存储实例。
 // 自动执行数据库迁移（建表），并从 config 表中加载加密密钥。
@@ -31,10 +58,8 @@ func NewStore(dbPath string) (*Store, error) {
 	}
 
 	store := &Store{
-		dbPath:    dbPath,
-		db:        db,
-		mu:        sync.RWMutex{},
-		cryptoKey: nil,
+		dbPath: dbPath,
+		db:     db,
 	}
 
 	if err := store.migrate(); err != nil {
@@ -42,8 +67,10 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
-	if key, err := store.getCryptoKey(); err == nil && key != nil {
-		store.cryptoKey = key
+	// 预加载加密密钥
+	if _, err := store.getCryptoKey(); err != nil {
+		store.db.Close()
+		return nil, err
 	}
 
 	return store, nil
@@ -132,6 +159,20 @@ func (s *Store) migrate() error {
 			conflicts   INTEGER DEFAULT 0,
 			timestamp   TEXT DEFAULT (datetime('now'))
 		);
+
+		CREATE TABLE IF NOT EXISTS jump_history (
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			target_expr      TEXT NOT NULL,
+			path_text        TEXT NOT NULL,
+			path_data        BLOB,
+			chain_count      INTEGER NOT NULL DEFAULT 0,
+			last_used        TEXT,
+			use_count        INTEGER DEFAULT 1,
+			created_at       TEXT DEFAULT (datetime('now')),
+			updated_at       TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_jump_history_last_used ON jump_history(last_used DESC);
 	`)
 
 	if err != nil {
@@ -151,11 +192,14 @@ func (s *Store) migrate() error {
 // columnExists 检查指定表中是否存在指定列。
 // 使用 PRAGMA table_info 查询表结构信息。
 func (s *Store) columnExists(table, column string) (bool, error) {
+	if !allowedTables[table] {
+		return false, fmt.Errorf("table %q is not allowed", table)
+	}
 	rows, err := s.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
+	defer closeAndLog(rows, "rows")
 
 	for rows.Next() {
 		var cid int
@@ -177,5 +221,19 @@ func (s *Store) columnExists(table, column string) (bool, error) {
 func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// 清零加密密钥，防止内存中残留敏感数据
+	if key, ok := s.cryptoKey.Load().([]byte); ok {
+		for i := range key {
+			key[i] = 0
+		}
+	}
+	s.cryptoKey.Store([]byte(nil))
+
 	return s.db.Close()
+}
+
+// JumpRecorder 返回跳板历史记录器。
+func (s *Store) JumpRecorder() *JumpRecorder {
+	return NewJumpRecorder(s)
 }

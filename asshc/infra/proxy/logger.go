@@ -59,6 +59,9 @@ type proxyLogger struct {
 	currentDate string
 }
 
+// 编译期接口合规检查
+var _ port.ProxyLogger = (*proxyLogger)(nil)
+
 // NewProxyLogger creates a proxy logger writing JSON lines to the given directory.
 // Log files are organized as: {logDir}/{date}/requests.jsonl
 // Each line is a JSON object.

@@ -10,9 +10,9 @@ import (
 	"net"
 	"sync"
 
-	"golang.org/x/crypto/ssh"
-
+	"assh/asshc/port"
 	"assh/log"
+	"golang.org/x/crypto/ssh"
 )
 
 // SOCKS5 协议常量（RFC 1928）
@@ -41,6 +41,9 @@ type SOCKS5Proxy struct {
 	active   map[net.Conn]struct{}
 	authFunc func(username, password string) bool
 }
+
+// 编译期接口合规检查
+var _ port.Proxy = (*SOCKS5Proxy)(nil)
 
 // NewSOCKS5Proxy 创建 SOCKS5 代理实例（无认证模式）。
 func NewSOCKS5Proxy() *SOCKS5Proxy {

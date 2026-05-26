@@ -207,13 +207,6 @@ func generateECDSA(bits int, comment string, passphrase []byte) (privPEM, pubSSH
 	return privPEM, pubSSH, nil
 }
 
-// keyTypeDefaultFilenames 映射密钥类型到 ssh-keygen 兼容的默认文件名。
-var keyTypeDefaultFilenames = map[string]string{
-	"rsa":     "id_rsa",
-	"ed25519": "id_ed25519",
-	"ecdsa":   "id_ecdsa",
-}
-
 // GenerateToPath 生成 SSH 密钥对并保存到指定路径（生成模式）。
 //
 // 与 Generate() 不同，此方法不保存到 data/keys/{fingerprint}.pem，

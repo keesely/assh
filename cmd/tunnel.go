@@ -24,6 +24,7 @@ func (a *App) registerTunnelCommands() {
 					cli.StringSliceFlag{Name: "R", Usage: "remote forward spec [bind_addr:]port:host:hostport"},
 					cli.BoolFlag{Name: "daemon, d", Usage: "run in background as daemon"},
 					cli.StringFlag{Name: "auto-reconnect", Usage: "auto reconnect [retries/]interval"},
+					cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
 				},
 				Action: a.tunnelStartAction,
 			},
@@ -52,6 +53,7 @@ func (a *App) tunnelStartAction(c *cli.Context) error {
 	}
 
 	serverName := c.Args()[0]
+	jumpChain := c.String("J")
 
 	localForwards := c.StringSlice("L")
 	remoteForwards := c.StringSlice("R")
@@ -89,6 +91,10 @@ func (a *App) tunnelStartAction(c *cli.Context) error {
 	opts := service.ProxyOptions{
 		Daemon:        c.Bool("daemon"),
 		AutoReconnect: c.String("auto-reconnect"),
+	}
+
+	if jumpChain != "" {
+		return a.proxySvc.StartTunnelWithChain(serverName, jumpChain, specs, opts)
 	}
 
 	return a.proxySvc.StartTunnel(serverName, specs, opts)
