@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 30 |
+| accepted | 31 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -45,6 +45,7 @@
 | ADR-028 | 代理 & 隧道架构设计（SOCKS5/端口转发/隧道管理） | accepted | 2026-05-13 |
 | ADR-029 | Smart Proxy 智能代理系统（正向代理+AutoProxy规则+透明日志+多端口规则） | accepted | 2026-05-13 |
 | ADR-030 | 跳板机多跳架构设计 | accepted | 2026-05-19 |
+| ADR-031 | 自动更新/升级架构设计（GitHub Release + 原子更新 + 回滚） | accepted | 2026-05-26 |
 
 ## 新增 ADR
 
