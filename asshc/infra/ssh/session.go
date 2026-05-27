@@ -2,8 +2,6 @@ package ssh
 
 import (
 	"os"
-	"os/signal"
-	"syscall"
 
 	"assh/asshc/port"
 	"golang.org/x/crypto/ssh"
@@ -65,16 +63,10 @@ func (s *Session) Shell(client *ssh.Client) error {
 	}
 
 	// 监听终端窗口大小变化信号，实时调整远程 PTY 尺寸
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGWINCH)
-	defer signal.Stop(sigCh)
-
-	go func() {
-		for range sigCh {
-			w, h, _ := term.GetSize(fd)
-			session.WindowChange(h, w)
-		}
-	}()
+	// 使用平台特定的实现（Unix: SIGWINCH, Windows: 占位）
+	go watchResize(fd, func(w, h int) {
+		session.WindowChange(h, w)
+	})
 
 	return session.Wait()
 }

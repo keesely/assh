@@ -28,7 +28,7 @@ import (
 )
 
 // Version 是 ASSH 的当前版本号，通过编译时注入（-ldflags）更新。
-var Version = "v2.0.0"
+var Version = "v2.1.0-rc1"
 
 // Build 是构建信息（构建时间等），通过编译时注入（-ldflags）更新。
 var Build string
