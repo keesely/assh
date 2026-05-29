@@ -31,7 +31,9 @@ var allowedTables = map[string]bool{
 	"servers":          true,
 	"cloud_accounts":   true,
 	"jump_history":     true,
-	"config":           true,
+	"proxy_services":    true,
+	"tunnel_services":   true,
+	"config":            true,
 	"server_changelog": true,
 }
 
@@ -173,6 +175,63 @@ func (s *Store) migrate() error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_jump_history_last_used ON jump_history(last_used DESC);
+
+		CREATE TABLE IF NOT EXISTS proxy_services (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			group_name TEXT NOT NULL DEFAULT '',
+			server_name TEXT DEFAULT '',
+			host TEXT NOT NULL DEFAULT '',
+			port INTEGER NOT NULL DEFAULT 22,
+			user_name TEXT NOT NULL DEFAULT 'root',
+			jump_chain TEXT DEFAULT '',
+			proxy_type TEXT NOT NULL DEFAULT 'socks5',
+			socks5_addr TEXT DEFAULT ':1080',
+			http_addr TEXT DEFAULT '',
+			tcp_addr TEXT DEFAULT '',
+			reverse INTEGER NOT NULL DEFAULT 0,
+			listen_type TEXT NOT NULL DEFAULT 'tcp',
+			auth_encrypted BLOB,
+			rule_file TEXT DEFAULT '',
+			log_dir TEXT DEFAULT '',
+			daemon INTEGER NOT NULL DEFAULT 0,
+			auto_reconnect TEXT DEFAULT '',
+			remark TEXT DEFAULT '',
+			enabled INTEGER NOT NULL DEFAULT 1,
+			use_count INTEGER DEFAULT 0,
+			last_used TEXT,
+			version INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT DEFAULT (datetime('now')),
+			updated_at TEXT DEFAULT (datetime('now')),
+			UNIQUE(group_name, name)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_proxy_services_group ON proxy_services(group_name);
+
+		CREATE TABLE IF NOT EXISTS tunnel_services (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			group_name TEXT NOT NULL DEFAULT '',
+			server_name TEXT DEFAULT '',
+			host TEXT NOT NULL DEFAULT '',
+			port INTEGER NOT NULL DEFAULT 22,
+			user_name TEXT NOT NULL DEFAULT 'root',
+			jump_chain TEXT DEFAULT '',
+			forwards TEXT NOT NULL DEFAULT '[]',
+			auth_encrypted BLOB,
+			daemon INTEGER NOT NULL DEFAULT 0,
+			auto_reconnect TEXT DEFAULT '',
+			remark TEXT DEFAULT '',
+			enabled INTEGER NOT NULL DEFAULT 1,
+			use_count INTEGER DEFAULT 0,
+			last_used TEXT,
+			version INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT DEFAULT (datetime('now')),
+			updated_at TEXT DEFAULT (datetime('now')),
+			UNIQUE(group_name, name)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_tunnel_services_group ON tunnel_services(group_name);
 	`)
 
 	if err != nil {
@@ -236,4 +295,14 @@ func (s *Store) Close() error {
 // JumpRecorder 返回跳板历史记录器。
 func (s *Store) JumpRecorder() *JumpRecorder {
 	return NewJumpRecorder(s)
+}
+
+// ProxyServiceRepo 返回代理服务存储。
+func (s *Store) ProxyServiceRepo() *ProxyStore {
+	return NewProxyStore(s)
+}
+
+// TunnelServiceStore 返回隧道服务存储。
+func (s *Store) TunnelServiceRepo() *TunnelServiceStore {
+	return NewTunnelServiceStore(s)
 }

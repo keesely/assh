@@ -2,7 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"text/tabwriter"
 
+	"assh/asshc/domain"
 	"assh/asshc/service"
 
 	"github.com/urfave/cli"
@@ -33,6 +37,12 @@ func proxyFlags() []cli.Flag {
 }
 
 func (a *App) registerProxyCommands() {
+	// 添加 --save 标志
+	flags := proxyFlags()
+	flags = append(flags, cli.StringFlag{Name: "save", Value: "", Usage: "save proxy configuration with name"})
+
+	// 注意：proxy 命令不能有 Subcommands，否则 urfave/cli v1 不会解析主命令的 flags。
+	// 所有子命令注册为顶级命令：proxy-list, proxy-start, proxy-stop, proxy-rm。
 	a.cli.Commands = append(a.cli.Commands, cli.Command{
 		Name:      "proxy",
 		Usage:     "Start SOCKS5/HTTP CONNECT proxy with Smart Proxy support",
@@ -48,9 +58,38 @@ Examples:
   assh proxy -H 192.168.1.1 -u root -P pass   # direct connection
   assh proxy myserver --autoproxy ./list.txt   # with AutoProxy rules
   assh proxy myserver --reverse --ports 80:3000  # reverse proxy
+  assh proxy myserver --socks :1080 --save my-proxy  # save and start
+  assh proxy-list                              # list saved proxies
+  assh proxy-start my-proxy                    # start saved proxy
+  assh proxy-stop my-proxy                     # stop running proxy
 `,
-		Flags:  proxyFlags(),
+		Flags: flags,
 		Action: a.proxyAction,
+	})
+
+	// proxy 子命令注册为顶级命令（避免 urfave/cli v1 的 Subcommands flag 解析 bug）
+	a.cli.Commands = append(a.cli.Commands, cli.Command{
+		Name:   "proxy-list",
+		Usage:  "List saved proxy configurations",
+		Action: a.proxyListAction,
+	})
+	a.cli.Commands = append(a.cli.Commands, cli.Command{
+		Name:      "proxy-start",
+		Usage:     "Start a saved proxy configuration",
+		ArgsUsage: "<name|id>",
+		Action:    a.proxyStartAction,
+	})
+	a.cli.Commands = append(a.cli.Commands, cli.Command{
+		Name:      "proxy-stop",
+		Usage:     "Stop a running proxy",
+		ArgsUsage: "<name|id>",
+		Action:    a.proxyStopAction,
+	})
+	a.cli.Commands = append(a.cli.Commands, cli.Command{
+		Name:      "proxy-rm",
+		Usage:     "Remove a saved proxy configuration",
+		ArgsUsage: "<name|id>",
+		Action:    a.proxyRmAction,
 	})
 
 	// proxy-rule 子命令单独注册
@@ -83,6 +122,7 @@ Examples:
 func (a *App) proxyAction(c *cli.Context) error {
 	host := c.String("H")
 	jumpChain := c.String("J")
+	saveName := c.String("save")
 
 	// 处理 --socks5 别名
 	socksAddr := c.String("socks")
@@ -102,6 +142,47 @@ func (a *App) proxyAction(c *cli.Context) error {
 		LogDir:        c.String("log-dir"),
 		Daemon:        c.Bool("daemon"),
 		AutoReconnect: c.String("auto-reconnect"),
+	}
+
+	// 如果指定了 --save，保存配置
+	if saveName != "" {
+		if a.proxyRepo == nil {
+			return fmt.Errorf("proxy repository not available")
+		}
+
+		svc := &domain.ProxyService{
+			Name:          saveName,
+			GroupName:     "",
+			ServerName:    c.Args().Get(0),
+			Host:          host,
+			Port:          c.Int("p"),
+			UserName:      c.String("u"),
+			JumpChain:     jumpChain,
+			ProxyType:     "socks5",
+			SOCKS5Addr:    socksAddr,
+			HTTPAddr:      c.String("http"),
+			TCPAddr:       c.String("tcp"),
+			Reverse:       c.Bool("reverse"),
+			ListenType:    c.String("listen"),
+			Auth:          c.String("auth"),
+			RuleFile:      c.String("autoproxy"),
+			LogDir:        c.String("log-dir"),
+			Daemon:        c.Bool("daemon"),
+			AutoReconnect: c.String("auto-reconnect"),
+			Enabled:       true,
+		}
+
+		// 确定代理类型
+		if svc.HTTPAddr != "" {
+			svc.ProxyType = "http"
+		} else if svc.TCPAddr != "" {
+			svc.ProxyType = "tcp"
+		}
+
+		if err := a.proxyRepo.Create(svc); err != nil {
+			return fmt.Errorf("save proxy failed: %w", err)
+		}
+		fmt.Printf("Proxy configuration saved as %q (id=%d)\n", saveName, svc.ID)
 	}
 
 	if host != "" {
@@ -142,6 +223,123 @@ func (a *App) proxyAction(c *cli.Context) error {
 	}
 
 	return a.proxySvc.StartProxy(serverName, opts)
+}
+
+// resolveProxyService 根据名字或 ID 解析代理服务
+func (a *App) resolveProxyService(nameOrID string) (*domain.ProxyService, error) {
+	if a.proxyRepo == nil {
+		return nil, fmt.Errorf("proxy repository not available")
+	}
+
+	// 尝试按 ID 解析
+	if id, err := strconv.ParseInt(nameOrID, 10, 64); err == nil {
+		return a.proxyRepo.GetByID(id)
+	}
+
+	// 按名字解析
+	return a.proxyRepo.GetByName("", nameOrID)
+}
+
+func (a *App) proxyListAction(c *cli.Context) error {
+	if a.proxyRepo == nil {
+		return fmt.Errorf("proxy repository not available")
+	}
+
+	services, err := a.proxyRepo.List("")
+	if err != nil {
+		return fmt.Errorf("list proxies failed: %w", err)
+	}
+
+	if len(services) == 0 {
+		fmt.Println("No saved proxy configurations")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "ID\tNAME\tSERVER\tTYPE\tLISTEN\tSTATUS\n")
+	for _, svc := range services {
+		status := "enabled"
+		if !svc.Enabled {
+			status = "disabled"
+		}
+		listen := svc.SOCKS5Addr
+		if svc.HTTPAddr != "" {
+			listen = svc.HTTPAddr
+		} else if svc.TCPAddr != "" {
+			listen = svc.TCPAddr
+		}
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", svc.ID, svc.Name, svc.ServerName, svc.ProxyType, listen, status)
+	}
+	w.Flush()
+	return nil
+}
+
+func (a *App) proxyStartAction(c *cli.Context) error {
+	if c.NArg() < 1 {
+		return cli.ShowSubcommandHelp(c)
+	}
+
+	svc, err := a.resolveProxyService(c.Args()[0])
+	if err != nil {
+		return fmt.Errorf("proxy not found: %w", err)
+	}
+
+	if a.proxySvc == nil {
+		return fmt.Errorf("proxy service not available")
+	}
+
+	opts := service.ProxyOptions{
+		SOCKS5Addr:    svc.SOCKS5Addr,
+		HTTPAddr:      svc.HTTPAddr,
+		TCPAddr:       svc.TCPAddr,
+		Reverse:       svc.Reverse,
+		ListenType:    svc.ListenType,
+		Auth:          svc.Auth,
+		RuleFile:      svc.RuleFile,
+		LogDir:        svc.LogDir,
+		Daemon:        svc.Daemon,
+		AutoReconnect: svc.AutoReconnect,
+	}
+
+	// 记录使用
+	if a.proxyRepo != nil {
+		_ = a.proxyRepo.RecordUsage(svc.ID)
+	}
+
+	if svc.Host != "" {
+		return a.proxySvc.StartDirectProxy(svc.Host, svc.Port, svc.UserName, "", "", opts)
+	}
+
+	if svc.JumpChain != "" {
+		return a.proxySvc.StartProxyWithChain(svc.ServerName, svc.JumpChain, opts)
+	}
+
+	return a.proxySvc.StartProxy(svc.ServerName, opts)
+}
+
+func (a *App) proxyStopAction(c *cli.Context) error {
+	if a.proxySvc == nil {
+		return fmt.Errorf("proxy service not available")
+	}
+	return a.proxySvc.StopProxy()
+}
+
+func (a *App) proxyRmAction(c *cli.Context) error {
+	if c.NArg() < 1 {
+		return cli.ShowSubcommandHelp(c)
+	}
+
+	svc, err := a.resolveProxyService(c.Args()[0])
+	if err != nil {
+		return fmt.Errorf("proxy not found: %w", err)
+	}
+
+	if err := a.proxyRepo.Delete(svc.ID); err != nil {
+		return fmt.Errorf("delete proxy failed: %w", err)
+	}
+
+	fmt.Printf("Proxy %q (id=%d) removed\n", svc.Name, svc.ID)
+	return nil
 }
 
 func (a *App) proxyRuleReloadAction(c *cli.Context) error {

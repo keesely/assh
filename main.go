@@ -111,7 +111,7 @@ func main() {
 	upgradeSvc := service.NewUpgradeService(versionChecker, downloader, installer)
 
 	// 12. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc, jumpSvc, upgradeSvc)
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, repo.ProxyServiceRepo(), repo.TunnelServiceRepo(), syncSvc, healthSvc, jumpSvc, upgradeSvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
