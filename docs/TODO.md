@@ -1,7 +1,7 @@
 # TODO.md
 
 > 开发任务计划 - 按 Phase 分阶段实施
-> 最后更新: 2026-05-29 (v2.1.0 开发启动: NEXT-001 → Phase 12 → Phase 13)
+> 最后更新: 2026-05-29 (v2.1.0 开发启动: NEXT-001 阶段 1-2 完成，阶段 3 待开发)
 
 ## 版本路线图
 
@@ -1179,19 +1179,37 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 
 ### 📝 Phase 12: 远程服务器挂载 (v2.1.0)
 
-目标：使用 sshfs/webdav/samba 挂载远程服务器文件系统到本地
+目标：使用 sshfs/WebDAV 挂载远程服务器文件系统到本地（SMB 延后）
 
 依赖： Phase 3 (ssh)
 
-| 任务 | 说明 |
-|------|------|
-| P12.1 挂载接口 | `asshc/port/mounter.go` — FileMounter 接口 |
-| P12.2 SSHFS 挂载 | `asshc/infra/mount/sshfs.go` — sshfs 封装 |
-| P12.3 WebDAV 挂载 | `asshc/infra/mount/webdav.go` — WebDAV 客户端 |
-| P12.4 SMB 挂载 | `asshc/infra/mount/smb.go` — SMB/CIFS 客户端 |
-| P12.5 挂载服务 | `asshc/service/mount.go` — MountService |
-| P12.6 挂载命令 | `cmd/mount.go` — mount/unmount/list 命令 |
-| **验证**: `go test ./asshc/... -v` |
+**设计文档**: [2026-05-29-Phase12-Mount-Design.md](worklogs/2026-05-29-Phase12-Mount-Design.md)
+
+**决策汇总**:
+- 挂载方案: sshfs + WebDAV（SMB 延后）
+- 挂载持久化: SQLite `mounts` 表
+- 依赖检测: 自动检测 macFUSE + sshfs + davfs2，提示安装命令
+- WebDAV 实现: Go 内置 WebDAV 服务端，通过 SSH 隧道转发
+- 自动重连: sshfs 默认开启 `-o reconnect`
+- 挂载点路径: 必须手动指定
+- 并发挂载: 支持多服务器同时挂载
+- WebDAV 端口: 自动选择可用端口（避免冲突）
+- 进程生命周期: 前台运行 + `--daemon` 后台模式可选
+- 命令归属: `assh-fs` 二进制
+
+| 编号 | 任务 | 文件 | 说明 | 优先级 |
+|------|------|------|------|--------|
+| P12.1 | 挂载接口定义 | `asshc/port/mounter.go` | FileMounter/MountManager/MountOptions/MountInfo | P0 |
+| P12.2 | 数据库迁移 | `asshc/infra/store/db.go` | mounts 表建表 | P0 |
+| P12.3 | 挂载存储 | `asshc/infra/store/mount.go` | CRUD 持久化 | P0 |
+| P12.4 | sshfs 实现 | `asshc/infra/mount/sshfs.go` | SSHFS 挂载/卸载/重连 | P0 |
+| P12.5 | WebDAV 实现 | `asshc/infra/mount/webdav.go` | Go WebDAV 服务 + SSH 隧道 + 客户端挂载 | P1 |
+| P12.6 | 依赖检测 | `asshc/infra/mount/detect.go` | 平台检测 + 依赖检查 | P0 |
+| P12.7 | 挂载服务 | `asshc/service/mount.go` | MountService 编排层 | P0 |
+| P12.8 | CLI 命令 | `cmd/sftp_cmd.go` | mount/umount 命令定义 | P0 |
+| P12.9 | DI 注入 | `cmd/fs/main.go` + `cmd/app.go` | MountManager 注入 | P0 |
+| P12.10 | WebDAV 端口管理 | `asshc/infra/mount/port.go` | 自动端口选择 + 冲突避免 | P1 |
+| **验证** | `go build ./... && go test ./... -v` | | | |
 
 ### 📝 Phase 13: 远程命令执行增强 (v2.1.0)
 
@@ -1259,13 +1277,13 @@ type SSHSession interface {
 | 运行中的服务无持久化记录 | 服务启动后无数据库记录，重连/重启后无法自动恢复 | SQLite 持久化服务记录，支持自动重连恢复 |
 | 无统一服务管理入口 | 启动/停止/列表分散在不同命令 | 统一 `assh service` 命令组，集中管理所有代理和隧道服务 |
 
-| 编号 | 任务 | 文件 | 说明 | 优先级 |
-|------|------|------|------|--------|
-| NEXT-001.1 | 🔧 修复 --http/--http-mode 无效 | `cmd/proxy.go` | 当前 `--http` 无法启用 HTTP CONNECT 代理，仅启动 SOCKS5；`--http-mode` 反向模式未正确处理。需修复 listener 编排逻辑，确保 `--http` 正确启动 HTTP CONNECT 处理器 | P0 |
-| NEXT-001.2 | 重构 proxy 参数体系 | `cmd/proxy.go` + `service/proxy.go` | `--http` 在目标端启动 HTTP Server 监听指定端口，将端口数据转发；`--tcp` 在目标端启动 TCP 服务监听指定端口，转发端口数据；`--socks` 启用 SOCKS 代理；目标端根据代理上下文确定（正常为服务器），`--reverse` 时目标端为本地 | P0 |
-| NEXT-001.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 |
-| NEXT-001.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80。**--listen http**: 在远程服务器上启动 HTTP Server（参考 v1 hostproxy/localproxy），监听指定端口并转发 HTTP 请求 | P0 |
-| NEXT-001.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 |
+| 编号 | 任务 | 文件 | 说明 | 优先级 | 状态 |
+|------|------|------|------|--------|:----:|
+| NEXT-001.1 | 🔧 修复 --http/--http-mode 无效 | `cmd/proxy.go` | 当前 `--http` 无法启用 HTTP CONNECT 代理，仅启动 SOCKS5；`--http-mode` 反向模式未正确处理。需修复 listener 编排逻辑，确保 `--http` 正确启动 HTTP CONNECT 处理器 | P0 | ✅ |
+| NEXT-001.2 | 重构 proxy 参数体系 | `cmd/proxy.go` + `service/proxy.go` | `--http` 在目标端启动 HTTP Server 监听指定端口，将端口数据转发；`--tcp` 在目标端启动 TCP 服务监听指定端口，转发端口数据；`--socks` 启用 SOCKS 代理；目标端根据代理上下文确定（正常为服务器），`--reverse` 时目标端为本地 | P0 | ✅ |
+| NEXT-001.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 | ✅ |
+| NEXT-001.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80。**--listen http**: 在远程服务器上启动 HTTP Server（参考 v1 hostproxy/localproxy），监听指定端口并转发 HTTP 请求 | P0 | ✅ |
+| NEXT-001.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 | ✅ |
 | NEXT-001.6 | **服务领域实体 + 存储接口** | `asshc/domain/service.go` + `asshc/port/servicemgr.go` | 定义 `ServiceInstance` 领域实体（ID/类型/服务器/端口/状态/配置快照/创建时间等），`ServiceRepository` 接口（CRUD + ListByStatus + ListByType） | P0 |
 | NEXT-001.7 | **SQLite 持久化实现** | `asshc/infra/store/service.go` | 新建 `services` 表存储服务记录，AES-GCM 加密敏感配置（如密码/认证信息），支持状态标记（running/stopped/failed）、自动时间戳、服务名唯一索引 | P0 |
 | NEXT-001.8 | **ServiceManager 接口 + 实现** | `asshc/port/servicemgr.go` + `asshc/infra/service/mgr.go` | 定义 `ServiceManager` 接口（Start/Stop/Restart/Status/List），实现包括：代理服务管理器（ProxyManager）和隧道服务管理器（TunnelManager），统一生命周期控制 | P0 |
