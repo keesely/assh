@@ -21,9 +21,9 @@ import (
 type ProxyOptions struct {
 	SOCKS5Addr    string
 	HTTPAddr      string
+	TCPAddr       string
 	Reverse       bool
-	ReverseTCP    bool
-	ReverseHTTP   bool
+	ListenType    string // tcp|http (for remote server listen)
 	Auth          string
 	Ports         string
 	RuleFile      string
@@ -36,6 +36,7 @@ type ForwardSpec struct {
 	LocalAddr  string
 	RemoteAddr string
 	Reverse    bool
+	ListenType string // tcp|http (for remote listen)
 }
 
 type tunnelManagerExt interface {
@@ -138,14 +139,19 @@ func (s *ProxyService) startProxyWithClient(client *ssh.Client, opts ProxyOption
 		return s.startReverseMode(client, opts)
 	}
 
+	// 如果设置了 TCPAddr 或 HTTPAddr（目标端监听），进入远程监听模式
+	if opts.TCPAddr != "" || opts.HTTPAddr != "" {
+		return s.startRemoteListenMode(client, opts)
+	}
+
 	authFn := parseAuth(opts.Auth)
 
 	useSmartProxy := opts.RuleFile != "" || opts.LogDir != ""
 
 	socks5Addr := opts.SOCKS5Addr
-	httpAddr := opts.HTTPAddr
 
-	if socks5Addr == "" && httpAddr == "" {
+	// 默认 SOCKS5 代理
+	if socks5Addr == "" {
 		socks5Addr = ":1080"
 	}
 
@@ -169,7 +175,6 @@ func (s *ProxyService) startProxyWithClient(client *ssh.Client, opts ProxyOption
 
 		cfg := proxy.SmartProxyConfig{
 			SOCKS5Addr:  socks5Addr,
-			HTTPAddr:    httpAddr,
 			AuthFunc:    authFn,
 			RuleEngine:  s.ruleEngine,
 			ProxyLogger: s.proxyLogger,
@@ -192,22 +197,6 @@ func (s *ProxyService) startProxyWithClient(client *ssh.Client, opts ProxyOption
 				return fmt.Errorf("start socks5 proxy: %w", err)
 			}
 			s.socks5Proxy = p
-		}
-
-		if httpAddr != "" {
-			var p *proxy.HTTPConnectProxy
-			if authFn != nil {
-				p = proxy.NewHTTPConnectProxyWithAuth(authFn)
-			} else {
-				p = proxy.NewHTTPConnectProxy()
-			}
-			if err := p.Start(client, httpAddr); err != nil {
-				if s.socks5Proxy != nil {
-					s.socks5Proxy.Stop()
-				}
-				return fmt.Errorf("start http proxy: %w", err)
-			}
-			s.httpProxy = p
 		}
 	}
 
@@ -235,6 +224,70 @@ func (s *ProxyService) startProxyWithClient(client *ssh.Client, opts ProxyOption
 	return nil
 }
 
+// startRemoteListenMode 在远程服务器上启动监听服务。
+// --tcp: 在远程启动 TCP Server，转发到本地
+// --http: 在远程启动 HTTP Server，转发到本地
+func (s *ProxyService) startRemoteListenMode(client *ssh.Client, opts ProxyOptions) error {
+	listenType := opts.ListenType
+	if listenType == "" {
+		listenType = "tcp"
+	}
+
+	var listenAddr string
+	if opts.TCPAddr != "" {
+		listenAddr = opts.TCPAddr
+	} else if opts.HTTPAddr != "" {
+		listenAddr = opts.HTTPAddr
+		listenType = "http"
+	}
+
+	// 使用 SSH Remote Forward 在远程监听
+	// 等价于 ssh -R listenAddr:localAddr
+	localAddr := "127.0.0.1:80" // 默认转发到本地 80 端口
+	if opts.Ports != "" {
+		// 解析端口映射
+		rules, err := ParsePorts(opts.Ports)
+		if err != nil {
+			return fmt.Errorf("parse ports: %w", err)
+		}
+		if len(rules) > 0 && len(rules[0].LocalPorts) > 0 {
+			localAddr = fmt.Sprintf("127.0.0.1:%d", rules[0].LocalPorts[0])
+		}
+	}
+
+	remoteAddr := fmt.Sprintf("0.0.0.0:%s", listenAddr)
+	localAddr = fmt.Sprintf("127.0.0.1:%s", listenAddr)
+
+	log.Infof("Starting remote %s listen on %s -> %s", listenType, remoteAddr, localAddr)
+
+	// 创建远程转发
+	fw := proxy.NewRemoteForward(remoteAddr, localAddr)
+	if err := s.tunnelMgr.Add(fw); err != nil {
+		return fmt.Errorf("add remote forward: %w", err)
+	}
+
+	if tm, ok := s.tunnelMgr.(tunnelManagerExt); ok {
+		tm.SetClient(client)
+		if err := tm.StartAll(client); err != nil {
+			return fmt.Errorf("start tunnels: %w", err)
+		}
+	}
+
+	if opts.Daemon {
+		proxy.Daemonize()
+	}
+
+	if !opts.Daemon {
+		s.mu.Unlock()
+		waitForSignal(func() error {
+			return s.tunnelMgr.StopAll()
+		})
+		s.mu.Lock()
+	}
+
+	return nil
+}
+
 func (s *ProxyService) startReverseMode(client *ssh.Client, opts ProxyOptions) error {
 	if opts.Ports == "" {
 		return fmt.Errorf("reverse mode requires --ports")
@@ -245,8 +298,6 @@ func (s *ProxyService) startReverseMode(client *ssh.Client, opts ProxyOptions) e
 		return fmt.Errorf("parse ports: %w", err)
 	}
 
-	authFn := parseAuth(opts.Auth)
-
 	for _, rule := range rules {
 		for i := range rule.ServerPorts {
 			serverPort := rule.ServerPorts[i]
@@ -255,24 +306,10 @@ func (s *ProxyService) startReverseMode(client *ssh.Client, opts ProxyOptions) e
 			remoteAddr := fmt.Sprintf("0.0.0.0:%d", serverPort)
 			localAddr := fmt.Sprintf("127.0.0.1:%d", localPort)
 
-			if opts.ReverseTCP && authFn != nil {
-				rf := proxy.NewRemoteForward(remoteAddr, localAddr)
-				if err := s.tunnelMgr.Add(rf); err != nil {
-					log.Warnf("add reverse forward %s->%s: %v", remoteAddr, localAddr, err)
-					continue
-				}
-			} else if opts.ReverseHTTP && authFn != nil {
-				rf := proxy.NewRemoteForward(remoteAddr, localAddr)
-				if err := s.tunnelMgr.Add(rf); err != nil {
-					log.Warnf("add reverse forward %s->%s: %v", remoteAddr, localAddr, err)
-					continue
-				}
-			} else {
-				rf := proxy.NewRemoteForward(remoteAddr, localAddr)
-				if err := s.tunnelMgr.Add(rf); err != nil {
-					log.Warnf("add reverse forward %s->%s: %v", remoteAddr, localAddr, err)
-					continue
-				}
+			rf := proxy.NewRemoteForward(remoteAddr, localAddr)
+			if err := s.tunnelMgr.Add(rf); err != nil {
+				log.Warnf("add reverse forward %s->%s: %v", remoteAddr, localAddr, err)
+				continue
 			}
 		}
 	}
