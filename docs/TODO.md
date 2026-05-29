@@ -1,7 +1,7 @@
 # TODO.md
 
 > 开发任务计划 - 按 Phase 分阶段实施
-> 最后更新: 2026-05-27 (v2.0.1 稳定版发布, v2.1.0 规划中)
+> 最后更新: 2026-05-29 (v2.1.0 开发启动: NEXT-001 → Phase 12 → Phase 13)
 
 ## 版本路线图
 
@@ -9,7 +9,7 @@
 |------|-----------|------|
 | v2.0.0 | Phase 0-9 | ✅ 已发布 |
 | v2.0.1 | Phase 0-11 (自动更新/升级) | ✅ 当前稳定版 |
-| v2.1.0 | Phase 12-13 + NEXT-001 | 📋 规划中 |
+| v2.1.0 | NEXT-001 + Phase 12-13 | 🔄 开发中 (dev/v2.1.0-phase-12) |
 | v2.1.0-rc1 | v2.0.1 稳定 + 预览 | 🏷️ 预览版标签 |
 
 ## 开发阶段
@@ -1241,9 +1241,11 @@ type SSHSession interface {
 }
 ```
 
-### 📝 NEXT-001: Proxy & Tunnel 增强计划 (v2.1.0)
+### 📝 NEXT-001: Proxy & Tunnel 增强计划 (v2.1.0) — 🔄 进行中
 
 目标：修复已知代理/隧道问题，重构 proxy/tunnel 参数体系，引入 SQLite 服务管理持久化，提供灵活的代理和隧道服务生命周期管理
+
+**开发顺序**: NEXT-001 → Phase 12 → Phase 13 (v2.1.0 计划)
 
 **状态说明**：Phase 7 (Proxy & Tunnel) 已完成基础功能交付，但存在以下已知问题和改进空间：
 
@@ -1262,7 +1264,7 @@ type SSHSession interface {
 | NEXT-001.1 | 🔧 修复 --http/--http-mode 无效 | `cmd/proxy.go` | 当前 `--http` 无法启用 HTTP CONNECT 代理，仅启动 SOCKS5；`--http-mode` 反向模式未正确处理。需修复 listener 编排逻辑，确保 `--http` 正确启动 HTTP CONNECT 处理器 | P0 |
 | NEXT-001.2 | 重构 proxy 参数体系 | `cmd/proxy.go` + `service/proxy.go` | `--http` 在目标端启动 HTTP Server 监听指定端口，将端口数据转发；`--tcp` 在目标端启动 TCP 服务监听指定端口，转发端口数据；`--socks` 启用 SOCKS 代理；目标端根据代理上下文确定（正常为服务器），`--reverse` 时目标端为本地 | P0 |
 | NEXT-001.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 |
-| NEXT-001.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80 | P0 |
+| NEXT-001.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80。**--listen http**: 在远程服务器上启动 HTTP Server（参考 v1 hostproxy/localproxy），监听指定端口并转发 HTTP 请求 | P0 |
 | NEXT-001.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 |
 | NEXT-001.6 | **服务领域实体 + 存储接口** | `asshc/domain/service.go` + `asshc/port/servicemgr.go` | 定义 `ServiceInstance` 领域实体（ID/类型/服务器/端口/状态/配置快照/创建时间等），`ServiceRepository` 接口（CRUD + ListByStatus + ListByType） | P0 |
 | NEXT-001.7 | **SQLite 持久化实现** | `asshc/infra/store/service.go` | 新建 `services` 表存储服务记录，AES-GCM 加密敏感配置（如密码/认证信息），支持状态标记（running/stopped/failed）、自动时间戳、服务名唯一索引 | P0 |
