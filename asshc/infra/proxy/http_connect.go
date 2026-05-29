@@ -172,23 +172,8 @@ func (p *HTTPConnectProxy) httpHandshake(conn net.Conn) (string, error) {
 
 	method, target, version := parts[0], parts[1], parts[2]
 
-	if method != "CONNECT" {
-		p.writeError(conn, "405", "Method Not Allowed")
-		return "", fmt.Errorf("unsupported method: %s", method)
-	}
-
-	if !strings.HasPrefix(version, "HTTP/1.") {
-		p.writeError(conn, "400", "Bad Request")
-		return "", fmt.Errorf("unsupported HTTP version: %s", version)
-	}
-
-	// 验证目标地址格式: host:port
-	if _, _, err := net.SplitHostPort(target); err != nil {
-		p.writeError(conn, "400", "Bad Request")
-		return "", fmt.Errorf("invalid target %q: %w", target, err)
-	}
-
 	// 读取头部直到空行（限制数量和大小，防止 Slowloris/内存耗尽）
+	// 注意：必须在检查 method 之前读取头部，以便提取 Proxy-Authorization
 	const maxHeaders = 100
 	const maxHeaderSize = 8192
 	var proxyAuth string
@@ -223,12 +208,30 @@ func (p *HTTPConnectProxy) httpHandshake(conn net.Conn) (string, error) {
 		}
 	}
 
-	// 如果配置了认证，验证 Proxy-Authorization
+	// 先检查认证（在检查 method 之前）
+	// 未认证的请求应返回 407，而不是 405
 	if p.authFunc != nil {
 		if err := p.authenticate(proxyAuth); err != nil {
 			p.writeAuthRequired(conn)
 			return "", err
 		}
+	}
+
+	// 认证通过后，检查 method 和 version
+	if method != "CONNECT" {
+		p.writeError(conn, "405", "Method Not Allowed")
+		return "", fmt.Errorf("unsupported method: %s", method)
+	}
+
+	if !strings.HasPrefix(version, "HTTP/1.") {
+		p.writeError(conn, "400", "Bad Request")
+		return "", fmt.Errorf("unsupported HTTP version: %s", version)
+	}
+
+	// 验证目标地址格式: host:port
+	if _, _, err := net.SplitHostPort(target); err != nil {
+		p.writeError(conn, "400", "Bad Request")
+		return "", fmt.Errorf("invalid target %q: %w", target, err)
 	}
 
 	return target, nil
