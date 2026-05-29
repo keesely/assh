@@ -48,34 +48,35 @@ Examples:
   assh proxy -H 192.168.1.1 -u root -P pass   # direct connection
   assh proxy myserver --autoproxy ./list.txt   # with AutoProxy rules
   assh proxy myserver --reverse --ports 80:3000  # reverse proxy
-  assh proxy rule reload                       # hot-reload rules
 `,
 		Flags:  proxyFlags(),
 		Action: a.proxyAction,
+	})
+
+	// proxy-rule 子命令单独注册
+	a.cli.Commands = append(a.cli.Commands, cli.Command{
+		Name:  "proxy-rule",
+		Usage: "Manage AutoProxy rules",
 		Subcommands: []cli.Command{
 			{
-				Name:  "rule",
-				Usage: "Manage AutoProxy rules",
-				Subcommands: []cli.Command{
-					{
-						Name:   "reload",
-						Usage:  "Reload AutoProxy rules from file",
-						Action: a.proxyRuleReloadAction,
-					},
-					{
-						Name:   "status",
-						Usage:  "Show AutoProxy rule status",
-						Action: a.proxyRuleStatusAction,
-					},
-				},
+				Name:   "reload",
+				Usage:  "Reload AutoProxy rules from file",
+				Action: a.proxyRuleReloadAction,
 			},
 			{
-				Name:      "log",
-				Usage:     "View proxy session logs",
-				UsageText: "proxy log <session-id>",
-				Action:    a.proxyLogAction,
+				Name:   "status",
+				Usage:  "Show AutoProxy rule status",
+				Action: a.proxyRuleStatusAction,
 			},
 		},
+	})
+
+	// proxy-log 子命令单独注册
+	a.cli.Commands = append(a.cli.Commands, cli.Command{
+		Name:      "proxy-log",
+		Usage:     "View proxy session logs",
+		UsageText: "proxy-log <session-id>",
+		Action:    a.proxyLogAction,
 	})
 }
 

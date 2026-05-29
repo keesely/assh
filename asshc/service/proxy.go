@@ -227,6 +227,9 @@ func (s *ProxyService) startProxyWithClient(client *ssh.Client, opts ProxyOption
 // startRemoteListenMode 在远程服务器上启动监听服务。
 // --tcp: 在远程启动 TCP Server，转发到本地
 // --http: 在远程启动 HTTP Server，转发到本地
+//
+// 示例: assh proxy server --http :8009 --ports 8009:4096
+//   → 远程监听 0.0.0.0:8009，转发到本地 127.0.0.1:4096
 func (s *ProxyService) startRemoteListenMode(client *ssh.Client, opts ProxyOptions) error {
 	listenType := opts.ListenType
 	if listenType == "" {
@@ -241,24 +244,28 @@ func (s *ProxyService) startRemoteListenMode(client *ssh.Client, opts ProxyOptio
 		listenType = "http"
 	}
 
-	// 使用 SSH Remote Forward 在远程监听
-	// 等价于 ssh -R listenAddr:localAddr
-	localAddr := "127.0.0.1:80" // 默认转发到本地 80 端口
+	// 解析端口映射
+	// 格式: listenPort:localPort (如 8009:4096)
+	// 默认: 如果没有 --ports，转发到本地同端口
+	localPort := listenAddr // 默认本地端口 = 远程监听端口
 	if opts.Ports != "" {
-		// 解析端口映射
 		rules, err := ParsePorts(opts.Ports)
 		if err != nil {
 			return fmt.Errorf("parse ports: %w", err)
 		}
 		if len(rules) > 0 && len(rules[0].LocalPorts) > 0 {
-			localAddr = fmt.Sprintf("127.0.0.1:%d", rules[0].LocalPorts[0])
+			localPort = fmt.Sprintf("%d", rules[0].LocalPorts[0])
 		}
 	}
 
-	remoteAddr := fmt.Sprintf("0.0.0.0:%s", listenAddr)
-	localAddr = fmt.Sprintf("127.0.0.1:%s", listenAddr)
+	// 去掉 listenAddr 的前导冒号
+	listenPort := strings.TrimPrefix(listenAddr, ":")
+	localPort = strings.TrimPrefix(localPort, ":")
 
-	log.Infof("Starting remote %s listen on %s -> %s", listenType, remoteAddr, localAddr)
+	remoteAddr := fmt.Sprintf("0.0.0.0:%s", listenPort)
+	localAddr := fmt.Sprintf("127.0.0.1:%s", localPort)
+
+	log.Infof("Starting remote %s listen on %s -> local %s", listenType, remoteAddr, localAddr)
 
 	// 创建远程转发
 	fw := proxy.NewRemoteForward(remoteAddr, localAddr)
