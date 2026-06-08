@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| fixed | 11 |
+| fixed | 14 |
 | known | 0 |
 | in-progress | 0 |
 
@@ -25,6 +25,9 @@
 | BUG-009 | ComputeRemoteSHA256 是 stub，-S 校验总是失败 | fixed | 2026-05-11 |
 | BUG-010 | SSH 密钥认证失败后未回退到密码认证 | fixed | 2026-05-11 |
 | BUG-011 | [默认 Action 中 -J 在 target 后未解析](bugs/BUG-011-default-action-jump-flag.md) | fixed | 2026-05-19 |
+| BUG-012 | [tunnel 命令 -R 参数解析异常](bugs/BUG-012-tunnel-R参数解析异常.md) | fixed | 2026-05-29 |
+| BUG-013 | [proxy --http --auth 未进行 Basic Auth 校验](bugs/BUG-013-proxy-http-auth未生效.md) | fixed | 2026-05-29 |
+| BUG-014 | [tunnel --daemon 模式无法正常工作](bugs/BUG-014-tunnel-daemon-mode-broken.md) | fixed | 2026-06-04 |
 
 ## 新增 Bug
 
