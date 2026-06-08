@@ -3,11 +3,9 @@ package service
 import (
 	"fmt"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -30,6 +28,7 @@ type ProxyOptions struct {
 	LogDir        string
 	Daemon        bool
 	AutoReconnect string
+	PidPath       string // PID file path for daemon mode
 }
 
 type ForwardSpec struct {
@@ -210,16 +209,19 @@ func (s *ProxyService) startProxyWithClient(client *ssh.Client, opts ProxyOption
 	}
 
 	if opts.Daemon {
-		if err := proxy.Daemonize(); err != nil {
-			log.Warnf("daemonize failed: %v", err)
+		if err := proxy.Daemonize(opts.PidPath); err != nil {
+			return fmt.Errorf("daemonize: %w", err)
 		}
+		log.Infof("proxy daemon started (PID: %d)", os.Getpid())
 	}
 
-	if !opts.Daemon {
-		s.mu.Unlock()
-		waitForSignal(s.StopProxy)
-		s.mu.Lock()
-	}
+	// Unlock before blocking (both daemon and non-daemon paths)
+	s.mu.Unlock()
+	proxy.WaitForSignal(
+		s.StopProxy,
+		func() { proxy.RemovePidFile(opts.PidPath) },
+	)
+	s.mu.Lock()
 
 	return nil
 }
@@ -281,16 +283,19 @@ func (s *ProxyService) startRemoteListenMode(client *ssh.Client, opts ProxyOptio
 	}
 
 	if opts.Daemon {
-		proxy.Daemonize()
+		if err := proxy.Daemonize(opts.PidPath); err != nil {
+			return fmt.Errorf("daemonize: %w", err)
+		}
+		log.Infof("remote listen daemon started (PID: %d)", os.Getpid())
 	}
 
-	if !opts.Daemon {
-		s.mu.Unlock()
-		waitForSignal(func() error {
-			return s.tunnelMgr.StopAll()
-		})
-		s.mu.Lock()
-	}
+	// Unlock before blocking (both daemon and non-daemon paths)
+	s.mu.Unlock()
+	proxy.WaitForSignal(
+		func() error { return s.tunnelMgr.StopAll() },
+		func() { proxy.RemovePidFile(opts.PidPath) },
+	)
+	s.mu.Lock()
 
 	return nil
 }
@@ -465,16 +470,20 @@ func (s *ProxyService) startTunnelWithClient(client *ssh.Client, forwards []Forw
 	}
 
 	if opts.Daemon {
-		proxy.Daemonize()
+		if err := proxy.Daemonize(opts.PidPath); err != nil {
+			return fmt.Errorf("daemonize: %w", err)
+		}
+		// Child process continues here (parent exited in Daemonize)
+		log.Infof("tunnel daemon started (PID: %d)", os.Getpid())
 	}
 
-	if !opts.Daemon {
-		s.mu.Unlock()
-		waitForSignal(func() error {
-			return s.tunnelMgr.StopAll()
-		})
-		s.mu.Lock()
-	}
+	// Unlock before blocking (both daemon and non-daemon paths)
+	s.mu.Unlock()
+	proxy.WaitForSignal(
+		func() error { return s.tunnelMgr.StopAll() },
+		func() { proxy.RemovePidFile(opts.PidPath) },
+	)
+	s.mu.Lock()
 
 	return nil
 }
@@ -545,15 +554,5 @@ func parseAutoReconnect(s string) (bool, proxy.ReconnectConfig) {
 		MaxRetries: maxRetries,
 		Interval:   interval,
 		Backoff:    5 * time.Second,
-	}
-}
-
-func waitForSignal(stop func() error) {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigCh
-	log.Infof("received signal %v, shutting down...", sig)
-	if err := stop(); err != nil {
-		log.Errorf("shutdown error: %v", err)
 	}
 }

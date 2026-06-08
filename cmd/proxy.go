@@ -8,6 +8,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/service"
+	"assh/config"
 
 	"github.com/urfave/cli"
 )
@@ -27,6 +28,7 @@ func proxyFlags() []cli.Flag {
 		cli.StringFlag{Name: "log-dir", Value: "", Usage: "proxy log directory"},
 		cli.BoolFlag{Name: "daemon, d", Usage: "run in background as daemon"},
 		cli.StringFlag{Name: "auto-reconnect", Value: "", Usage: "auto reconnect [retries/]interval (e.g. 3/5s)"},
+		cli.StringFlag{Name: "pid-file", Value: "", Usage: "PID file path for daemon mode (default: ~/.assh/v2/tunnel.pid)"},
 		cli.StringFlag{Name: "H, host", Usage: "remote host address (direct connection)"},
 		cli.StringFlag{Name: "u, user", Usage: "username (direct connection)"},
 		cli.StringFlag{Name: "P, password", Usage: "password (direct connection)"},
@@ -142,6 +144,12 @@ func (a *App) proxyAction(c *cli.Context) error {
 		LogDir:        c.String("log-dir"),
 		Daemon:        c.Bool("daemon"),
 		AutoReconnect: c.String("auto-reconnect"),
+		PidPath:       c.String("pid-file"),
+	}
+
+	// 默认 PID 文件路径
+	if opts.PidPath == "" && opts.Daemon {
+		opts.PidPath = config.PidPath
 	}
 
 	// 如果指定了 --save，保存配置
@@ -299,6 +307,11 @@ func (a *App) proxyStartAction(c *cli.Context) error {
 		LogDir:        svc.LogDir,
 		Daemon:        svc.Daemon,
 		AutoReconnect: svc.AutoReconnect,
+	}
+
+	// daemon 模式默认 PID 文件路径
+	if opts.Daemon {
+		opts.PidPath = config.PidPath
 	}
 
 	// 记录使用

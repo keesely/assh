@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -208,51 +210,108 @@ func (m *tunnelManager) Close() {
 }
 
 // Daemonize forks the current process to run in background.
-// Returns nil in the child process; parent exits with status 0.
-func Daemonize() error {
+// Parent exits with status 0; child continues and returns nil.
+//
+// In the child process:
+//   - Creates a new session (Setsid) to detach from terminal
+//   - Redirects stdin/stdout/stderr to /dev/null
+//   - Writes current PID to pidPath (if non-empty)
+//
+// The caller is responsible for blocking the child process after this returns
+// (e.g., via WaitForSignal) to keep the daemon alive.
+func Daemonize(pidPath string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("get executable: %w", err)
 	}
 
+	// Open /dev/null for redirecting child's stdin/stdout/stderr
+	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("open /dev/null: %w", err)
+	}
+	defer devNull.Close()
+
 	proc, err := os.StartProcess(exe, os.Args, &os.ProcAttr{
-		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+		Files: []*os.File{devNull, devNull, devNull}, // redirect stdin/stdout/stderr to /dev/null
+		Sys:   &syscall.SysProcAttr{Setsid: true},    // create new session, detach from terminal
 	})
 	if err != nil {
 		return fmt.Errorf("daemonize: %w", err)
 	}
 
+	// Parent process: log child PID and exit
 	log.Debugf("daemonized child PID: %d", proc.Pid)
-	// Parent process must exit after spawning daemon child — os.Exit is intentional here.
+	fmt.Fprintf(os.Stderr, "daemon started (PID: %d)\n", proc.Pid)
 	os.Exit(0)
 
-	return nil // unreachable
+	return nil // unreachable (parent exits above)
+}
+
+// WaitForSignal blocks until SIGINT or SIGTERM is received, then executes stop and cleanup.
+// stop is the main shutdown function (e.g., stopping all forwards).
+// cleanup are optional functions executed after stop (e.g., removing PID file).
+func WaitForSignal(stop func() error, cleanup ...func()) {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigCh
+	log.Infof("received signal %v, shutting down...", sig)
+
+	if err := stop(); err != nil {
+		log.Errorf("shutdown error: %v", err)
+	}
+
+	for _, fn := range cleanup {
+		fn()
+	}
 }
 
 // WritePidFile writes the current process PID to the specified path.
 // Ensures the parent directory exists.
 func WritePidFile(path string) error {
-	dir := filepath.Dir(path)
+	expanded, err := filepath.Abs(path)
+	if err != nil {
+		expanded = path
+	}
+
+	dir := filepath.Dir(expanded)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("create pid dir %s: %w", dir, err)
 	}
 
-	if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
-		return fmt.Errorf("write pid file %s: %w", path, err)
+	if err := os.WriteFile(expanded, []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+		return fmt.Errorf("write pid file %s: %w", expanded, err)
 	}
 	return nil
 }
 
+// RemovePidFile removes the PID file if it exists.
+func RemovePidFile(path string) {
+	expanded, err := filepath.Abs(path)
+	if err != nil {
+		expanded = path
+	}
+
+	if err := os.Remove(expanded); err != nil && !os.IsNotExist(err) {
+		log.Warnf("remove pid file %s: %v", expanded, err)
+	}
+}
+
 // ReadPidFile reads PID from file and returns the corresponding process.
 func ReadPidFile(path string) (*os.Process, error) {
-	data, err := os.ReadFile(path)
+	expanded, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("read pid file %s: %w", path, err)
+		expanded = path
+	}
+
+	data, err := os.ReadFile(expanded)
+	if err != nil {
+		return nil, fmt.Errorf("read pid file %s: %w", expanded, err)
 	}
 
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
-		return nil, fmt.Errorf("parse pid from %s: %w", path, err)
+		return nil, fmt.Errorf("parse pid from %s: %w", expanded, err)
 	}
 
 	proc, err := os.FindProcess(pid)
