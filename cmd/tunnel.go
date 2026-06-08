@@ -9,6 +9,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/service"
+	"assh/config"
 
 	"github.com/urfave/cli"
 )
@@ -40,6 +41,7 @@ Examples:
 			cli.StringFlag{Name: "auto-reconnect", Usage: "auto reconnect [retries/]interval"},
 			cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
 			cli.StringFlag{Name: "save", Value: "", Usage: "save tunnel configuration with name"},
+			cli.StringFlag{Name: "pid-file", Value: "", Usage: "PID file path for daemon mode (default: ~/.assh/v2/tunnel.pid)"},
 		},
 		Action: a.tunnelAction,
 	})
@@ -153,6 +155,12 @@ func (a *App) tunnelAction(c *cli.Context) error {
 		Daemon:        c.Bool("daemon"),
 		AutoReconnect: c.String("auto-reconnect"),
 		ListenType:    listenType,
+		PidPath:       c.String("pid-file"),
+	}
+
+	// 默认 PID 文件路径
+	if opts.PidPath == "" && opts.Daemon {
+		opts.PidPath = config.PidPath
 	}
 
 	if jumpChain != "" {
@@ -260,6 +268,11 @@ func (a *App) tunnelStartAction(c *cli.Context) error {
 	opts := service.ProxyOptions{
 		Daemon:        svc.Daemon,
 		AutoReconnect: svc.AutoReconnect,
+	}
+
+	// daemon 模式默认 PID 文件路径
+	if opts.Daemon {
+		opts.PidPath = config.PidPath
 	}
 
 	// 记录使用

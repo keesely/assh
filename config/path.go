@@ -23,6 +23,7 @@ var (
 	ConfigFile     = "~/.assh/v2/assh.yml"    // YAML 配置文件路径
 	DbFile         = "~/.assh/v2/asshv2.db"   // SQLite 数据库文件路径
 	LogPath        = "/tmp/assh.log"          // 日志文件路径
+	PidPath        = "~/.assh/v2/tunnel.pid" // tunnel daemon PID 文件路径
 )
 
 // ExpandPath 展开路径中的 ~/ 为用户的 home 目录。
