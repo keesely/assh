@@ -1,12 +1,14 @@
 # An SSH Client
 
-ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快速使用。当前版本：`v2.0.1`
+ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快速使用。当前版本：`v2.2.0-preview.1`
 
 ## 项目状态 & 技术选型
 
-- **Version**: v2.0.1 (Phase 0-11 完成, 稳定版 2026/05/26)
-- **下一版本**: v2.1.0 (Phase 12-13 + NEXT-001, 预览版 v2.1.0-rc1)
-- **上一稳定版本**: v2.0.0 (Phase 9 完成)
+- **Version**: v2.2.0-preview.1 (2026/06/14) - 预览版
+- **当前分支**: dev/v2.2.0-experiment
+- **开发顺序**: X1 (AI 安全检查) + X2 (虚拟命令)
+- **上一稳定版本**: v2.1.2 (Phase 12/13 + NEXT-001 完成, 2026/06/14)
+- **实验目标**: 验证 X1 & X2 实验性功能
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.25.0+
 - **Encrypt**: RSA + AES
@@ -92,11 +94,11 @@ asshv2/
 | **9** | **服务器健康检查** | **✅ 完成 (2026-05-17)** |
 | 10 | 跳板机支持 | ✅ P0+P1 完成 (2026-05-22) |
 | **11** | **自动更新/升级** | **✅ 完成 (2026-05-26)** |
-| 12 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ |
-| 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ⏳ |
-| NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | ⏳ 计划中 |
+| 12 | 远程服务器挂载 (sshfs/WebDAV, SMB延后) | ✅ 完成 (2026-06-14) |
+| 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ✅ 完成 (2026-06-14) |
+| NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | ✅ 完成 (2026-06-14) |
 | X1 | 实验：AI 安全检查 | ⏳ 排队中 (2026-05-17) |
-| X2 | 实验：虚拟命令投放与执行 | ⏳ 排队中 |
+| X2 | 实验：虚拟命令投放与执行 | 🚧 开发中 (2026-06-14) |
 | X3 | 实验：堡垒机管理 | ⏳ 排队中 |
 
 ### 分支命名规范
@@ -175,6 +177,27 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/infra/updater/installer.go` — BinaryInstaller 实现 Installer (Phase 11)
 - [x] `asshc/service/upgrade.go` — UpgradeService 编排层 (Phase 11)
 - [x] `cmd/upgrade.go` — upgrade CLI 命令 (Phase 11)
+- [x] `asshc/port/servicemgr.go` — ServiceManager 接口 (NEXT-001)
+- [x] `asshc/service/servicemgr.go` — ServiceManagerImpl 实现 + RestoreAll 自动恢复 (NEXT-001)
+- [x] `cmd/service.go` — service CLI 命令组 (NEXT-001)
+- [x] `asshc/port/mounter.go` — FileMounter/MountManager/MountStore 接口 (Phase 12)
+- [x] `asshc/infra/mount/sshfs.go` — SSHFS 挂载器实现 (Phase 12)
+- [x] `asshc/infra/mount/webdav.go` — WebDAV 挂载器实现 (Phase 12)
+- [x] `asshc/infra/mount/manager.go` — MountManager 挂载管理器 (Phase 12)
+- [x] `asshc/infra/mount/detect.go` — 依赖检测 (Phase 12)
+- [x] `asshc/infra/mount/port.go` — WebDAV 端口管理 (Phase 12)
+- [x] `asshc/infra/store/mount.go` — MountStore SQLite 持久化 (Phase 12)
+- [x] `asshc/service/mount.go` — MountService 编排层 (Phase 12)
+- [x] `asshc/domain/virtual.go` — 虚拟命令实体定义 (X2)
+- [x] `asshc/port/virtual.go` — VirtualCommandHandler/VirtualCommandService 接口 (X2)
+- [x] `asshc/service/virtual.go` — VirtualCommandService 实现 (X2)
+- [x] `asshc/infra/virtual/config.go` — 虚拟命令配置加载器 (X2)
+- [x] `asshc/infra/virtual/push.go` — @push 命令处理器 (X2)
+- [x] `asshc/infra/virtual/pull.go` — @pull 命令处理器 (X2)
+- [x] `asshc/infra/virtual/help.go` — @help 命令处理器 (X2)
+- [x] `asshc/infra/virtual/version.go` — @version 命令处理器 (X2)
+- [x] `asshc/infra/virtual/status.go` — @status 命令处理器 (X2)
+- [x] `asshc/infra/virtual/handler.go` — 输入拦截处理器 (X2)
 
 ## 开发命令
 

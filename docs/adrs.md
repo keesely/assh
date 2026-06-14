@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| accepted | 31 |
+| accepted | 32 |
 | proposed | 0 |
 | deprecated | 0 |
 | superseded | 0 |
@@ -46,6 +46,7 @@
 | ADR-029 | Smart Proxy 智能代理系统（正向代理+AutoProxy规则+透明日志+多端口规则） | accepted | 2026-05-13 |
 | ADR-030 | 跳板机多跳架构设计 | accepted | 2026-05-19 |
 | ADR-031 | 自动更新/升级架构设计（GitHub Release + 原子更新 + 回滚） | accepted | 2026-05-26 |
+| ADR-032 | 远程服务器挂载方案选型与架构设计（sshfs + WebDAV） | accepted | 2026-05-29 |
 
 ## 新增 ADR
 
@@ -165,3 +166,13 @@ YYYY-MM-DD
 | ADR-030 | **跳板机多跳架构设计**：基于 ssh.Dial→client.Dial→ssh.NewClientConn 链式连接、ChainClient 全链路 cleanup、JumpHistory 领域实体+AES-GCM 加密 path_data、jump_history 数据库表、parseJumpChain 链式表达式解析（server名/direct/`@id`/IPv6/`-J none`）、Config 隔离规则（CLI flags 不传递跳板机）、Options["jump_hosts"] 默认跳板、每跳 Keepalive+错误报告 | 新增 domain/jump.go、port/connector.go(ConnectChain 扩展)、port/jump.go、infra/ssh/client.go(ConnectChain+chainClient)、infra/store/db.go(jump_history 表)、infra/store/jump.go、service/connect.go(ConnectChain+parseJumpChain)、service/jump.go、cmd/connect.go(-J 标志) |
 
 详细内容见 [ADR-030](adrs/030-jump-host-multi-hop.md)。
+
+## Phase 12 ADR 变更摘要
+
+本次 Phase 12 引入的关键架构决策：
+
+| ADR | 变更 | 影响 |
+|-----|------|------|
+| ADR-032 | **远程服务器挂载方案选型与架构设计**：sshfs（P0）+ WebDAV（P1）双方案、挂载命令归属 assh-fs、SQLite mounts 表持久化、Go 内置 WebDAV 服务端 + SSH 隧道、自动依赖检测 + 安装提示、sshfs 默认 reconnect、前台 + --daemon 双模式 | 新增 port/mounter.go、infra/mount/（sshfs.go+webdav.go+detect.go+port.go）、infra/store/mount.go、service/mount.go、cmd/sftp_cmd.go 扩展、cmd/fs/main.go DI 变更 |
+
+详细内容见 [ADR-032](adrs/032-远程服务器挂载方案选型.md)。

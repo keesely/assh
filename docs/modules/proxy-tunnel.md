@@ -149,7 +149,7 @@ SSH 请求: client.Listen("tcp", remoteAddr)  // 发送 tcpip-forward 全局请�
 双向拷贝: bidirectionalCopy(localConn, remoteConn)
 ```
 
-### 隧道管理器 — TunnelManager（待实现 P7.4）
+### 隧道管理器 — TunnelManager（✅ 已实现）
 
 ```go
 type tunnelManager struct {
@@ -157,7 +157,8 @@ type tunnelManager struct {
     forwards map[string]PortForward
     sshClient *ssh.Client        // 当前 SSH 连接
     reconnect bool               // 是否启用自动重连
-    reconnectCfg *ReconnectConfig // 重连配置
+    reconnectCfg ReconnectConfig // 重连配置
+    reconnectFn  func() (*ssh.Client, error) // 重连回调（service 层提供）
 }
 
 type ReconnectConfig struct {
@@ -166,6 +167,12 @@ type ReconnectConfig struct {
     Backoff    time.Duration // 退避增量（默认 5s）
 }
 ```
+
+**已实现功能：**
+- `SetReconnect(cfg, reconnectFn)` — 启用自动重连并启动监控协程
+- `reconnectLoop()` — 监控 SSH 客户端断开并触发重连
+- `tryReconnect()` — 指数退避重连逻辑
+- `Close()` — 安全关闭，支持无重连场景快速退出
 
 ## 服务编排层 (`asshc/service/proxy.go` — 待实现 P7.5)
 
@@ -467,17 +474,17 @@ main.go (DI 组合根) — 创建所有依赖并注入
 
 ## 待实现功能摘要
 
-| 编号 | 任务 | 文件 | 优先级 |
-|------|------|------|:------:|
-| P7.2-a-2 | SOCKS5 USERNAME/PASSWORD 认证扩展 | `infra/proxy/socks5.go` | 🟡 中 |
-| P7.4 | TunnelManager 实现 | `infra/proxy/tunnel_manager.go` | 🔴 高 |
-| P7.5 | ProxyService 编排层 | `service/proxy.go` | 🔴 高 |
-| P7.2-b | proxy CLI 命令 | `cmd/proxy.go` | 🔴 高 |
-| P7.6 | tunnel CLI 命令 | `cmd/tunnel.go` | 🔴 高 |
-| P7.7 | 单元测试 | `*_test.go` | 🔴 高 |
-| P7.8 | DI 注入 | `main.go` + `cmd/app.go` | 🔴 高 |
-| - | Fork + PID 文件 daemon 模式 | `service/proxy.go` + 工具函数 | 🟡 中 |
-| - | 重连逻辑 | `infra/proxy/tunnel_manager.go` | 🟡 中 |
+| 编号 | 任务 | 文件 | 优先级 | 状态 |
+|------|------|------|:------:|:----:|
+| P7.2-a-2 | SOCKS5 USERNAME/PASSWORD 认证扩展 | `infra/proxy/socks5.go` | 🟡 中 | ⏳ |
+| P7.4 | TunnelManager 实现 | `infra/proxy/tunnel_manager.go` | 🔴 高 | ✅ |
+| P7.5 | ProxyService 编排层 | `service/proxy.go` | 🔴 高 | ✅ |
+| P7.2-b | proxy CLI 命令 | `cmd/proxy.go` | 🔴 高 | ✅ |
+| P7.6 | tunnel CLI 命令 | `cmd/tunnel.go` | 🔴 高 | ✅ |
+| P7.7 | 单元测试 | `*_test.go` | 🔴 高 | ⏳ |
+| P7.8 | DI 注入 | `main.go` + `cmd/app.go` | 🔴 高 | ✅ |
+| - | Fork + PID 文件 daemon 模式 | `service/proxy.go` + 工具函数 | 🟡 中 | ✅ |
+| - | 重连逻辑 | `infra/proxy/tunnel_manager.go` | 🟡 中 | ✅ |
 
 ## 参考资料
 
