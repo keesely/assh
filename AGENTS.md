@@ -98,7 +98,7 @@ asshv2/
 | 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ✅ 完成 (2026-06-14) |
 | NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | ✅ 完成 (2026-06-14) |
 | X1 | 实验：AI 安全检查 | ⏳ 排队中 (2026-05-17) |
-| X2 | 实验：虚拟命令投放与执行 | ✅ 需求已确认 (2026-06-14) |
+| X2 | 实验：虚拟命令投放与执行 | 🚧 开发中 (2026-06-14) |
 | X3 | 实验：堡垒机管理 | ⏳ 排队中 |
 
 ### 分支命名规范
@@ -188,6 +188,16 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/infra/mount/port.go` — WebDAV 端口管理 (Phase 12)
 - [x] `asshc/infra/store/mount.go` — MountStore SQLite 持久化 (Phase 12)
 - [x] `asshc/service/mount.go` — MountService 编排层 (Phase 12)
+- [x] `asshc/domain/virtual.go` — 虚拟命令实体定义 (X2)
+- [x] `asshc/port/virtual.go` — VirtualCommandHandler/VirtualCommandService 接口 (X2)
+- [x] `asshc/service/virtual.go` — VirtualCommandService 实现 (X2)
+- [x] `asshc/infra/virtual/config.go` — 虚拟命令配置加载器 (X2)
+- [x] `asshc/infra/virtual/push.go` — @push 命令处理器 (X2)
+- [x] `asshc/infra/virtual/pull.go` — @pull 命令处理器 (X2)
+- [x] `asshc/infra/virtual/help.go` — @help 命令处理器 (X2)
+- [x] `asshc/infra/virtual/version.go` — @version 命令处理器 (X2)
+- [x] `asshc/infra/virtual/status.go` — @status 命令处理器 (X2)
+- [x] `asshc/infra/virtual/handler.go` — 输入拦截处理器 (X2)
 
 ## 开发命令
 
