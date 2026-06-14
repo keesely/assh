@@ -6,7 +6,7 @@
 
 | 状态 | 数量 |
 |------|------|
-| fixed | 14 |
+| fixed | 16 |
 | known | 0 |
 | in-progress | 0 |
 
@@ -28,6 +28,8 @@
 | BUG-012 | [tunnel 命令 -R 参数解析异常](bugs/BUG-012-tunnel-R参数解析异常.md) | fixed | 2026-05-29 |
 | BUG-013 | [proxy --http --auth 未进行 Basic Auth 校验](bugs/BUG-013-proxy-http-auth未生效.md) | fixed | 2026-05-29 |
 | BUG-014 | [tunnel --daemon 模式无法正常工作](bugs/BUG-014-tunnel-daemon-mode-broken.md) | fixed | 2026-06-04 |
+| BUG-015 | [auto-reconnect 空壳：SetReconnect 只设标志无监控协程](bugs/BUG-015-auto-reconnect空壳.md) | fixed | 2026-06-08 |
+| BUG-016 | [tunnel stop 无法停止 daemon 模式隧道](bugs/BUG-016-tunnel-stop跨进程限制.md) | fixed | 2026-06-08 |
 
 ## 新增 Bug
 

@@ -61,3 +61,4 @@ proposed → clarifying → accepted → in_progress → implemented
 | ID | 标题 | 状态 | 优先级 | 阶段 | 创建日期 |
 |----|------|------|--------|------|----------|
 | RQ-001 | CLI 组合短参数支持（-qnt 风格） | accepted | medium | Phase 5 | 2026-05-10 |
+| RQ-002 | Session 管理 — 守护进程生命周期管理 | proposed | high | NEXT-001 | 2026-06-04 |
