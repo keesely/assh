@@ -6,7 +6,7 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 
 - **Version**: v2.1.0-dev (开发中, 2026/05/29)
 - **当前分支**: dev/v2.1.0-phase-12
-- **开发顺序**: NEXT-001 → Phase 12 → Phase 13
+- **开发顺序**: NEXT-001 ✅ → Phase 12 → Phase 13
 - **上一稳定版本**: v2.0.1 (Phase 0-11 完成, 2026/05/26)
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.25.0+
@@ -95,7 +95,7 @@ asshv2/
 | **11** | **自动更新/升级** | **✅ 完成 (2026-05-26)** |
 | 12 | 远程服务器挂载 (sshfs/WebDAV, SMB延后) | 📝 设计完成 (2026-05-29) |
 | 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ⏳ |
-| NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | 🔄 进行中 (阶段 1 完成) |
+| NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | ✅ 完成 (2026-06-14) |
 | X1 | 实验：AI 安全检查 | ⏳ 排队中 (2026-05-17) |
 | X2 | 实验：虚拟命令投放与执行 | ⏳ 排队中 |
 | X3 | 实验：堡垒机管理 | ⏳ 排队中 |
@@ -176,6 +176,9 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/infra/updater/installer.go` — BinaryInstaller 实现 Installer (Phase 11)
 - [x] `asshc/service/upgrade.go` — UpgradeService 编排层 (Phase 11)
 - [x] `cmd/upgrade.go` — upgrade CLI 命令 (Phase 11)
+- [x] `asshc/port/servicemgr.go` — ServiceManager 接口 (NEXT-001)
+- [x] `asshc/service/servicemgr.go` — ServiceManagerImpl 实现 + RestoreAll 自动恢复 (NEXT-001)
+- [x] `cmd/service.go` — service CLI 命令组 (NEXT-001)
 
 ## 开发命令
 

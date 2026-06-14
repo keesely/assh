@@ -1,7 +1,7 @@
 # TODO.md
 
 > 开发任务计划 - 按 Phase 分阶段实施
-> 最后更新: 2026-06-08 (v2.1.0 开发中: NEXT-001 阶段 1-2 完成，BUG-015/016 已修复，阶段 3 待开发)
+> 最后更新: 2026-06-14 (v2.1.0 开发中: NEXT-001 全部阶段完成，完整结项)
 
 ## 版本路线图
 
@@ -1177,7 +1177,7 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 - 代码质量: `go build` + `go vet` + `go test` 全部通过
 - 架构边界: port/service/infra 三层分离，DI 注入正确
 
-### 📝 Phase 12: 远程服务器挂载 (v2.1.0)
+### ✅ Phase 12: 远程服务器挂载 (v2.1.0) — ✅ 完成 (2026-06-14)
 
 目标：使用 sshfs/WebDAV 挂载远程服务器文件系统到本地（SMB 延后）
 
@@ -1197,21 +1197,21 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 - 进程生命周期: 前台运行 + `--daemon` 后台模式可选
 - 命令归属: `assh-fs` 二进制
 
-| 编号 | 任务 | 文件 | 说明 | 优先级 |
-|------|------|------|------|--------|
-| P12.1 | 挂载接口定义 | `asshc/port/mounter.go` | FileMounter/MountManager/MountOptions/MountInfo | P0 |
-| P12.2 | 数据库迁移 | `asshc/infra/store/db.go` | mounts 表建表 | P0 |
-| P12.3 | 挂载存储 | `asshc/infra/store/mount.go` | CRUD 持久化 | P0 |
-| P12.4 | sshfs 实现 | `asshc/infra/mount/sshfs.go` | SSHFS 挂载/卸载/重连 | P0 |
-| P12.5 | WebDAV 实现 | `asshc/infra/mount/webdav.go` | Go WebDAV 服务 + SSH 隧道 + 客户端挂载 | P1 |
-| P12.6 | 依赖检测 | `asshc/infra/mount/detect.go` | 平台检测 + 依赖检查 | P0 |
-| P12.7 | 挂载服务 | `asshc/service/mount.go` | MountService 编排层 | P0 |
-| P12.8 | CLI 命令 | `cmd/sftp_cmd.go` | mount/umount 命令定义 | P0 |
-| P12.9 | DI 注入 | `cmd/fs/main.go` + `cmd/app.go` | MountManager 注入 | P0 |
-| P12.10 | WebDAV 端口管理 | `asshc/infra/mount/port.go` | 自动端口选择 + 冲突避免 | P1 |
-| **验证** | `go build ./... && go test ./... -v` | | | |
+| 编号 | 任务 | 文件 | 说明 | 优先级 | 状态 |
+|------|------|------|------|--------|------|
+| P12.1 | 挂载接口定义 | `asshc/port/mounter.go` | FileMounter/MountManager/MountOptions/MountInfo | P0 | ✅ |
+| P12.2 | 数据库迁移 | `asshc/infra/store/db.go` | mounts 表建表 | P0 | ✅ |
+| P12.3 | 挂载存储 | `asshc/infra/store/mount.go` | CRUD 持久化 | P0 | ✅ |
+| P12.4 | sshfs 实现 | `asshc/infra/mount/sshfs.go` | SSHFS 挂载/卸载/重连 | P0 | ✅ |
+| P12.5 | WebDAV 实现 | `asshc/infra/mount/webdav.go` | Go WebDAV 服务 + SSH 隧道 + 客户端挂载 | P1 | ✅ |
+| P12.6 | 依赖检测 | `asshc/infra/mount/detect.go` | 平台检测 + 依赖检查 | P0 | ✅ |
+| P12.7 | 挂载服务 | `asshc/service/mount.go` | MountService 编排层 | P0 | ✅ |
+| P12.8 | CLI 命令 | `cmd/app.go` | mount/umount 命令定义 | P0 | ✅ |
+| P12.9 | DI 注入 | `cmd/fs/main.go` + `cmd/app.go` | MountManager 注入 | P0 | ✅ |
+| P12.10 | WebDAV 端口管理 | `asshc/infra/mount/port.go` | 自动端口选择 + 冲突避免 | P1 | ✅ |
+| **验证** | `go build ./... && go test ./... -v` | | | | ✅ |
 
-### 📝 Phase 13: 远程命令执行增强 (v2.1.0)
+### ✅ Phase 13: 远程命令执行增强 (v2.1.0) — ✅ 完成 (2026-06-14)
 
 目标：增强 `run` 和 `bc` 命令，添加超时、输出格式化、stdout/stderr 分离等功能
 
@@ -1231,15 +1231,15 @@ ADR：[ADR-030](../adrs/030-jump-host-multi-hop.md)
 | 异步/后台任务 | ❌ | ❌ | 缺失 |
 | 命令历史 | ❌ | ❌ | 缺失 |
 
-| 编号 | 任务 | 文件 | 说明 | 优先级 |
-|------|------|------|------|--------|
-| P13.1 | 命令超时 | `asshc/port/session.go` + `asshc/infra/ssh/session.go` | 新增 `RunWithTimeout` / `RunWithOutputTimeout` 方法 | ⏳ |
-| P13.2 | stdout/stderr 分离 | `asshc/service/connect.go` | 新增 `RunWithStderr` 方法，返回 stdout + stderr | ⏳ |
-| P13.3 | 输出格式化 | `cmd/connect.go` | run/bc 添加 `--format json/table/plain` 参数 | ⏳ |
-| P13.4 | run 超时/格式化 | `cmd/connect.go` | run 命令添加 `--timeout` / `--format` 支持 | ⏳ |
-| P13.5 | bc 超时/格式化 | `cmd/connect.go` | bc 命令添加 `--timeout` / `--format` 支持 | ⏳ |
-| P13.6 | 变量替换 | `cmd/connect.go` | 支持 `{{.Host}}` / `{{.User}}` / `{{.Name}}` 替换 | ⏳ |
-| **验证** | `go test ./asshc/... -v` | | | |
+| 编号 | 任务 | 文件 | 说明 | 优先级 | 状态 |
+|------|------|------|------|--------|------|
+| P13.1 | 命令超时 | `asshc/port/session.go` + `asshc/infra/ssh/session.go` | 新增 `RunWithTimeout` / `RunWithOutputTimeout` 方法 | P0 | ✅ |
+| P13.2 | stdout/stderr 分离 | `asshc/service/connect.go` | 新增 `RunWithStderr` 方法，返回 stdout + stderr | P0 | ✅ |
+| P13.3 | 输出格式化 | `cmd/connect.go` | run/bc 添加 `--format json/table/plain` 参数 | P1 | ✅ |
+| P13.4 | run 超时/格式化 | `cmd/connect.go` | run 命令添加 `--timeout` / `--format` 支持 | P0 | ✅ |
+| P13.5 | bc 超时/格式化 | `cmd/connect.go` | bc 命令添加 `--timeout` / `--format` 支持 | P0 | ✅ |
+| P13.6 | 变量替换 | `cmd/connect.go` | 支持 `{{.Host}}` / `{{.User}}` / `{{.Name}}` 替换 | P1 | ✅ |
+| **验证** | `go test ./asshc/... -v` | | | | ✅ |
 
 **接口变更：**
 ```go
@@ -1259,7 +1259,7 @@ type SSHSession interface {
 }
 ```
 
-### 📝 NEXT-001: Proxy & Tunnel 增强计划 (v2.1.0) — 🔄 进行中
+### ✅ NEXT-001: Proxy & Tunnel 增强计划 (v2.1.0) — ✅ 已完成
 
 目标：修复已知代理/隧道问题，重构 proxy/tunnel 参数体系，引入 SQLite 服务管理持久化，提供灵活的代理和隧道服务生命周期管理
 
@@ -1286,14 +1286,14 @@ type SSHSession interface {
 | NEXT-001.3 | tunnel 命令简化 | `cmd/tunnel.go` | 去除 `start` 子命令，直接 `assh tunnel myserver -L/-R` 进行端口转发。`stop` / `list` 保留为子命令 | P0 | ✅ |
 | NEXT-001.4 | tunnel 新增 --listen 参数 | `cmd/tunnel.go` | `--listen` 枚举值为 `tcp`/`http`。根据 `-L`/`-R` 确定目标端，在其上启动对应类型的服务监听并转发数据。如：`assh tunnel myserver --listen tcp -R 8080:web:80` 表示在 myserver 启用 8080 端口 TCP 监听，转发数据到本地 web:80。**--listen http**: 在远程服务器上启动 HTTP Server（参考 v1 hostproxy/localproxy），监听指定端口并转发 HTTP 请求 | P0 | ✅ |
 | NEXT-001.5 | -L/-R 端口参数自动补全 | `cmd/tunnel.go` + `service/proxy.go` | `8080::80` 中间 IP/Host 为空时自动补全为 `127.0.0.1`，即 `assh tunnel myserver -L 80::80` 等价于 `assh tunnel myserver -L 80:127.0.0.1:80` | P0 | ✅ |
-| NEXT-001.6 | **服务领域实体 + 存储接口** | `asshc/domain/service.go` + `asshc/port/servicemgr.go` | 定义 `ServiceInstance` 领域实体（ID/类型/服务器/端口/状态/配置快照/创建时间等），`ServiceRepository` 接口（CRUD + ListByStatus + ListByType） | P0 |
-| NEXT-001.7 | **SQLite 持久化实现** | `asshc/infra/store/service.go` | 新建 `services` 表存储服务记录，AES-GCM 加密敏感配置（如密码/认证信息），支持状态标记（running/stopped/failed）、自动时间戳、服务名唯一索引 | P0 |
-| NEXT-001.8 | **ServiceManager 接口 + 实现** | `asshc/port/servicemgr.go` + `asshc/infra/service/mgr.go` | 定义 `ServiceManager` 接口（Start/Stop/Restart/Status/List），实现包括：代理服务管理器（ProxyManager）和隧道服务管理器（TunnelManager），统一生命周期控制 | P0 |
-| NEXT-001.9 | **ServiceManager 服务编排** | `asshc/service/servicemgr.go` | `ManageService` 编排层，组装 StartService/StopService/ListServices/RestartService，联动 ServiceRepository 持久化状态变更 | P0 |
-| NEXT-001.10 | **assh service 命令组** | `cmd/service.go` | 统一服务管理命令：`assh service list [--type proxy/tunnel] [--status running/stopped]`、`assh service start <id>`、`assh service stop <id>`、`assh service restart <id>`、`assh service rm <id>`；支持 `--all` 批量操作 | P0 |
-| NEXT-001.11 | **数据库迁移** | `asshc/infra/store/db.go` | `migrate()` 新增 `services` 建表 | P0 |
-| NEXT-001.12 | **DI 注入** | `main.go` + `cmd/app.go` | ServiceManager + ManageService 创建注入 | P0 |
-| NEXT-001.13 | **自动重连/恢复** | `asshc/service/servicemgr.go` | 启动时自动恢复状态为 running 的服务（按类型调用对应 Manager.Start），支持退避重试 | P1 |
+| NEXT-001.6 | **服务领域实体 + 存储接口** | `asshc/domain/service.go` + `asshc/port/servicemgr.go` | 定义 `ServiceInstance` 领域实体（ID/类型/服务器/端口/状态/配置快照/创建时间等），`ServiceRepository` 接口（CRUD + ListByStatus + ListByType） | P0 | ✅ |
+| NEXT-001.7 | **SQLite 持久化实现** | `asshc/infra/store/service.go` | 新建 `services` 表存储服务记录，AES-GCM 加密敏感配置（如密码/认证信息），支持状态标记（running/stopped/failed）、自动时间戳、服务名唯一索引 | P0 | ✅ |
+| NEXT-001.8 | **ServiceManager 接口 + 实现** | `asshc/port/servicemgr.go` + `asshc/service/servicemgr.go` | 定义 `ServiceManager` 接口（Start/Stop/Restart/Status/List），实现包括：代理服务管理器（ProxyManager）和隧道服务管理器（TunnelManager），统一生命周期控制 | P0 | ✅ |
+| NEXT-001.9 | **ServiceManager 服务编排** | `asshc/service/servicemgr.go` | `ManageService` 编排层，组装 StartService/StopService/ListServices/RestartService，联动 ServiceRepository 持久化状态变更 | P0 | ✅ |
+| NEXT-001.10 | **assh service 命令组** | `cmd/service.go` | 统一服务管理命令：`assh service list [--type proxy/tunnel] [--status running/stopped]`、`assh service start <id>`、`assh service stop <id>`、`assh service restart <id>`、`assh service rm <id>`；支持 `--all` 批量操作 | P0 | ✅ |
+| NEXT-001.11 | **数据库迁移** | `asshc/infra/store/db.go` | `migrate()` 新增 `services` 建表 | P0 | ✅ |
+| NEXT-001.12 | **DI 注入** | `main.go` + `cmd/app.go` | ServiceManager + ManageService 创建注入 | P0 | ✅ |
+| NEXT-001.13 | **自动重连/恢复** | `asshc/service/servicemgr.go` | 启动时自动恢复状态为 running 的服务（按类型调用对应 Manager.Start），支持退避重试 | P1 | ✅ |
 | **验证** | `go build ./... && go test ./... -v` | | | |
 
 **设计说明**：
