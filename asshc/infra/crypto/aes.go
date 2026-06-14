@@ -34,8 +34,9 @@ func generateRandomBytes(size int) ([]byte, error) {
 }
 
 // AESEncrypt 使用指定的模式加密数据。
-// 支持的加密模式：CBC、CTR、GCM、ECB。
+// 支持的加密模式：CBC、CTR、GCM。
 // key 长度必须与所选模式匹配（128/192/256 位）。
+// 注意：ECB 模式已被禁用，因为它不提供认证加密，存在安全风险。
 func AESEncrypt(plaintext []byte, key []byte, mode string) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -50,14 +51,15 @@ func AESEncrypt(plaintext []byte, key []byte, mode string) ([]byte, error) {
 	case "GCM":
 		return aesEncryptGCM(plaintext, key)
 	case "ECB":
-		return aesEncryptECB(plaintext, block)
+		return nil, fmt.Errorf("ECB mode is disabled for security reasons, use GCM mode instead")
 	default:
-		return nil, fmt.Errorf("unsupported encryption mode: %s (supported: CBC, CTR, GCM, ECB)", mode)
+		return nil, fmt.Errorf("unsupported encryption mode: %s (supported: CBC, CTR, GCM)", mode)
 	}
 }
 
 // AESDecrypt 使用指定的模式解密数据。
 // mode 必须与加密时使用的模式一致。
+// 注意：ECB 模式已被禁用，因为它不提供认证加密，存在安全风险。
 func AESDecrypt(ciphertext []byte, key []byte, mode string) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -72,9 +74,9 @@ func AESDecrypt(ciphertext []byte, key []byte, mode string) ([]byte, error) {
 	case "GCM":
 		return aesDecryptGCM(ciphertext, key)
 	case "ECB":
-		return aesDecryptECB(ciphertext, block)
+		return nil, fmt.Errorf("ECB mode is disabled for security reasons, use GCM mode instead")
 	default:
-		return nil, fmt.Errorf("unsupported decryption mode: %s (supported: CBC, CTR, GCM, ECB)", mode)
+		return nil, fmt.Errorf("unsupported decryption mode: %s (supported: CBC, CTR, GCM)", mode)
 	}
 }
 

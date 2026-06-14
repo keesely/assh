@@ -266,14 +266,31 @@ func sha256Hash(s string) string {
 
 // getHostKeyCallback 返回 HostKey 校验回调函数。
 // 如果 Options["insecure_skip_hostkey"] 为 true，则跳过校验。
-// 当前默认行为为跳过校验（InsecureIgnoreHostKey）。
+// 默认行为为使用 known_hosts 文件校验。
 func (c *Connector) getHostKeyCallback(server *domain.Server) ssh.HostKeyCallback {
 	if skip, ok := server.Options["insecure_skip_hostkey"]; ok {
 		if v, ok := skip.(bool); ok && v {
 			return ssh.InsecureIgnoreHostKey()
 		}
 	}
-	return ssh.InsecureIgnoreHostKey()
+
+	// 使用 known_hosts 文件校验
+	knownHostsPath := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
+	if path, ok := server.Options["known_hosts_path"]; ok {
+		if p, ok := path.(string); ok {
+			knownHostsPath = p
+		}
+	}
+
+	checker, err := NewKnownHostsChecker(knownHostsPath)
+	if err != nil {
+		// 如果无法加载 known_hosts，回退到不安全模式并记录警告
+		fmt.Printf("Warning: Failed to load known_hosts from %s: %v\n", knownHostsPath, err)
+		fmt.Println("Warning: Falling back to insecure host key verification")
+		return ssh.InsecureIgnoreHostKey()
+	}
+
+	return checker.Check
 }
 
 // getKeepalive 从服务器配置中读取 Keepalive 心跳间隔（秒）。

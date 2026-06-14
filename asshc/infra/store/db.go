@@ -151,6 +151,12 @@ func (s *Store) migrate() error {
 // columnExists 检查指定表中是否存在指定列。
 // 使用 PRAGMA table_info 查询表结构信息。
 func (s *Store) columnExists(table, column string) (bool, error) {
+	// Validate table name to prevent SQL injection
+	// Only allow alphanumeric characters and underscores
+	if !isValidIdentifier(table) {
+		return false, fmt.Errorf("invalid table name: %q", table)
+	}
+
 	rows, err := s.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return false, err
@@ -171,6 +177,23 @@ func (s *Store) columnExists(table, column string) (bool, error) {
 		}
 	}
 	return false, rows.Err()
+}
+
+// isValidIdentifier checks if a string is a valid SQL identifier.
+// Only allows alphanumeric characters and underscores.
+func isValidIdentifier(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for i, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+			return false
+		}
+		if i == 0 && c >= '0' && c <= '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // Close 关闭数据库连接，释放资源。

@@ -8,8 +8,8 @@ require (
 	github.com/qiniu/api.v7/v7 v7.4.0
 	github.com/rs/zerolog v1.32.0
 	github.com/urfave/cli v1.22.2
-	golang.org/x/crypto v0.25.0
-	golang.org/x/term v0.22.0
+	golang.org/x/crypto v0.52.0
+	golang.org/x/term v0.43.0
 	modernc.org/sqlite v1.50.0
 )
 
@@ -27,8 +27,8 @@ require (
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/stretchr/testify v1.8.0 // indirect
-	golang.org/x/net v0.21.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

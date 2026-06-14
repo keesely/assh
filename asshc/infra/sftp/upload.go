@@ -302,7 +302,9 @@ func computeRemoteHash(sshClient *ssh.Client, remotePath string) (string, error)
 	}
 	defer session.Close()
 
-	out, err := session.Output("sha256sum " + remotePath)
+	// Use shell quoting to prevent command injection
+	escapedPath := "'" + strings.ReplaceAll(remotePath, "'", "'\\''") + "'"
+	out, err := session.Output("sha256sum -- " + escapedPath)
 	if err != nil {
 		return "", fmt.Errorf("remote sha256sum failed: %w", err)
 	}
