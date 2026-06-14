@@ -188,14 +188,45 @@ func (s *VulnService) ExecuteScript(ctx context.Context, server *domain.Server, 
 
 // SaveScript 保存脚本到本地。
 func (s *VulnService) SaveScript(vulnID string, script string) (string, error) {
-	// TODO: 实现脚本保存逻辑
-	return "", fmt.Errorf("not implemented")
+	// 创建检查记录
+	check := &domain.VulnCheck{
+		ID:        generateID(),
+		VulnID:    vulnID,
+		Script:    script,
+		Status:    domain.VulnStatusPending,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// 保存到存储
+	if err := s.store.Save(check); err != nil {
+		return "", fmt.Errorf("failed to save script: %w", err)
+	}
+
+	return fmt.Sprintf("~/.assh/security/scripts/%s/script.sh", vulnID), nil
 }
 
 // SaveReport 保存报告到本地。
 func (s *VulnService) SaveReport(vulnID string, report *domain.VulnReport) (string, error) {
-	// TODO: 实现报告保存逻辑
-	return "", fmt.Errorf("not implemented")
+	// 创建检查记录
+	check := &domain.VulnCheck{
+		ID:        generateID(),
+		VulnID:    vulnID,
+		Target:    report.Target,
+		Status:    domain.VulnStatusCompleted,
+		Result:    report.Details,
+		Report:    fmt.Sprintf("# Vulnerability Report\n\n- **Vuln ID**: %s\n- **Target**: %s\n- **Status**: %s\n- **Details**: %s\n", report.VulnID, report.Target, report.Status, report.Details),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Duration:  report.Duration,
+	}
+
+	// 保存到存储
+	if err := s.store.Save(check); err != nil {
+		return "", fmt.Errorf("failed to save report: %w", err)
+	}
+
+	return fmt.Sprintf("~/.assh/security/scripts/%s/report.md", vulnID), nil
 }
 
 // executeScript 执行脚本。

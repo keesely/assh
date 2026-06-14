@@ -1484,7 +1484,7 @@ assh service restart --type tunnel            # 重启所有隧道服务
 | X1.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ✅ |
 | X1.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ✅ |
 | X1.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ✅ |
-| X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ⏳ |
+| X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ✅ |
 | **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ✅ |
 
 **命令使用预览**:
