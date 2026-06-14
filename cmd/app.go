@@ -67,6 +67,7 @@ type App struct {
 	healthSvc      *service.HealthService        // 健康检查服务
 	jumpSvc        *service.JumpService          // 跳板历史服务
 	upgradeSvc     *service.UpgradeService       // 自动更新服务 (Phase 11)
+	mountSvc       *service.MountService         // 挂载服务 (Phase 12)
 }
 
 // NewApp 创建 CLI 应用，注入所有 service 依赖。
@@ -108,7 +109,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 }
 
 // NewFSApp creates CLI application for file transfer (assh-fs binary).
-func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, connectSvc *service.ConnectService, jumpSvc *service.JumpService) *App {
+func NewFSApp(version, build string, transferSvc *service.TransferService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, connectSvc *service.ConnectService, jumpSvc *service.JumpService, mountSvc *service.MountService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH-FS - SFTP File Transfer"
 	app.Usage = "SFTP File Transfer Client"
@@ -123,16 +124,17 @@ func NewFSApp(version, build string, transferSvc *service.TransferService, serve
 		serverSvc:     serverSvc,
 		knownRecorder: knownRecorder,
 		jumpSvc:       jumpSvc,
+		mountSvc:      mountSvc,
 	}
 	app.Before = a.beforeAction
 	a.setupGlobalFlags()
-	a.registerFSCommands(transferSvc, serverSvc)
+	a.registerFSCommands(transferSvc, serverSvc, mountSvc)
 
 	return a
 }
 
 // registerFSCommands registers file transfer commands.
-func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc *service.ServerService) {
+func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc *service.ServerService, mountSvc *service.MountService) {
 	kr := a.knownRecorder
 	connectSvc := a.connectSvc
 	a.cli.Commands = []cli.Command{
@@ -286,6 +288,57 @@ func (a *App) registerFSCommands(transferSvc *service.TransferService, serverSvc
 				return nil
 			},
 			Flags: []cli.Flag{},
+		},
+		// mount 命令组
+		{
+			Name:  "mount",
+			Usage: "Mount remote filesystem",
+			Subcommands: []cli.Command{
+				{
+					Name:      "list",
+					Usage:     "List active mounts",
+					ArgsUsage: "",
+					Action:    fsMountListAction(mountSvc),
+					Flags: []cli.Flag{
+						cli.StringFlag{Name: "server", Usage: "filter by server name"},
+					},
+				},
+				{
+					Name:   "check",
+					Usage:  "Check mount dependencies",
+					Action: fsMountCheckAction(mountSvc),
+					Flags: []cli.Flag{
+						cli.StringFlag{Name: "type", Usage: "check specific type (sshfs, webdav)"},
+					},
+				},
+			},
+			Action: fsMountAction(mountSvc, serverSvc),
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "type", Value: "sshfs", Usage: "mount type (sshfs, webdav)"},
+				cli.BoolFlag{Name: "ro, readonly", Usage: "read-only mount"},
+				cli.BoolFlag{Name: "allow-other", Usage: "allow other users to access"},
+				cli.StringFlag{Name: "volname", Usage: "volume name (macOS Finder)"},
+				cli.BoolFlag{Name: "daemon", Usage: "run in background"},
+				// Direct connection flags
+				cli.StringFlag{Name: "H, host", Usage: "remote host address (direct connection)"},
+				cli.StringFlag{Name: "u, user", Usage: "username (direct connection)"},
+				cli.IntFlag{Name: "p, port", Value: 22, Usage: "SSH port (direct connection)"},
+				cli.StringFlag{Name: "P, password", Usage: "password (direct connection)"},
+				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path (direct connection)"},
+				cli.StringFlag{Name: "k, key", Usage: "key file path (alias for -i)"},
+				// Jump chain flag
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
+			},
+		},
+		// umount 命令
+		{
+			Name:  "umount",
+			Usage: "Unmount filesystem",
+			Action: fsUmountAction(mountSvc),
+			Flags: []cli.Flag{
+				cli.StringFlag{Name: "server", Usage: "unmount all mounts for server"},
+				cli.BoolFlag{Name: "all", Usage: "unmount all mounts"},
+			},
 		},
 	}
 }
@@ -569,6 +622,150 @@ func fsPushAction(transferSvc *service.TransferService, serverSvc *service.Serve
 		}
 
 		fmt.Println("pull completed")
+		return nil
+	}
+}
+
+// fsMountAction handles `assh-fs mount <server> <remote> <local>` command.
+func fsMountAction(mountSvc *service.MountService, serverSvc *service.ServerService) func(*cli.Context) error {
+	return func(c *cli.Context) error {
+		if c.NArg() < 3 {
+			return cli.ShowSubcommandHelp(c)
+		}
+
+		serverName := c.Args()[0]
+		remotePath := c.Args()[1]
+		mountPoint := c.Args()[2]
+
+		// 解析挂载类型
+		mountType := transferport.MountType(c.String("type"))
+		if mountType == "" {
+			mountType = transferport.MountTypeSSHFS
+		}
+
+		// 构造挂载选项
+		opts := transferport.MountOptions{
+			MountType:  mountType,
+			MountPoint: mountPoint,
+			ReadOnly:   c.Bool("ro") || c.Bool("readonly"),
+			AllowOther: c.Bool("allow-other"),
+			VolumeName: c.String("volname"),
+			Daemon:     c.Bool("daemon"),
+			ExtraOpts:  make(map[string]string),
+		}
+
+		// 检查是否为直连模式
+		host := c.String("H")
+		if host != "" {
+			user := c.String("u")
+			portNum := c.Int("p")
+			password := c.String("P")
+			identityFile := c.String("i")
+			if identityFile == "" {
+				identityFile = c.String("k")
+			}
+
+			return mountSvc.MountWithDirect(host, portNum, user, password, identityFile, remotePath, mountPoint, opts)
+		}
+
+		// 服务器模式
+		return mountSvc.Mount(serverName, remotePath, mountPoint, opts)
+	}
+}
+
+// fsUmountAction handles `assh-fs umount <path>` command.
+func fsUmountAction(mountSvc *service.MountService) func(*cli.Context) error {
+	return func(c *cli.Context) error {
+		// 检查 --all 标志
+		if c.Bool("all") {
+			return mountSvc.UnmountAll()
+		}
+
+		// 检查 --server 标志
+		serverName := c.String("server")
+		if serverName != "" {
+			return mountSvc.UnmountByServer(serverName)
+		}
+
+		// 按挂载点卸载
+		if c.NArg() < 1 {
+			return cli.ShowSubcommandHelp(c)
+		}
+
+		mountPoint := c.Args()[0]
+		return mountSvc.Unmount(mountPoint)
+	}
+}
+
+// fsMountListAction handles `assh-fs mount list` command.
+func fsMountListAction(mountSvc *service.MountService) func(*cli.Context) error {
+	return func(c *cli.Context) error {
+		mounts, err := mountSvc.List()
+		if err != nil {
+			return fmt.Errorf("list mounts: %w", err)
+		}
+
+		// 过滤
+		serverFilter := c.String("server")
+
+		if len(mounts) == 0 {
+			fmt.Println("No active mounts")
+			return nil
+		}
+
+		// 输出表格
+		fmt.Printf("%-20s %-20s %-30s %-8s %-10s\n", "SERVER", "REMOTE", "LOCAL", "TYPE", "STATUS")
+		fmt.Printf("%-20s %-20s %-30s %-8s %-10s\n", "------", "------", "-----", "----", "------")
+
+		for _, info := range mounts {
+			if serverFilter != "" && info.ServerName != serverFilter {
+				continue
+			}
+			status := "active"
+			if info.Daemon {
+				status = "daemon"
+			}
+			fmt.Printf("%-20s %-20s %-30s %-8s %-10s\n",
+				info.ServerName, info.RemotePath, info.MountPoint, info.MountType, status)
+		}
+
+		return nil
+	}
+}
+
+// fsMountCheckAction handles `assh-fs mount check` command.
+func fsMountCheckAction(mountSvc *service.MountService) func(*cli.Context) error {
+	return func(c *cli.Context) error {
+		deps := mountSvc.CheckDependencies()
+
+		typeFilter := c.String("type")
+
+		fmt.Println("DEPENDENCY CHECK:")
+
+		for mountType, status := range deps {
+			if typeFilter != "" && string(mountType) != typeFilter {
+				continue
+			}
+
+			fmt.Printf("  %s:\n", mountType)
+			for _, item := range status.Details {
+				symbol := "✗"
+				if item.Found {
+					symbol = "✓"
+				}
+
+				version := ""
+				if item.Version != "" {
+					version = " (" + item.Version + ")"
+				}
+
+				fmt.Printf("    %s %s%s\n", symbol, item.Name, version)
+				if !item.Found && item.Install != "" {
+					fmt.Printf("      Install: %s\n", item.Install)
+				}
+			}
+		}
+
 		return nil
 	}
 }

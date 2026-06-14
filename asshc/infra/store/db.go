@@ -33,6 +33,7 @@ var allowedTables = map[string]bool{
 	"jump_history":     true,
 	"proxy_services":    true,
 	"tunnel_services":   true,
+	"mounts":            true,
 	"config":            true,
 	"server_changelog": true,
 }
@@ -232,6 +233,23 @@ func (s *Store) migrate() error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_tunnel_services_group ON tunnel_services(group_name);
+
+		CREATE TABLE IF NOT EXISTS mounts (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			server_name   TEXT NOT NULL,
+			remote_path   TEXT NOT NULL,
+			mount_point   TEXT NOT NULL UNIQUE,
+			mount_type    TEXT NOT NULL CHECK(mount_type IN ('sshfs', 'webdav')),
+			local_port    INTEGER DEFAULT 0,
+			daemon        INTEGER DEFAULT 0,
+			pid           INTEGER DEFAULT 0,
+			options       TEXT DEFAULT '{}',
+			created_at    TEXT DEFAULT (datetime('now')),
+			updated_at    TEXT DEFAULT (datetime('now'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_mounts_server ON mounts(server_name);
+		CREATE INDEX IF NOT EXISTS idx_mounts_point ON mounts(mount_point);
 	`)
 
 	if err != nil {
@@ -305,4 +323,9 @@ func (s *Store) ProxyServiceRepo() *ProxyStore {
 // TunnelServiceStore 返回隧道服务存储。
 func (s *Store) TunnelServiceRepo() *TunnelServiceStore {
 	return NewTunnelServiceStore(s)
+}
+
+// MountStore 返回挂载信息存储。
+func (s *Store) MountStoreAccessor() *MountStoreImpl {
+	return NewMountStoreImpl(s)
 }

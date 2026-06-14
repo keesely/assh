@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"assh/asshc/domain"
+	mountinfra "assh/asshc/infra/mount"
 	sshinfra "assh/asshc/infra/ssh"
 	"assh/asshc/infra/sftp"
 	"assh/asshc/service"
@@ -60,7 +61,12 @@ func main() {
 	// 为 TransferService 注入 ConnectService（-J 跳板链支持）
 	transferSvc.SetConnectService(connectSvc)
 
-	app := cmd.NewFSApp(Version, Build, transferSvc, serverSvc, store.Store, connectSvc, jumpSvc)
+	// 创建 MountService（Phase 12 挂载功能）
+	mountStore := store.Store.MountStoreAccessor()
+	mountMgr := mountinfra.NewMountManagerImpl(mountStore)
+	mountSvc := service.NewMountService(mountMgr, store.Store, mountStore)
+
+	app := cmd.NewFSApp(Version, Build, transferSvc, serverSvc, store.Store, connectSvc, jumpSvc, mountSvc)
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
