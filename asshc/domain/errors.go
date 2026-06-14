@@ -29,4 +29,18 @@ var (
 
 	// ErrInvalidAccount 表示云账户凭据无效。
 	ErrInvalidAccount = errors.New("invalid cloud account credentials")
+
+	// 自动更新相关错误 (Phase 11)
+	// ErrUpdateNotFound 表示未找到可用更新。
+	ErrUpdateNotFound = errors.New("update not found")
+	// ErrUpdateFailed 表示更新操作失败。
+	ErrUpdateFailed = errors.New("update failed")
+	// ErrRollbackFailed 表示回滚操作失败。
+	ErrRollbackFailed = errors.New("rollback failed")
+	// ErrVerificationFailed 表示文件验证失败（SHA256 不匹配）。
+	ErrVerificationFailed = errors.New("verification failed")
+	// ErrNetworkError 表示网络请求失败。
+	ErrNetworkError = errors.New("network error")
+	// ErrAlreadyLatest 表示当前已是最新版本。
+	ErrAlreadyLatest = errors.New("already latest version")
 )

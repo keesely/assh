@@ -25,6 +25,9 @@ type SFTPTransfer struct {
 	sshConnector func(server *domain.Server) (*ssh.Client, error)
 }
 
+// 编译期接口合规检查
+var _ port.FileTransfer = (*SFTPTransfer)(nil)
+
 func NewSFTPTransfer(sshConnector func(server *domain.Server) (*ssh.Client, error)) *SFTPTransfer {
 	return &SFTPTransfer{
 		sshConnector: sshConnector,
@@ -38,6 +41,45 @@ func (t *SFTPTransfer) Push(ctx context.Context, server *domain.Server, localPat
 	}
 	defer sshClient.Close()
 
+	return t.pushWithClient(ctx, sshClient, localPath, remotePath, opts, progress)
+}
+
+// PushWithSSHClient pushes files using a pre-established SSH connection (for jump chain support).
+// Unlike Push, this doesn't create a new SSH connection - it uses the provided client directly.
+func (t *SFTPTransfer) PushWithSSHClient(ctx context.Context, sshClient *ssh.Client, localPath, remotePath string, opts port.TransferOptions, progress port.TransferProgress) error {
+	return t.pushWithClient(ctx, sshClient, localPath, remotePath, opts, progress)
+}
+
+// PullWithSSHClient pulls files using a pre-established SSH connection (for jump chain support).
+// Unlike Pull, this doesn't create a new SSH connection - it uses the provided client directly.
+func (t *SFTPTransfer) PullWithSSHClient(ctx context.Context, sshClient *ssh.Client, remotePath, localPath string, opts port.TransferOptions, progress port.TransferProgress) error {
+	dlOpts := DownloadOptions{
+		Resume:         opts.Resume,
+		Progress:       progress != nil,
+		VerifyChecksum: opts.VerifyChecksum,
+		Concurrency:    opts.Concurrency,
+	}
+
+	progressAdapter := func(info ProgressInfo) {
+		if progress != nil {
+			progress(port.TransferInfo{
+				Index:      info.Index,
+				Total:      info.Total,
+				FileName:   info.FileName,
+				Progress:   info.Progress,
+				Rate:       info.Rate,
+				ETA:        info.ETA,
+				Bytes:      info.Bytes,
+				TotalBytes: info.TotalBytes,
+			})
+		}
+	}
+
+	return PullFile(ctx, sshClient, remotePath, localPath, dlOpts, progressAdapter)
+}
+
+// pushWithClient is the shared push implementation used by Push and PushWithSSHClient.
+func (t *SFTPTransfer) pushWithClient(ctx context.Context, sshClient *ssh.Client, localPath, remotePath string, opts port.TransferOptions, progress port.TransferProgress) error {
 	uploadOpts := UploadOptions{
 		Resume:         opts.Resume,
 		Progress:       progress != nil,
@@ -273,6 +315,16 @@ func (t *SFTPTransfer) VerifyUpload(server *domain.Server, localPath, remotePath
 	}
 	defer sshClient.Close()
 
+	return t.verifyWithClient(sshClient, localPath, remotePath, verifyChecksum)
+}
+
+// VerifyUploadWithSSHClient verifies upload using a pre-established SSH connection (for jump chain support).
+func (t *SFTPTransfer) VerifyUploadWithSSHClient(sshClient *ssh.Client, localPath, remotePath string, verifyChecksum bool) error {
+	return t.verifyWithClient(sshClient, localPath, remotePath, verifyChecksum)
+}
+
+// verifyWithClient is the shared verification implementation.
+func (t *SFTPTransfer) verifyWithClient(sshClient *ssh.Client, localPath, remotePath string, verifyChecksum bool) error {
 	client, err := sftp.NewClient(sshClient)
 	if err != nil {
 		return err
@@ -328,7 +380,7 @@ func (t *SFTPTransfer) LocalIsDir(path string) bool {
 }
 
 func (t *SFTPTransfer) CollectLocalFiles(dir string) ([]string, error) {
-	return collectLocalFiles(dir, dir)
+	return collectLocalFiles(dir, dir, 0)
 }
 
 func (t *SFTPTransfer) CollectRemoteFiles(server *domain.Server, dir string) ([]string, error) {
@@ -344,7 +396,7 @@ func (t *SFTPTransfer) CollectRemoteFiles(server *domain.Server, dir string) ([]
 	}
 	defer client.Close()
 
-	files, err := collectRemoteFiles(client, dir, dir)
+	files, err := collectRemoteFiles(client, dir, dir, 0)
 	if err != nil {
 		return nil, err
 	}

@@ -21,13 +21,14 @@ import (
 	sshinfra "assh/asshc/infra/ssh"
 	"assh/asshc/infra/store"
 	qiniusync "assh/asshc/infra/sync/qiniu"
+	"assh/asshc/infra/updater"
 	"assh/asshc/port"
 	"assh/asshc/service"
 	"assh/config"
 )
 
 // Version 是 ASSH 的当前版本号，通过编译时注入（-ldflags）更新。
-var Version = "v2.0.0"
+var Version = "v2.1.0-rc1"
 
 // Build 是构建信息（构建时间等），通过编译时注入（-ldflags）更新。
 var Build string
@@ -72,6 +73,7 @@ func main() {
 	// 5. 创建 service 层（依赖注入）
 	serverSvc := service.NewServerService(repo)
 	connectSvc := service.NewConnectService(connector, session, repo)
+	connectSvc.SetJumpRecorder(repo.JumpRecorder()) // P10.7-c: -J @id 复用
 
 	// 6. 创建密钥管理器服务
 	keySvc := service.NewKeyService(km, repo, connector)
@@ -89,8 +91,27 @@ func main() {
 	healthChecker := sshinfra.NewHealthChecker(connector)
 	healthSvc := service.NewHealthService(healthChecker, repo)
 
-	// 10. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc)
+	// 10. 创建跳板历史服务（Phase 10）
+	jumpSvc := service.NewJumpService(repo.JumpRecorder())
+
+	// 11. 创建自动更新服务（Phase 11）
+	// 版本检查器：从 GitHub 仓库的 version.txt 文件检查最新版本
+	// 更新器：HTTP 下载器 + 二进制安装器
+	versionChecker := updater.NewGitHubChecker("keesely", "assh", Version, "version.txt")
+	backupDir := filepath.Join(filepath.Dir(dbPath), "backups")
+	tmpDir := filepath.Join(filepath.Dir(dbPath), "tmp")
+	downloader := updater.NewHTTPDownloader(tmpDir)
+	// 使用 os.Executable() 获取规范路径，避免 os.Args[0] 的不确定性
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: failed to get executable path: %v\n", err)
+		os.Exit(1)
+	}
+	installer := updater.NewBinaryInstaller(execPath, backupDir, 3)
+	upgradeSvc := service.NewUpgradeService(versionChecker, downloader, installer)
+
+	// 12. 创建 CLI 应用并运行
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc, jumpSvc, upgradeSvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

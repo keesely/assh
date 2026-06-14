@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +16,15 @@ import (
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh"
 )
+
+const (
+	maxBCConcurrency = 10           // max concurrent batch command goroutines
+	maxBCOutputSize  = 10 * 1024 * 1024 // 10MB per server output
+)
+
+// resolveFlag 从 cli 上下文中获取字符串参数值。
+// 优先使用 cli 正常解析的值（c.IsSet 为 true），
+// 如果未解析则从 c.Args() 中手动查找短参数（v1 兼容）。
 
 // registerConnectCommands 注册连接相关命令（login/run/bc）。
 func (a *App) registerConnectCommands() {
@@ -32,6 +42,7 @@ func (a *App) registerConnectCommands() {
 				cli.StringFlag{Name: "P, password", Usage: "password"},
 				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
 				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
 			},
 		},
 		{
@@ -46,6 +57,7 @@ func (a *App) registerConnectCommands() {
 				cli.StringFlag{Name: "P, password", Usage: "password"},
 				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
 				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
 			},
 		},
 		{
@@ -63,6 +75,7 @@ func (a *App) registerConnectCommands() {
 				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
 				cli.StringFlag{Name: "P, password", Usage: "password override"},
 				cli.StringFlag{Name: "log", Usage: "output log path (default: ./bc-result-{timestamp}.json)"},
+				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
 			},
 		},
 	}...)
@@ -91,12 +104,31 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error)
 	user := firstNonEmpty(resolveFlag(c, "user", "u"), resolveFlag(c, "login", "l"))
 	password := resolveFlag(c, "password", "P")
 	keyFile := firstNonEmpty(resolveFlag(c, "identity-file", "i"), resolveFlag(c, "key", "k"))
+	jumpExpr := resolveFlag(c, "jump", "J")
 
 	if target == "" && host == "" {
 		return nil, nil, fmt.Errorf("no target specified: use <name>, <user@host>, or -H <host>")
 	}
 	if target != "" && host != "" {
 		return nil, nil, fmt.Errorf("cannot specify both target and -H/--host")
+	}
+
+	// 如果有 -J 参数，使用 ConnectChain
+	if jumpExpr != "" && jumpExpr != "none" {
+		client, chain, err := a.connectSvc.ConnectChain(target, jumpExpr)
+		if err != nil {
+			return nil, nil, err
+		}
+		// 异步记录跳板历史
+		if len(chain) > 0 && a.jumpSvc != nil {
+			pathText := jumpExpr
+			go func() {
+				if err := a.jumpSvc.RecordJumpChain(target, pathText, chain); err != nil {
+					log.Debugf("failed to record jump chain: %v", err)
+				}
+			}()
+		}
+		return client, nil, nil
 	}
 
 	switch {
@@ -186,9 +218,32 @@ func (a *App) runAction(c *cli.Context) error {
 		return fmt.Errorf("command is required")
 	}
 
-	client, err := a.connectSvc.ConnectByName(name)
-	if err != nil {
-		return err
+	jumpExpr := c.String("jump")
+
+	var client *ssh.Client
+	var chain []*domain.Server
+	var err error
+
+	// 如果有 -J 参数，使用 ConnectChain
+	if jumpExpr != "" && jumpExpr != "none" {
+		client, chain, err = a.connectSvc.ConnectChain(name, jumpExpr)
+		if err != nil {
+			return err
+		}
+		// 异步记录跳板历史
+		if len(chain) > 0 && a.jumpSvc != nil {
+			pathText := jumpExpr
+			go func() {
+				if err := a.jumpSvc.RecordJumpChain(name, pathText, chain); err != nil {
+					log.Debugf("failed to record jump chain: %v", err)
+				}
+			}()
+		}
+	} else {
+		client, err = a.connectSvc.ConnectByName(name)
+		if err != nil {
+			return err
+		}
 	}
 	defer a.connectSvc.Close(client)
 
@@ -256,28 +311,61 @@ func (a *App) bcAction(c *cli.Context) error {
 	}
 
 	logDir := "/tmp/assh/bclogs"
-	os.MkdirAll(logDir, 0755)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Warnf("failed to create log directory %s: %v", logDir, err)
+	}
 	timestamp := time.Now()
 
+	jumpExpr := c.String("jump")
+
 	var (
-		wg         sync.WaitGroup
-		stdoutMu   sync.Mutex
-		resultsMu  sync.Mutex
-		allResults []bcServerResult
+		wg             sync.WaitGroup
+		stdoutMu       sync.Mutex
+		resultsMu      sync.Mutex
+		allResults     []bcServerResult
+		jumpChain      []*domain.Server // 共享跳板链
+		jumpChainMu    sync.Mutex
+		jumpRecordOnce sync.Once
 	)
+
+	// Limit concurrent goroutines
+	sem := make(chan struct{}, maxBCConcurrency)
 
 	// 并发对每台服务器执行命令
 	for _, name := range names {
 		wg.Add(1)
+		sem <- struct{}{} // acquire semaphore (blocks if at capacity)
 		go func(n string) {
 			defer wg.Done()
+			defer func() { <-sem }() // release semaphore
 
 			result := bcServerResult{Name: n}
 
-			client, err := a.connectSvc.ConnectByName(n)
+			var client *ssh.Client
+			var err error
+
+			if jumpExpr != "" && jumpExpr != "none" {
+				// 使用跳板链连接
+				var chain []*domain.Server
+				client, chain, err = a.connectSvc.ConnectChain(n, jumpExpr)
+				// 记录跳板历史（仅一次，全批共享同一跳板链）
+				if err == nil && len(chain) > 0 && a.jumpSvc != nil {
+					jumpChainMu.Lock()
+					if jumpChain == nil {
+						jumpChain = chain
+					}
+					jumpChainMu.Unlock()
+					jumpRecordOnce.Do(func() {
+						pathText := jumpExpr
+						a.jumpSvc.RecordJumpChain(n, pathText, chain)
+					})
+				}
+			} else {
+				client, err = a.connectSvc.ConnectByName(n)
+			}
 			if err != nil {
 				result.Error = err.Error()
-				writeLogFile(logDir+"/"+n+".log", "error: "+err.Error())
+				writeLogFile(logDir+"/"+sanitizeLogFilename(n)+".log", "error: "+err.Error())
 				stdoutMu.Lock()
 				fmt.Printf("[%s] error: %v\n", n, err)
 				stdoutMu.Unlock()
@@ -296,18 +384,24 @@ func (a *App) bcAction(c *cli.Context) error {
 			}
 
 			output, runErr := a.connectSvc.RunWithOutput(client, cmd)
+
+			// Truncate output if too large
+			if len(output) > maxBCOutputSize {
+				output = output[:maxBCOutputSize] + "\n... (truncated at 10MB)"
+			}
+
 			if runErr != nil {
 				result.Error = runErr.Error()
 				result.Stdout = output
-				writeLogFile(logDir+"/"+n+".log", output)
-				writeLogFile(logDir+"/"+n+".log", "error: "+runErr.Error())
+				writeLogFile(logDir+"/"+sanitizeLogFilename(n)+".log", output)
+				writeLogFile(logDir+"/"+sanitizeLogFilename(n)+".log", "error: "+runErr.Error())
 
 				stdoutMu.Lock()
 				fmt.Printf("[%s] error: %v\n", n, runErr)
 				stdoutMu.Unlock()
 			} else {
 				result.Stdout = output
-				writeLogFile(logDir+"/"+n+".log", output)
+				writeLogFile(logDir+"/"+sanitizeLogFilename(n)+".log", output)
 
 				stdoutMu.Lock()
 				for _, line := range strings.Split(output, "\n") {
@@ -364,6 +458,18 @@ func writeLogFile(filePath, content string) {
 	}
 	defer f.Close()
 	f.WriteString(content + "\n")
+}
+
+// sanitizeLogFilename 清理日志文件名，防止路径遍历攻击。
+// 只保留文件名部分，移除目录分隔符和特殊字符。
+func sanitizeLogFilename(name string) string {
+	// 只保留文件名部分（移除路径）
+	cleaned := filepath.Base(name)
+	// 替换不安全的字符
+	cleaned = strings.ReplaceAll(cleaned, "/", "_")
+	cleaned = strings.ReplaceAll(cleaned, "\\", "_")
+	cleaned = strings.ReplaceAll(cleaned, "..", "_")
+	return cleaned
 }
 
 // resolveFlag 从 cli 上下文中获取字符串参数值。

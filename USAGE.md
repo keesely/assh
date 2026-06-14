@@ -17,9 +17,12 @@
 7. [密钥管理](#7-密钥管理)
 8. [代理与隧道](#8-代理与隧道)
 9. [云同步](#9-云同步)
-10. [健康检查](#10-健康检查)
-11. [AI 安全检查](#11-ai-安全检查)
-12. [虚拟命令](#12-虚拟命令)
+<<<<<<< HEAD
+10. [跳板机](#10-跳板机)
+11. [健康检查](#11-健康检查)
+12. [自动更新](#12-自动更新)
+13. [AI 安全检查](#13-ai-安全检查)
+14. [虚拟命令](#14-虚拟命令)
 13. [配置参考](#13-配置参考)
 14. [命令速查表](#14-命令速查表)
 15. [常见问题与技巧](#15-常见问题与技巧)
@@ -39,6 +42,9 @@
 | 代理 & 隧道 | SOCKS5/HTTP CONNECT/AutoProxy/端口转发 | `assh proxy/tunnel` | Phase 7 |
 | 云同步 | 七牛云加密同步服务器配置 | `assh sync` | Phase 8 |
 | 健康检查 | SSH 连接延迟 + 系统指标采集 | `assh health` | Phase 9 |
+<<<<<<< HEAD
+| 跳板机 | 多跳 SSH 连接、历史复用 | `assh login -J / jump` | Phase 10 |
+| 自动更新 | 版本检查、自动升级、回滚、SHA256 校验 | `assh upgrade` | Phase 11 |
 | AI 安全检查 | AI 自动生成漏洞检测脚本 | `assh security vuln-check` | X1 |
 | 虚拟命令 | SSH 会话中使用 @push/@pull 等命令 | `@push/@pull/@help` | X2 |
 | 加密存储 | AES-256-GCM + SQLite，自动密钥管理 | 内置 | Phase 2 |
@@ -56,7 +62,8 @@ SSH 连接/管理      文件系统操作
 ├── keygen
 ├── proxy/tunnel
 ├── sync
-└── health
+├── health
+└── jump
     │
     └── 共用核心层 (asshc/)
 ```
@@ -87,8 +94,8 @@ sh build.sh
 
 # 构建产物在 build/ 目录
 ls build/
-# assh-macOS-amd64_v2.0.0.zip
-# assh-linux-amd64_v2.0.0.zip
+# assh-macOS-amd64_v2.0.1.zip
+# assh-linux-amd64_v2.0.1.zip
 # ...
 ```
 
@@ -119,15 +126,15 @@ go run ./cmd/fs/ pull ...        # 直接运行 assh-fs
 
 ```bash
 # 解压对应平台的构建包
-unzip build/assh-linux-amd64_v2.0.0.zip -d ~/bin
+unzip build/assh-linux-amd64_v2.0.1.zip -d ~/bin
 # 或复制到 PATH 目录
-cp build/assh-linux-amd64_v2.0.0/assh /usr/local/bin/
-cp build/assh-linux-amd64_v2.0.0/assh-fs /usr/local/bin/
+cp build/assh-linux-amd64_v2.0.1/assh /usr/local/bin/
+cp build/assh-linux-amd64_v2.0.1/assh-fs /usr/local/bin/
 ```
 
 ### 2.5 系统要求
 
-- **Go 版本**: 1.22.0+
+- **Go 版本**: 1.25.0+
 - **运行环境**: macOS / Linux / Windows（无 CGO 依赖）
 - **存储空间**: 约 20MB（二进制）+ 数据库空间
 
@@ -991,11 +998,121 @@ assh sync history
 
 ---
 
-## 10. 健康检查
+## 10. 跳板机
+
+ASSH 自 v2.0.1 起支持多跳 SSH 连接（Jump Host），通过 `-J` 参数或服务器的 `options.jump` 配置实现。
+
+### 10.1 基本用法
+
+```bash
+# 通过跳板机登录目标服务器
+assh login myserver -J jump-server
+
+# 多跳：依次通过多个跳板机
+assh login myserver -J jump1,jump2
+
+# 直连模式使用跳板机
+assh login root@target-host -J root@jump-host
+
+# 在 Options 中配置默认跳板机
+assh set myserver -o jump=jump-server
+# 配置后直接 assh login myserver 会自动使用跳板机
+```
+
+### 10.2 跳板机认证
+
+跳板机支持与目标服务器独立认证，可以配置不同的用户、密码或密钥：
+
+```bash
+# 不同用户
+assh login target -J admin@jump-server
+
+# 跳板机使用密钥，目标使用密码
+assh login target -P targetpass -J jump-server -i ~/.ssh/id_rsa
+
+# 跳板机指定端口
+assh login target -J jump-server:2222
+```
+
+### 10.3 跳板历史管理
+
+`assh jump` 命令管理跳板连接历史，方便复用之前成功的跳板配置：
+
+```bash
+# 查看跳板历史
+assh jump history
+
+# 查看指定次数（默认 20 条）
+assh jump history --limit 50
+
+# 查看历史详情（JSON 格式）
+assh jump history --json
+
+# 清除历史记录
+assh jump history --clear
+```
+
+### 10.4 跳板机工作流程
+
+跳板机连接的认证流程：
+
+1. **解析跳板规格** — 从 `-J` 参数或 `options.jump` 读取跳板服务器列表
+2. **递归连接** — 从离目标最远的跳板开始依次建立 SSH 连接
+3. **认证链** — 每个跳板独立认证（密码/密钥/Agent）
+4. **建立隧道** — 最终通过最后一级跳板的 TCP 隧道连接目标服务器
+5. **历史记录** — 连接成功后自动记录跳板路径
+
+### 10.5 跳板机与代理组合
+
+跳板机可以和代理/隧道功能组合使用：
+
+```bash
+# 通过跳板机建立 SOCKS5 代理
+assh proxy myserver --socks5 :1080 -J jump-server
+
+# 通过跳板机建立端口转发
+assh tunnel start myserver -L 8080:web:80 -J jump-server
+
+# 批量命令通过跳板机
+assh run myserver "uptime" -J jump-server
+```
+
+### 10.6 跳板机示例集合
+
+```bash
+# === 常见场景 ===
+
+# 场景：通过企业堡垒机访问内网服务器
+assh login internal-server -J bastion.company.com
+
+# 场景：多层级网络（办公网 → 跳板 → 生产网）
+assh login prod-db -J office-jump,prod-jump
+
+# 场景：跳板机认证信息不同
+assh login target-srv -J admin@jump:2222 -i ~/.ssh/office-key
+
+# 场景：配置默认跳板机
+assh set myserver -o jump=default-jump
+# 以后直接登录
+assh login myserver
+
+# 场景：查看最近的跳板历史
+assh jump history --limit 10
+
+# 场景：通过跳板机做健康检查
+assh health check internal-server -J jump-server
+
+# 场景：通过跳板机同步文件
+assh-fs push internal-server ./file /remote/ -J jump-server
+```
+
+---
+
+## 11. 健康检查
 
 ASSH 支持通过 SSH 连接对服务器进行健康检查，采集关键系统指标。
 
-### 10.1 检查指标
+### 11.1 检查指标
 
 健康检查采集以下系统信息：
 
@@ -1011,7 +1128,7 @@ ASSH 支持通过 SSH 连接对服务器进行健康检查，采集关键系统�
 > 单个指标采集失败**不会**阻断整体检查，静默跳过后继续采集其他指标。
 > 所有指标均失败时标记为 unhealthy。
 
-### 10.2 检查单台服务器
+### 11.2 检查单台服务器
 
 ```bash
 # 按名称检查
@@ -1036,7 +1153,7 @@ Memory:     total 7.6Gi, used 3.2Gi, free 4.4Gi
 Disk:       total 98G, used 45G, free 53G (48% used)
 ```
 
-### 10.3 批量检查
+### 11.3 批量检查
 
 ```bash
 # 检查所有服务器
@@ -1069,7 +1186,7 @@ office-proxy| ⏱ timeout | -       | -              | -           | -          
 Summary: 2 healthy, 1 unhealthy, 1 error, 1 timeout
 ```
 
-### 10.4 健康检查示例集合
+### 11.4 健康检查示例集合
 
 ```bash
 # === 常见场景 ===
@@ -1095,172 +1212,67 @@ assh health check root@10.0.0.1:2222
 
 ---
 
-## 11. AI 安全检查
+## 13. 配置参考
 
-ASSH 支持通过 AI 大模型自动生成漏洞检测脚本，进行安全检查。
+ASSH 支持自动检查和升级，确保用户始终运行最新安全版本。
 
-### 11.1 功能概述
-
-- **AI 脚本生成**：根据漏洞信息自动生成检测脚本
-- **CVE 查询**：从 NVD NIST API 自动获取 CVE 详情
-- **安全审查**：双重审查机制（自动规则 + 用户确认）
-- **报告生成**：终端显示 + Markdown 报告文件
-
-### 11.2 配置 AI 服务
-
-创建配置文件 `~/.assh/v2/ai.yml`：
-
-```yaml
-ai:
-  endpoint: "https://api.openai.com/v1"
-  model: "gpt-4"
-  api_key: "sk-xxx"
-  max_tokens: 4096
-  temperature: 0.3
-```
-
-### 11.3 检查漏洞
+### 12.1 检查更新
 
 ```bash
-# 按 CVE 编号检查
-assh security vuln-check -s myserver "CVE-2024-3094"
+# 检查是否有新版本（不执行升级）
+assh upgrade --check
 
-# 按漏洞描述检查
-assh security vuln-check -s myserver "检查是否存在未修补的 Log4j 漏洞"
-
-# 批量检查
-assh security vuln-check -s server1,server2 "CVE-2024-3094"
-
-# 按分组检查
-assh security vuln-check -g prod "CVE-2024-3094"
-
-# 只生成脚本不执行
-assh security vuln-check -s myserver --no-execute "CVE-2024-3094"
-
-# 输出 JSON 格式
-assh security vuln-check -s myserver -o json "CVE-2024-3094"
+# 输出示例：
+# Current version: v2.0.1
+# Latest version:  v2.0.2
+# Update available: v2.0.2
 ```
 
-### 11.4 管理安全规则
+### 12.2 升级到最新版本
 
 ```bash
-# 查看所有规则
-assh security rules list
+# 检查并升级到最新版本
+assh upgrade
 
-# 添加自定义规则
-assh security rules add "禁止访问敏感目录" "/etc/shadow|/etc/passwd"
+# 自动确认（不提示）
+assh upgrade -y
 
-# 删除规则
-assh security rules remove "禁止访问敏感目录"
+# 强制升级（跳过版本检查）
+assh upgrade --force
+
+# 升级到指定版本
+assh upgrade --version v2.0.2
 ```
 
-### 11.5 输出示例
-
-```
-┌─ AI 安全检查 ─────────────────────┐
-│ 漏洞: CVE-2024-3094               │
-│ 目标: myserver (192.168.1.100)    │
-│ 状态: ⚠️ 存在漏洞                  │
-│ 详情: xz/liblzma 5.6.0/5.6.1     │
-│ 建议: 升级至 5.6.2+                │
-│ 报告: ~/.assh/security/...report  │
-└────────────────────────────────────┘
-```
-
-### 11.6 存储位置
-
-- 脚本：`~/.assh/security/scripts/<漏洞ID>/script.sh`
-- 报告：`~/.assh/security/scripts/<漏洞ID>/report.md`
-- 日志：`~/.assh/security/scripts/<漏洞ID>/result.log`
-
----
-
-## 12. 虚拟命令
-
-ASSH 支持在 SSH 会话中使用虚拟命令，以 `@` 为前缀触发本地操作。
-
-### 12.1 功能概述
-
-- **前缀触发**：输入 `@command` 触发虚拟命令
-- **本地执行**：虚拟命令在本地执行，不发送到远程服务器
-- **内置命令**：@push、@pull、@help、@version、@status
-- **自定义命令**：支持 YAML 配置的自定义命令
-
-### 12.2 配置虚拟命令
-
-创建配置文件 `~/.assh/v2/virtual.yml`：
-
-```yaml
-virtual-commands:
-  builtin:
-    push:
-      enabled: true
-      timeout: 30s
-    pull:
-      enabled: true
-      timeout: 30s
-  custom:
-    hello:
-      description: "Say hello"
-      script: echo "Hello from virtual command!"
-      timeout: 10s
-  settings:
-    on-error: continue
-    output: color
-    history: false
-```
-
-### 12.3 使用虚拟命令
+### 12.3 回滚
 
 ```bash
-# 启动 SSH 会话
-assh login myserver
-
-# 在 SSH 会话中使用虚拟命令
-@push ./local-file.txt /remote/path/
-@pull /remote/file.txt ./local-path/
-@help
-@help push
-@version
-@status
+# 回滚到上一版本
+assh upgrade --rollback
 ```
 
-### 12.4 内置命令
+### 12.4 工作原理
 
-| 命令 | 语法 | 说明 |
-|------|------|------|
-| `@push` | `@push [-r] <local> [remote]` | 上传文件到远程 |
-| `@pull` | `@pull [-r] <remote> [local]` | 从远程下载文件 |
-| `@help` | `@help [command]` | 显示帮助信息 |
-| `@version` | `@version` | 显示版本信息 |
-| `@status` | `@status` | 显示连接状态 |
+1. **版本检查**：从 GitHub 仓库的 `version.txt` 文件获取最新版本号
+2. **下载**：通过 GitHub Release API 查找适配当前系统/架构的二进制文件
+3. **验证**：从 Release assets 获取 SHA256 校验文件，验证下载完整性
+4. **安装**：备份当前版本 → 验证新版本 → 原子替换 → 清理
+5. **回滚**：保留最近 3 个备份版本，支持一键回滚
 
-### 12.5 自定义命令
+### 12.5 安全特性
 
-在配置文件中定义自定义命令：
-
-```yaml
-virtual-commands:
-  custom:
-    deploy:
-      description: "Deploy application"
-      script: |
-        @push ./dist/ /var/www/html/
-        @run "systemctl restart nginx"
-      timeout: 120s
-```
-
-使用自定义命令：
-
-```bash
-@deploy
-```
+- ✅ SHA256 校验：下载文件必须通过 SHA256 验证
+- ✅ 原子替换：使用 copy + rename 策略，避免部分写入
+- ✅ 自动备份：升级前自动备份当前版本
+- ✅ 失败回滚：安装失败时自动回滚到备份版本
+- ✅ 大小限制：下载文件最大 1GB，防止磁盘耗尽攻击
+- ✅ User-Agent：符合 GitHub API 规范
 
 ---
 
 ## 13. 配置参考
 
-### 11.1 存储路径
+### 13.1 存储路径
 
 ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 
@@ -1274,13 +1286,13 @@ ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 | `~/.assh/v2/.account` | 加密的密码文件 |
 | `~/.assh/v2/data/keys/` | 密钥备份目录（按指纹命名子目录） |
 
-### 11.2 环境变量
+### 13.2 环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `ASSH_CONFIG_DIR` | 配置目录路径 | `~/.assh/v2` |
 
-### 11.3 全局命令行标志
+### 13.3 全局命令行标志
 
 | 标志 | 简写 | 说明 |
 |------|:----:|------|
@@ -1291,7 +1303,7 @@ ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 
 > **组合短参数**：支持组合使用，例如 `-qv` 等价于 `-q -v`。
 
-### 11.4 日志级别
+### 13.4 日志级别
 
 | 级别 | 值 | 说明 |
 |------|:---:|------|
@@ -1314,7 +1326,7 @@ assh -q run myserver "uptime"
 assh -F ~/.assh/custom.yml login myserver
 ```
 
-### 11.5 认证配置
+### 13.5 认证配置
 
 服务器支持的认证方式及优先级：
 
@@ -1326,7 +1338,7 @@ assh -F ~/.assh/custom.yml login myserver
 | 4 | 密码 | `-P <password>` 或交互输入 |
 | 5 | 认证回退 | 密钥失败 → 自动尝试密码 |
 
-### 11.6 SSH 选项
+### 13.6 SSH 选项
 
 通过 `-o` 参数可以设置额外的 SSH 选项：
 
@@ -1338,7 +1350,7 @@ assh set myserver -o timeout=10      # 连接超时（秒）
 assh proxy myserver -o keepalive=15
 ```
 
-### 11.7 直连模式
+### 13.7 直连模式
 
 所有命令都支持直连模式，不依赖已保存的配置：
 
@@ -1355,9 +1367,9 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 
 ---
 
-## 12. 命令速查表
+## 14. 命令速查表
 
-### 12.1 assh 命令
+### 14.1 assh 命令
 
 | 命令 | 功能 | 常用参数 | 示例 |
 |------|------|----------|------|
@@ -1384,9 +1396,10 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `sync history` | 同步历史 | — | `assh sync history` |
 | `health check` | 健康检查 | `<server>[,server2,...]` | `assh health check web-01` |
 | `health list` | 批量检查 | `--group --concurrency --detail` | `assh health list --detail` |
+| `jump history` | 跳板历史 | `--limit --json --clear` | `assh jump history` |
 | `version` | 版本信息 | — | `assh version` |
 
-### 12.2 assh-fs 命令
+### 14.2 assh-fs 命令
 
 | 命令 | 功能 | 常用参数 | 示例 |
 |------|------|----------|------|
@@ -1394,18 +1407,19 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `pull` | 拉取文件 | `-r --resume --checksum -H -u -P` | `assh-fs pull myserver /remote/file ./` |
 | `<server>` | 交互式 SFTP | 交互式命令 | `assh-fs myserver` |
 
-### 12.3 快捷键一览
+### 14.3 快捷键一览
 
 | 命令行模式 | 操作 |
 |-----------|------|
 | `assh <name>` | 直接登录（等价于 `assh login <name>`） |
+| `assh <name> -J <jump>` | 通过跳板机登录 |
 | `-qv` | 组合短参数（等价的 `-q -v`） |
 
 ---
 
-## 13. 常见问题与技巧
+## 15. 常见问题与技巧
 
-### 13.1 首次运行
+### 15.1 首次运行
 
 **Q: 第一次运行 assh 需要做什么？**
 
@@ -1417,13 +1431,13 @@ A: 下载二进制后直接运行即可。首次运行会自动：
 
 不需要手动配置，添加服务器即可开始使用。
 
-### 13.2 密码存储安全
+### 15.2 密码存储安全
 
 **Q: 密码存储在本地安全吗？**
 
 A: 密码使用 AES-256-GCM 加密存储在 SQLite 中。加密密钥在首次运行时自动生成，单独存储在同一数据库的 `config` 表中，并通过 Base64 编码持久化。理论上需要同时获取数据库文件和破解 AES-256 才能解密。
 
-### 13.3 跨设备同步配置
+### 15.3 跨设备同步配置
 
 **Q: 如何在多台电脑之间同步服务器配置？**
 
@@ -1438,7 +1452,7 @@ assh sync account set
 assh sync pull
 ```
 
-### 13.4 代理保持后台运行
+### 15.4 代理保持后台运行
 
 **Q: 关闭终端后代理会停止吗？**
 
@@ -1448,7 +1462,7 @@ assh proxy myserver --socks5 :1080 --daemon
 ```
 关闭终端后代理继续运行。使用 `ps aux | grep assh` 查看进程，`kill` 停止。
 
-### 13.5 端口转发场景
+### 15.5 端口转发场景
 
 **Q: 如何访问内网数据库？**
 
@@ -1460,7 +1474,7 @@ assh tunnel start jump-server -L 3306:rds.internal:3306
 mysql -h 127.0.0.1 -P 3306 -u admin -p
 ```
 
-### 13.6 文件传输效率
+### 15.6 文件传输效率
 
 **Q: 大文件传输中断了怎么办？**
 
@@ -1470,7 +1484,7 @@ assh-fs push --resume myserver ./large-file.iso /remote/
 ```
 传输中断后重新执行相同命令，会自动从断点处继续。
 
-### 13.7 批量服务器管理
+### 15.7 批量服务器管理
 
 **Q: 如何对多台服务器执行相同命令？**
 
@@ -1486,7 +1500,7 @@ assh bc "systemctl restart nginx" --group prod
 assh bc "date" --servers s1,s2 --log ./result.json
 ```
 
-### 13.8 常用组合技巧
+### 15.8 常用组合技巧
 
 ```bash
 # 快速查看所有服务器的磁盘使用
@@ -1510,7 +1524,7 @@ assh health list --concurrency 20
 assh -v proxy myserver --socks5 :1080 --log-dir ./logs
 ```
 
-### 13.9 故障排查
+### 15.9 故障排查
 
 **Q: 连接失败怎么办？**
 
@@ -1537,7 +1551,7 @@ A: `assh-fs` 是独立的二进制文件，需要确保：
 1. 构建时同时生成了 `assh-fs`（`build.sh` 自动构建两个二进制）
 2. 两个二进制都在 `PATH` 中
 
-### 13.10 最佳实践总结
+### 15.10 最佳实践总结
 
 | 实践 | 说明 |
 |------|------|

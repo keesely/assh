@@ -42,6 +42,7 @@ func main() {
 	defer store.Close()
 
 	connector := sshinfra.NewConnector()
+	session := sshinfra.NewSession()
 
 	sshConnectorFunc := func(server *domain.Server) (*ssh.Client, error) {
 		return connector.Connect(server)
@@ -51,7 +52,15 @@ func main() {
 	serverSvc := service.NewServerService(store.Store)
 	transferSvc := service.NewTransferService(sftpTransfer, store.Store)
 
-	app := cmd.NewFSApp(Version, Build, transferSvc, serverSvc, store.Store)
+	// 创建 ConnectService + JumpService（用于 -J 跳板支持）
+	connectSvc := service.NewConnectService(connector, session, store.Store)
+	connectSvc.SetJumpRecorder(store.Store.JumpRecorder())
+	jumpSvc := service.NewJumpService(store.Store.JumpRecorder())
+
+	// 为 TransferService 注入 ConnectService（-J 跳板链支持）
+	transferSvc.SetConnectService(connectSvc)
+
+	app := cmd.NewFSApp(Version, Build, transferSvc, serverSvc, store.Store, connectSvc, jumpSvc)
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

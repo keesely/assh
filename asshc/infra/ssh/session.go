@@ -2,9 +2,8 @@ package ssh
 
 import (
 	"os"
-	"os/signal"
-	"syscall"
 
+	"assh/asshc/port"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 )
@@ -12,6 +11,9 @@ import (
 // Session 实现 port.SSHSession 接口，提供 SSH 会话操作的具体实现。
 // 支持交互式 Shell（含终端大小自适应调整）和远程命令执行。
 type Session struct{}
+
+// 编译期接口合规检查
+var _ port.SSHSession = (*Session)(nil)
 
 // NewSession 创建 Session 实例。
 func NewSession() *Session {
@@ -61,16 +63,10 @@ func (s *Session) Shell(client *ssh.Client) error {
 	}
 
 	// 监听终端窗口大小变化信号，实时调整远程 PTY 尺寸
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGWINCH)
-	defer signal.Stop(sigCh)
-
-	go func() {
-		for range sigCh {
-			w, h, _ := term.GetSize(fd)
-			session.WindowChange(h, w)
-		}
-	}()
+	// 使用平台特定的实现（Unix: SIGWINCH, Windows: 占位）
+	go watchResize(fd, func(w, h int) {
+		session.WindowChange(h, w)
+	})
 
 	return session.Wait()
 }

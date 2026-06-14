@@ -13,20 +13,27 @@ func (a *App) registerTunnelCommands() {
 	a.cli.Commands = append(a.cli.Commands, cli.Command{
 		Name:      "tunnel",
 		Usage:     "Manage SSH port forwarding tunnels",
-		ArgsUsage: "start/stop/list",
+		ArgsUsage: "<server> [-L/-R spec] or stop/list",
+		Description: `Start SSH port forwarding tunnels.
+
+Examples:
+  assh tunnel myserver -L 8080:localhost:80        # local forward
+  assh tunnel myserver -R 8080:localhost:80        # remote forward
+  assh tunnel myserver -L 80:web:80 -L 443:web:443  # multiple forwards
+  assh tunnel myserver -L 8080:localhost:80 --daemon  # background
+  assh tunnel stop <id>                            # stop tunnel
+  assh tunnel list                                 # list tunnels
+`,
+		Flags: []cli.Flag{
+			cli.StringSliceFlag{Name: "L", Usage: "local forward spec [bind_addr:]port:host:hostport"},
+			cli.StringSliceFlag{Name: "R", Usage: "remote forward spec [bind_addr:]port:host:hostport"},
+			cli.StringFlag{Name: "listen", Value: "tcp", Usage: "listen type: tcp|http"},
+			cli.BoolFlag{Name: "daemon, d", Usage: "run in background as daemon"},
+			cli.StringFlag{Name: "auto-reconnect", Usage: "auto reconnect [retries/]interval"},
+			cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
+		},
+		Action: a.tunnelAction,
 		Subcommands: []cli.Command{
-			{
-				Name:      "start",
-				Usage:     "Start a port forwarding tunnel",
-				ArgsUsage: "<server> [-L [bind:]port:host:hostport] [-R [bind:]port:host:hostport]",
-				Flags: []cli.Flag{
-					cli.StringSliceFlag{Name: "L", Usage: "local forward spec [bind_addr:]port:host:hostport"},
-					cli.StringSliceFlag{Name: "R", Usage: "remote forward spec [bind_addr:]port:host:hostport"},
-					cli.BoolFlag{Name: "daemon, d", Usage: "run in background as daemon"},
-					cli.StringFlag{Name: "auto-reconnect", Usage: "auto reconnect [retries/]interval"},
-				},
-				Action: a.tunnelStartAction,
-			},
 			{
 				Name:      "stop",
 				Usage:     "Stop a running tunnel",
@@ -42,7 +49,7 @@ func (a *App) registerTunnelCommands() {
 	})
 }
 
-func (a *App) tunnelStartAction(c *cli.Context) error {
+func (a *App) tunnelAction(c *cli.Context) error {
 	if a.proxySvc == nil {
 		return fmt.Errorf("proxy service not available")
 	}
@@ -52,6 +59,8 @@ func (a *App) tunnelStartAction(c *cli.Context) error {
 	}
 
 	serverName := c.Args()[0]
+	jumpChain := c.String("J")
+	listenType := c.String("listen")
 
 	localForwards := c.StringSlice("L")
 	remoteForwards := c.StringSlice("R")
@@ -71,6 +80,7 @@ func (a *App) tunnelStartAction(c *cli.Context) error {
 			LocalAddr:  localAddr,
 			RemoteAddr: remoteAddr,
 			Reverse:    false,
+			ListenType: listenType,
 		})
 	}
 
@@ -83,12 +93,18 @@ func (a *App) tunnelStartAction(c *cli.Context) error {
 			LocalAddr:  localAddr,
 			RemoteAddr: remoteAddr,
 			Reverse:    true,
+			ListenType: listenType,
 		})
 	}
 
 	opts := service.ProxyOptions{
 		Daemon:        c.Bool("daemon"),
 		AutoReconnect: c.String("auto-reconnect"),
+		ListenType:    listenType,
+	}
+
+	if jumpChain != "" {
+		return a.proxySvc.StartTunnelWithChain(serverName, jumpChain, specs, opts)
 	}
 
 	return a.proxySvc.StartTunnel(serverName, specs, opts)
@@ -132,9 +148,19 @@ func parseForwardSpec(spec string) (localAddr, remoteAddr string) {
 
 	switch len(parts) {
 	case 3:
-		return fmt.Sprintf("127.0.0.1:%s", parts[0]), fmt.Sprintf("%s:%s", parts[1], parts[2])
+		// port:host:hostport
+		host := parts[1]
+		if host == "" {
+			host = "127.0.0.1" // 自动补全空 host
+		}
+		return fmt.Sprintf("127.0.0.1:%s", parts[0]), fmt.Sprintf("%s:%s", host, parts[2])
 	case 4:
-		return fmt.Sprintf("%s:%s", parts[0], parts[1]), fmt.Sprintf("%s:%s", parts[2], parts[3])
+		// bind:port:host:hostport
+		host := parts[2]
+		if host == "" {
+			host = "127.0.0.1" // 自动补全空 host
+		}
+		return fmt.Sprintf("%s:%s", parts[0], parts[1]), fmt.Sprintf("%s:%s", host, parts[3])
 	default:
 		return "", ""
 	}

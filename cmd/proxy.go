@@ -11,12 +11,13 @@ import (
 // proxyFlags returns the common set of flags for proxy commands.
 func proxyFlags() []cli.Flag {
 	return []cli.Flag{
-		cli.StringFlag{Name: "socks5", Value: "", Usage: "SOCKS5 proxy listen address (default :1080)"},
+		cli.StringFlag{Name: "socks", Value: "", Usage: "SOCKS5 proxy listen address (local, default :1080)"},
+		cli.StringFlag{Name: "socks5", Value: "", Usage: "alias for --socks (deprecated)"},
 		cli.StringFlag{Name: "http", Value: "", Usage: "HTTP CONNECT proxy listen address"},
-		cli.BoolFlag{Name: "reverse", Usage: "reverse proxy mode"},
-		cli.BoolFlag{Name: "tcp", Usage: "reverse TCP mode (SOCKS5 auth method)"},
-		cli.BoolFlag{Name: "http-mode", Usage: "reverse HTTP mode (Basic Auth)"},
-		cli.StringFlag{Name: "ports", Value: "", Usage: "port mapping rules for reverse mode (e.g. 80,443:80)"},
+		cli.StringFlag{Name: "tcp", Value: "", Usage: "TCP proxy listen address"},
+		cli.BoolFlag{Name: "reverse", Usage: "reverse proxy mode (target is local)"},
+		cli.StringFlag{Name: "listen", Value: "tcp", Usage: "listen type for remote server: tcp|http"},
+		cli.StringFlag{Name: "ports", Value: "", Usage: "port mapping rules (e.g. 80,443:80)"},
 		cli.StringFlag{Name: "auth", Value: "", Usage: "proxy authentication (user:pass)"},
 		cli.StringFlag{Name: "autoproxy", Value: "", Usage: "AutoProxy rule file path"},
 		cli.StringFlag{Name: "log-dir", Value: "", Usage: "proxy log directory"},
@@ -27,6 +28,7 @@ func proxyFlags() []cli.Flag {
 		cli.StringFlag{Name: "P, password", Usage: "password (direct connection)"},
 		cli.StringFlag{Name: "i, identity-file", Usage: "identity file path (direct connection)"},
 		cli.StringFlag{Name: "k, key", Usage: "key file path (alias for -i)"},
+		cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
 	}
 }
 
@@ -79,13 +81,20 @@ Examples:
 
 func (a *App) proxyAction(c *cli.Context) error {
 	host := c.String("H")
+	jumpChain := c.String("J")
+
+	// 处理 --socks5 别名
+	socksAddr := c.String("socks")
+	if socksAddr == "" {
+		socksAddr = c.String("socks5")
+	}
 
 	opts := service.ProxyOptions{
-		SOCKS5Addr:    c.String("socks5"),
+		SOCKS5Addr:    socksAddr,
 		HTTPAddr:      c.String("http"),
+		TCPAddr:       c.String("tcp"),
 		Reverse:       c.Bool("reverse"),
-		ReverseTCP:    c.Bool("tcp"),
-		ReverseHTTP:   c.Bool("http-mode"),
+		ListenType:    c.String("listen"),
 		Auth:          c.String("auth"),
 		Ports:         c.String("ports"),
 		RuleFile:      c.String("autoproxy"),
@@ -124,6 +133,11 @@ func (a *App) proxyAction(c *cli.Context) error {
 
 	if a.proxySvc == nil {
 		return fmt.Errorf("proxy service not available")
+	}
+
+	// 跳板链模式
+	if jumpChain != "" {
+		return a.proxySvc.StartProxyWithChain(serverName, jumpChain, opts)
 	}
 
 	return a.proxySvc.StartProxy(serverName, opts)

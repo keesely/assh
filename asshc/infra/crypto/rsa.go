@@ -195,12 +195,14 @@ func ParsePEMPublicKey(data []byte) (*rsa.PublicKey, error) {
 	return nil, fmt.Errorf("unsupported PEM type: %s", block.Type)
 }
 
-// RSAEncrypt 使用 PKCS#1 v1.5 填充方式加密数据。
+// Deprecated: RSAEncrypt is deprecated. Use RSAEncryptOAEP instead.
+// PKCS#1 v1.5 is vulnerable to padding oracle attacks.
 func RSAEncrypt(plain []byte, pubKey *rsa.PublicKey) ([]byte, error) {
 	return rsa.EncryptPKCS1v15(rand.Reader, pubKey, plain)
 }
 
-// RSADecrypt 使用 PKCS#1 v1.5 填充方式解密数据。
+// Deprecated: RSADecrypt is deprecated. Use RSADecryptOAEP instead.
+// PKCS#1 v1.5 is vulnerable to padding oracle attacks.
 func RSADecrypt(cipher []byte, privKey *rsa.PrivateKey) ([]byte, error) {
 	return rsa.DecryptPKCS1v15(rand.Reader, privKey, cipher)
 }
