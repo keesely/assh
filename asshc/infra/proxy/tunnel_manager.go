@@ -33,6 +33,7 @@ type tunnelManager struct {
 	sshClient    *ssh.Client
 	reconnect    bool
 	reconnectCfg ReconnectConfig
+	reconnectFn  func() (*ssh.Client, error) // callback to reconnect (provided by service layer)
 	ctx          context.Context
 	cancel       context.CancelFunc
 	done         chan struct{}
@@ -48,7 +49,6 @@ func NewTunnelManager() *tunnelManager {
 		forwards: make(map[string]port.PortForward),
 		ctx:      ctx,
 		cancel:   cancel,
-		done:     make(chan struct{}),
 	}
 }
 
@@ -167,13 +167,24 @@ func (m *tunnelManager) StartAll(client *ssh.Client) error {
 	return nil
 }
 
-// SetReconnect enables auto-reconnection with the given config.
-func (m *tunnelManager) SetReconnect(cfg ReconnectConfig) {
+// SetReconnect enables auto-reconnection with the given config and reconnect function.
+// Starts a background goroutine that monitors the SSH client for disconnection.
+// reconnectFn is a callback provided by the service layer that reconnects to the server.
+func (m *tunnelManager) SetReconnect(cfg ReconnectConfig, reconnectFn func() (*ssh.Client, error)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.reconnect {
+		// Already running, just update config and callback
+		m.reconnectCfg = cfg
+		m.reconnectFn = reconnectFn
+		return
+	}
+
 	m.reconnect = true
 	m.reconnectCfg = cfg
+	m.reconnectFn = reconnectFn
+	m.done = make(chan struct{})
 
 	if cfg.Interval <= 0 {
 		m.reconnectCfg.Interval = 5 * time.Second
@@ -181,6 +192,8 @@ func (m *tunnelManager) SetReconnect(cfg ReconnectConfig) {
 	if cfg.Backoff <= 0 {
 		m.reconnectCfg.Backoff = 5 * time.Second
 	}
+
+	go m.reconnectLoop()
 }
 
 // SetClient replaces the current SSH client.
@@ -198,15 +211,108 @@ func (m *tunnelManager) Client() *ssh.Client {
 }
 
 // Close cancels the context and waits for the reconnect loop to finish.
-// Uses a timeout to prevent deadlock when reconnect loop doesn't close done channel.
+// If no reconnect loop is running, returns immediately.
 func (m *tunnelManager) Close() {
 	m.cancel()
+	if m.done == nil {
+		return
+	}
 	select {
 	case <-m.done:
 		// normal close
 	case <-time.After(5 * time.Second):
 		log.Warnf("tunnel manager close timeout")
 	}
+}
+
+// reconnectLoop monitors the SSH client for disconnection and attempts to reconnect.
+// Runs until context is cancelled or max retries exhausted.
+func (m *tunnelManager) reconnectLoop() {
+	defer close(m.done)
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		default:
+		}
+
+		// Wait for a client to be available
+		client := m.Client()
+		if client == nil {
+			select {
+			case <-m.ctx.Done():
+				return
+			case <-time.After(time.Second):
+				continue
+			}
+		}
+
+		// Block until client disconnects or context cancelled
+		clientDone := make(chan error, 1)
+		go func() {
+			clientDone <- client.Wait()
+		}()
+
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-clientDone:
+			// Client disconnected, try to reconnect
+		}
+
+		if !m.tryReconnect() {
+			return
+		}
+	}
+}
+
+// tryReconnect attempts to reconnect with exponential backoff.
+// Returns true if reconnection succeeded, false if should stop.
+func (m *tunnelManager) tryReconnect() bool {
+	m.mu.Lock()
+	interval := m.reconnectCfg.Interval
+	maxRetries := m.reconnectCfg.MaxRetries
+	backoff := m.reconnectCfg.Backoff
+	reconnectFn := m.reconnectFn
+	m.mu.Unlock()
+
+	if reconnectFn == nil {
+		log.Warnf("reconnect function not set, giving up")
+		return false
+	}
+
+	for attempt := 1; maxRetries == 0 || attempt <= maxRetries; attempt++ {
+		select {
+		case <-m.ctx.Done():
+			return false
+		case <-time.After(interval):
+		}
+
+		retriesStr := "∞"
+		if maxRetries > 0 {
+			retriesStr = strconv.Itoa(maxRetries)
+		}
+		log.Infof("reconnecting (attempt %d/%s, interval %v)...", attempt, retriesStr, interval)
+
+		newClient, err := reconnectFn()
+		if err != nil {
+			log.Warnf("reconnect attempt %d failed: %v", attempt, err)
+			interval += backoff
+			continue
+		}
+
+		// Success - update client and restart forwards
+		m.SetClient(newClient)
+		if err := m.StartAll(newClient); err != nil {
+			log.Warnf("restart forwards after reconnect: %v", err)
+		}
+		log.Infof("reconnected successfully (attempt %d)", attempt)
+		return true
+	}
+
+	log.Errorf("max reconnect attempts (%d) exhausted, giving up", maxRetries)
+	return false
 }
 
 // Daemonize forks the current process to run in background.

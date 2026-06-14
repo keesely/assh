@@ -41,7 +41,7 @@ type ForwardSpec struct {
 type tunnelManagerExt interface {
 	StartAll(client *ssh.Client) error
 	SetClient(client *ssh.Client)
-	SetReconnect(cfg proxy.ReconnectConfig)
+	SetReconnect(cfg proxy.ReconnectConfig, reconnectFn func() (*ssh.Client, error))
 }
 
 type ProxyService struct {
@@ -200,12 +200,9 @@ func (s *ProxyService) startProxyWithClient(client *ssh.Client, opts ProxyOption
 	}
 
 	if opts.AutoReconnect != "" {
-		enabled, cfg := parseAutoReconnect(opts.AutoReconnect)
-		if enabled {
-			if tm, ok := s.tunnelMgr.(tunnelManagerExt); ok {
-				tm.SetReconnect(cfg)
-			}
-		}
+		// Note: auto-reconnect for proxy mode requires separate SOCKS5 proxy restart logic.
+		// Currently only supported for tunnel mode. See startTunnelWithClient.
+		log.Warnf("auto-reconnect not yet supported for proxy mode, ignoring")
 	}
 
 	if opts.Daemon {
@@ -417,7 +414,16 @@ func (s *ProxyService) StartTunnel(name string, forwards []ForwardSpec, opts Pro
 	}
 	s.sshClient = client
 
-	return s.startTunnelWithClient(client, forwards, opts)
+	// Provide reconnect function for auto-reconnect
+	reconnectFn := func() (*ssh.Client, error) {
+		srv, err := s.repo.Get(name)
+		if err != nil {
+			return nil, fmt.Errorf("get server %s: %w", name, err)
+		}
+		return s.connector.Connect(srv)
+	}
+
+	return s.startTunnelWithClient(client, forwards, opts, reconnectFn)
 }
 
 // StartTunnelWithChain 通过跳板链启动端口转发隧道。
@@ -436,11 +442,17 @@ func (s *ProxyService) StartTunnelWithChain(name, chainExpr string, forwards []F
 	}
 	s.sshClient = client
 
-	return s.startTunnelWithClient(client, forwards, opts)
+	// Provide reconnect function for auto-reconnect (via chain)
+	reconnectFn := func() (*ssh.Client, error) {
+		c, _, err := s.connectSvc.ConnectChain(name, chainExpr)
+		return c, err
+	}
+
+	return s.startTunnelWithClient(client, forwards, opts, reconnectFn)
 }
 
 // startTunnelWithClient is the shared tunnel implementation.
-func (s *ProxyService) startTunnelWithClient(client *ssh.Client, forwards []ForwardSpec, opts ProxyOptions) error {
+func (s *ProxyService) startTunnelWithClient(client *ssh.Client, forwards []ForwardSpec, opts ProxyOptions, reconnectFn func() (*ssh.Client, error)) error {
 	for _, spec := range forwards {
 		var fw port.PortForward
 		if spec.Reverse {
@@ -464,7 +476,7 @@ func (s *ProxyService) startTunnelWithClient(client *ssh.Client, forwards []Forw
 		if opts.AutoReconnect != "" {
 			enabled, cfg := parseAutoReconnect(opts.AutoReconnect)
 			if enabled {
-				tm.SetReconnect(cfg)
+				tm.SetReconnect(cfg, reconnectFn)
 			}
 		}
 	}
