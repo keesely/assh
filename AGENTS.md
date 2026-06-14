@@ -11,10 +11,24 @@ ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快�
 - **实验目标**: 验证 X2 虚拟命令功能
 - **SFTP 库**: github.com/pkg/sftp v1.13.7+
 - **Go Version**: 1.25.0+
-- **Encrypt**: RSA + AES
+- **Encrypt**: RSA + AES-GCM (ECB 模式已禁用)
 - **数据库**: SQLite (modernc.org/sqlite, 纯 Go 无 CGO)
 - **日志库**: zerolog v1.32.0
 - **Cli 框架**: urfave/cli v1.22.2
+
+## 安全改进
+
+### 最近安全修复 (2026-06-15)
+
+- **P0 严重问题修复**:
+  - 修复命令注入漏洞 (verify.go + upload.go)
+  - 修复 HostKey 校验缺失 (client.go)
+  - 升级 golang.org/x/crypto 依赖到 v0.52.0
+
+- **P1 中危问题修复**:
+  - 修复 SQL 注入风险 (db.go)
+  - 修复 generateID 不安全 fallback (port.go)
+  - 禁用 AES-ECB 模式 (aes.go)
 
 ## 工作区间
 
