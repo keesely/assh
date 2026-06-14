@@ -2,6 +2,7 @@
 
 > ASSH (An SSH Client) — 使用 Go 开发的 SSH 客户端，适用于服务器管理、维护和快速使用。
 > 基于 SQLite 加密存储，支持多认证方式，双二进制架构（`assh` + `assh-fs`）。
+> 当前版本：v2.2.0
 
 ---
 
@@ -17,9 +18,11 @@
 8. [代理与隧道](#8-代理与隧道)
 9. [云同步](#9-云同步)
 10. [健康检查](#10-健康检查)
-11. [配置参考](#11-配置参考)
-12. [命令速查表](#12-命令速查表)
-13. [常见问题与技巧](#13-常见问题与技巧)
+11. [AI 安全检查](#11-ai-安全检查)
+12. [虚拟命令](#12-虚拟命令)
+13. [配置参考](#13-配置参考)
+14. [命令速查表](#14-命令速查表)
+15. [常见问题与技巧](#15-常见问题与技巧)
 
 ---
 
@@ -36,6 +39,8 @@
 | 代理 & 隧道 | SOCKS5/HTTP CONNECT/AutoProxy/端口转发 | `assh proxy/tunnel` | Phase 7 |
 | 云同步 | 七牛云加密同步服务器配置 | `assh sync` | Phase 8 |
 | 健康检查 | SSH 连接延迟 + 系统指标采集 | `assh health` | Phase 9 |
+| AI 安全检查 | AI 自动生成漏洞检测脚本 | `assh security vuln-check` | X1 |
+| 虚拟命令 | SSH 会话中使用 @push/@pull 等命令 | `@push/@pull/@help` | X2 |
 | 加密存储 | AES-256-GCM + SQLite，自动密钥管理 | 内置 | Phase 2 |
 | 版本回滚 | 配置变更自动快照，支持任意版本回滚 | `assh rollback` | Phase 4 |
 
@@ -1090,7 +1095,170 @@ assh health check root@10.0.0.1:2222
 
 ---
 
-## 11. 配置参考
+## 11. AI 安全检查
+
+ASSH 支持通过 AI 大模型自动生成漏洞检测脚本，进行安全检查。
+
+### 11.1 功能概述
+
+- **AI 脚本生成**：根据漏洞信息自动生成检测脚本
+- **CVE 查询**：从 NVD NIST API 自动获取 CVE 详情
+- **安全审查**：双重审查机制（自动规则 + 用户确认）
+- **报告生成**：终端显示 + Markdown 报告文件
+
+### 11.2 配置 AI 服务
+
+创建配置文件 `~/.assh/v2/ai.yml`：
+
+```yaml
+ai:
+  endpoint: "https://api.openai.com/v1"
+  model: "gpt-4"
+  api_key: "sk-xxx"
+  max_tokens: 4096
+  temperature: 0.3
+```
+
+### 11.3 检查漏洞
+
+```bash
+# 按 CVE 编号检查
+assh security vuln-check -s myserver "CVE-2024-3094"
+
+# 按漏洞描述检查
+assh security vuln-check -s myserver "检查是否存在未修补的 Log4j 漏洞"
+
+# 批量检查
+assh security vuln-check -s server1,server2 "CVE-2024-3094"
+
+# 按分组检查
+assh security vuln-check -g prod "CVE-2024-3094"
+
+# 只生成脚本不执行
+assh security vuln-check -s myserver --no-execute "CVE-2024-3094"
+
+# 输出 JSON 格式
+assh security vuln-check -s myserver -o json "CVE-2024-3094"
+```
+
+### 11.4 管理安全规则
+
+```bash
+# 查看所有规则
+assh security rules list
+
+# 添加自定义规则
+assh security rules add "禁止访问敏感目录" "/etc/shadow|/etc/passwd"
+
+# 删除规则
+assh security rules remove "禁止访问敏感目录"
+```
+
+### 11.5 输出示例
+
+```
+┌─ AI 安全检查 ─────────────────────┐
+│ 漏洞: CVE-2024-3094               │
+│ 目标: myserver (192.168.1.100)    │
+│ 状态: ⚠️ 存在漏洞                  │
+│ 详情: xz/liblzma 5.6.0/5.6.1     │
+│ 建议: 升级至 5.6.2+                │
+│ 报告: ~/.assh/security/...report  │
+└────────────────────────────────────┘
+```
+
+### 11.6 存储位置
+
+- 脚本：`~/.assh/security/scripts/<漏洞ID>/script.sh`
+- 报告：`~/.assh/security/scripts/<漏洞ID>/report.md`
+- 日志：`~/.assh/security/scripts/<漏洞ID>/result.log`
+
+---
+
+## 12. 虚拟命令
+
+ASSH 支持在 SSH 会话中使用虚拟命令，以 `@` 为前缀触发本地操作。
+
+### 12.1 功能概述
+
+- **前缀触发**：输入 `@command` 触发虚拟命令
+- **本地执行**：虚拟命令在本地执行，不发送到远程服务器
+- **内置命令**：@push、@pull、@help、@version、@status
+- **自定义命令**：支持 YAML 配置的自定义命令
+
+### 12.2 配置虚拟命令
+
+创建配置文件 `~/.assh/v2/virtual.yml`：
+
+```yaml
+virtual-commands:
+  builtin:
+    push:
+      enabled: true
+      timeout: 30s
+    pull:
+      enabled: true
+      timeout: 30s
+  custom:
+    hello:
+      description: "Say hello"
+      script: echo "Hello from virtual command!"
+      timeout: 10s
+  settings:
+    on-error: continue
+    output: color
+    history: false
+```
+
+### 12.3 使用虚拟命令
+
+```bash
+# 启动 SSH 会话
+assh login myserver
+
+# 在 SSH 会话中使用虚拟命令
+@push ./local-file.txt /remote/path/
+@pull /remote/file.txt ./local-path/
+@help
+@help push
+@version
+@status
+```
+
+### 12.4 内置命令
+
+| 命令 | 语法 | 说明 |
+|------|------|------|
+| `@push` | `@push [-r] <local> [remote]` | 上传文件到远程 |
+| `@pull` | `@pull [-r] <remote> [local]` | 从远程下载文件 |
+| `@help` | `@help [command]` | 显示帮助信息 |
+| `@version` | `@version` | 显示版本信息 |
+| `@status` | `@status` | 显示连接状态 |
+
+### 12.5 自定义命令
+
+在配置文件中定义自定义命令：
+
+```yaml
+virtual-commands:
+  custom:
+    deploy:
+      description: "Deploy application"
+      script: |
+        @push ./dist/ /var/www/html/
+        @run "systemctl restart nginx"
+      timeout: 120s
+```
+
+使用自定义命令：
+
+```bash
+@deploy
+```
+
+---
+
+## 13. 配置参考
 
 ### 11.1 存储路径
 
