@@ -46,14 +46,17 @@ function build () {
 }
 
 if [ -z "$1" ];then
+  # OS X Mac
   build darwin amd64 macOS
   build darwin 386 macOS
   build darwin arm macOS
 
+  # Linux
   build linux amd64 linux
   build linux 386 linux
   build linux arm linux
 
+  # Windows
   build windows amd64 windows
   build windows 386 windows
 else

@@ -7,3 +7,7 @@ assh
 assh-fs
 assh/
 backup/
+.obsidian/
+asshv2/
+adrs.db
+opencode-back/
