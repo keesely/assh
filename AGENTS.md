@@ -1,6 +1,6 @@
 # An SSH Client
 
-ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快速使用。当前版本：`v2.1.0-dev`
+ASSH: 使用Go 开发的SSH客户端，适用于服务器管理、维护和快速使用。当前版本：`v2.1.2`
 
 ## 项目状态 & 技术选型
 
@@ -93,8 +93,8 @@ asshv2/
 | **9** | **服务器健康检查** | **✅ 完成 (2026-05-17)** |
 | 10 | 跳板机支持 | ✅ P0+P1 完成 (2026-05-22) |
 | **11** | **自动更新/升级** | **✅ 完成 (2026-05-26)** |
-| 12 | 远程服务器挂载 (sshfs/WebDAV, SMB延后) | 📝 设计完成 (2026-05-29) |
-| 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ⏳ |
+| 12 | 远程服务器挂载 (sshfs/WebDAV, SMB延后) | ✅ 完成 (2026-06-14) |
+| 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ✅ 完成 (2026-06-14) |
 | NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | ✅ 完成 (2026-06-14) |
 | X1 | 实验：AI 安全检查 | ⏳ 排队中 (2026-05-17) |
 | X2 | 实验：虚拟命令投放与执行 | ⏳ 排队中 |
@@ -179,6 +179,14 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/port/servicemgr.go` — ServiceManager 接口 (NEXT-001)
 - [x] `asshc/service/servicemgr.go` — ServiceManagerImpl 实现 + RestoreAll 自动恢复 (NEXT-001)
 - [x] `cmd/service.go` — service CLI 命令组 (NEXT-001)
+- [x] `asshc/port/mounter.go` — FileMounter/MountManager/MountStore 接口 (Phase 12)
+- [x] `asshc/infra/mount/sshfs.go` — SSHFS 挂载器实现 (Phase 12)
+- [x] `asshc/infra/mount/webdav.go` — WebDAV 挂载器实现 (Phase 12)
+- [x] `asshc/infra/mount/manager.go` — MountManager 挂载管理器 (Phase 12)
+- [x] `asshc/infra/mount/detect.go` — 依赖检测 (Phase 12)
+- [x] `asshc/infra/mount/port.go` — WebDAV 端口管理 (Phase 12)
+- [x] `asshc/infra/store/mount.go` — MountStore SQLite 持久化 (Phase 12)
+- [x] `asshc/service/mount.go` — MountService 编排层 (Phase 12)
 
 ## 开发命令
 
