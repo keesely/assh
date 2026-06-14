@@ -25,6 +25,7 @@ import (
 	"assh/asshc/port"
 	"assh/asshc/service"
 	"assh/config"
+	"assh/log"
 )
 
 // Version 是 ASSH 的当前版本号，通过编译时注入（-ldflags）更新。
@@ -84,6 +85,13 @@ func main() {
 
 	// 7.1 创建统一服务管理器（NEXT-001）
 	serviceMgr := service.NewServiceManagerImpl(repo.ProxyServiceRepo(), repo.TunnelServiceRepo(), proxySvc)
+
+	// 7.2 启动时自动恢复已启用的服务（NEXT-001.13）
+	result := serviceMgr.RestoreAll(port.DefaultRestoreConfig())
+	if result.Total > 0 {
+		log.Infof("service restore: %d total, %d succeeded, %d failed",
+			result.Total, result.Succeeded, result.Failed)
+	}
 
 	// 8. 创建云同步服务（Phase 8）
 	// 初始使用空账户，实际账户在 Login 时从 DB 获取

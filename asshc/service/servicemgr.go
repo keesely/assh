@@ -7,8 +7,10 @@ package service
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"assh/asshc/port"
+	"assh/log"
 )
 
 // ServiceManagerImpl 实现 port.ServiceManager 接口。
@@ -268,4 +270,97 @@ func (m *ServiceManagerImpl) List(filter port.ServiceFilter) ([]*port.ServiceIns
 	}
 
 	return result, nil
+}
+
+// RestoreAll 尝试恢复所有已启用的服务。
+// 遍历 proxy_services 和 tunnel_services 仓库，对 Enabled == true 的服务
+// 执行自动恢复启动，支持指数退避重试。
+func (m *ServiceManagerImpl) RestoreAll(cfg port.RestoreConfig) port.RestoreResult {
+	result := port.RestoreResult{
+		Errors: make(map[int64]error),
+	}
+
+	// 恢复代理服务
+	proxies, err := m.proxyRepo.List("")
+	if err != nil {
+		log.Warnf("restore: list proxy services failed: %v", err)
+	} else {
+		for _, svc := range proxies {
+			if !svc.Enabled {
+				continue
+			}
+			result.Total++
+			instance := &port.ServiceInstance{
+				ID:   svc.ID,
+				Name: svc.Name,
+				Type: port.ServiceTypeProxy,
+			}
+			if err := m.restoreWithRetry(instance, cfg); err != nil {
+				result.Failed++
+				result.Errors[svc.ID] = err
+				log.Warnf("restore proxy service %q (id=%d) failed: %v", svc.Name, svc.ID, err)
+			} else {
+				result.Succeeded++
+				log.Infof("restore proxy service %q (id=%d) succeeded", svc.Name, svc.ID)
+			}
+		}
+	}
+
+	// 恢复隧道服务
+	tunnels, err := m.tunnelRepo.List("")
+	if err != nil {
+		log.Warnf("restore: list tunnel services failed: %v", err)
+	} else {
+		for _, svc := range tunnels {
+			if !svc.Enabled {
+				continue
+			}
+			result.Total++
+			instance := &port.ServiceInstance{
+				ID:   svc.ID,
+				Name: svc.Name,
+				Type: port.ServiceTypeTunnel,
+			}
+			if err := m.restoreWithRetry(instance, cfg); err != nil {
+				result.Failed++
+				result.Errors[svc.ID] = err
+				log.Warnf("restore tunnel service %q (id=%d) failed: %v", svc.Name, svc.ID, err)
+			} else {
+				result.Succeeded++
+				log.Infof("restore tunnel service %q (id=%d) succeeded", svc.Name, svc.ID)
+			}
+		}
+	}
+
+	return result
+}
+
+// restoreWithRetry 使用指数退避重试来启动单个服务实例。
+func (m *ServiceManagerImpl) restoreWithRetry(instance *port.ServiceInstance, cfg port.RestoreConfig) error {
+	var lastErr error
+	interval := cfg.InitialInterval
+	maxRetries := cfg.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 1 // 至少尝试一次
+	}
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// 退避等待
+			time.Sleep(interval)
+			interval = time.Duration(float64(interval) * cfg.BackoffFactor)
+		}
+
+		if err := m.Start(instance); err != nil {
+			lastErr = err
+			log.Debugf("restore service %d attempt %d/%d failed: %v",
+				instance.ID, attempt+1, maxRetries, err)
+			continue
+		}
+
+		// 成功启动
+		return nil
+	}
+
+	return fmt.Errorf("restore service %d after %d attempts: %w", instance.ID, maxRetries, lastErr)
 }

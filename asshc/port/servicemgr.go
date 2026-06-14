@@ -5,6 +5,8 @@
 // 从而实现依赖倒置原则——高层模块不依赖低层模块的具体实现。
 package port
 
+import "time"
+
 // ServiceType 服务类型枚举
 type ServiceType string
 
@@ -43,6 +45,37 @@ type ServiceFilter struct {
 	Server string        // 按服务器名称过滤（空=不过滤）
 }
 
+// RestoreConfig 定义自动恢复服务的配置参数。
+type RestoreConfig struct {
+	// MaxRetries 每个服务的最大重试次数，0 表示不重试。
+	MaxRetries int
+
+	// InitialInterval 首次重试等待时间。
+	InitialInterval time.Duration
+
+	// BackoffFactor 退避因子，每次重试间隔乘以该因子。
+	// 例如 2.0 表示指数退避。
+	BackoffFactor float64
+}
+
+// DefaultRestoreConfig 返回默认的自动恢复配置。
+// 默认最多重试 3 次，初始间隔 1 秒，2 倍退避。
+func DefaultRestoreConfig() RestoreConfig {
+	return RestoreConfig{
+		MaxRetries:      3,
+		InitialInterval: time.Second,
+		BackoffFactor:   2.0,
+	}
+}
+
+// RestoreResult 记录自动恢复操作的结果。
+type RestoreResult struct {
+	Total     int                 // 总尝试恢复数
+	Succeeded int                 // 成功恢复数
+	Failed    int                 // 失败恢复数
+	Errors    map[int64]error     // 失败的详细错误 key=service ID
+}
+
 // ServiceManager 定义统一的服务生命周期管理接口。
 // 代理和隧道服务通过此接口进行启动、停止、重启和状态查询。
 // 实现层负责将代理和隧道服务的差异封装在统一接口之后。
@@ -65,4 +98,10 @@ type ServiceManager interface {
 
 	// List 列出符合条件的服务实例。
 	List(filter ServiceFilter) ([]*ServiceInstance, error)
+
+	// RestoreAll 尝试恢复所有已启用的服务。
+	// 遍历代理和隧道服务仓库，对 Enabled == true 的服务执行自动恢复，
+	// 支持退避重试（由 cfg 控制）。
+	// 返回恢复结果统计。
+	RestoreAll(cfg RestoreConfig) RestoreResult
 }
