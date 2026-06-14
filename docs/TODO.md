@@ -1424,7 +1424,7 @@ assh service restart --type tunnel            # 重启所有隧道服务
 | 编号 | 内容 | 状态 | 优先级 |
 |------|------|:----:|:------:|
 | X1 | AI 安全检查 — 通过大模型自动生成漏洞检测脚本并执行 | 🆕 进行中 | 高 |
-| X2 | 虚拟命令投放与执行 — 虚拟命令的下发、跟踪和结果收集 | ⏳ 排队中 | 低 |
+| X2 | 虚拟命令投放与执行 — SSH 客户端本地命令扩展 (@push/@pull/@run/@deploy) | ✅ 需求已确认 | 实验性 |
 | X3 | 堡垒机管理 — 集中式堡垒机节点认证/审计/授权 | ⏳ 排队中 | 低 |
 
 **分支策略**: 实验阶段在 `dev/v2.0.1-phase-10` 分支上开发，独立包路径避免冲突。
@@ -1474,22 +1474,45 @@ assh security vuln-check -s myserver "检查是否存在未修补的 Log4j 漏�
 ls ~/.assh/security/scripts/
 ```
 
-### ⏳ X2: 虚拟命令投放与执行
+### ✅ X2: 虚拟命令投放与执行
 
-目标：实验性功能，测试虚拟命令（模拟命令）的投放和执行机制
+**状态**: ✅ 需求已确认 (2026-06-14)
+**优先级**: 实验性
+**设计文档**: `docs/requirements/RQ-003-virtual-commands.md`
 
-依赖：Phase 4 (CLI) + 实验性设计
+目标：SSH 客户端本地命令扩展机制，用户在 SSH 会话中输入 `@command` 触发本地操作
 
-> 本阶段为探索性实验，用于验证概念和用户需求，不保证最终实现。
+**核心机制**:
+- 前缀 `@` 区分虚拟命令和远程命令
+- 内置命令 + 自定义命令（YAML 配置）
+- 复用现有 SFTP 实现
+
+**内置命令**:
+- `@push [-r] <local> [remote]` - 上传文件到远程
+- `@pull [-r] <remote> [local]` - 从远程下载文件
+- `@run <command>` - 执行本地命令
+- `@deploy <script>` - 上传脚本到远程并执行
+- `@help [command]` - 显示帮助
+- `@version` - 显示版本
+- `@status` - 显示连接状态
+- `@reconnect` - 重新连接
+
+**配置**: `~/.assh/v2/virtual.yml` (YAML 格式，全局生效)
 
 | 编号 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|:----:|
-| X2.1 | 虚拟命令定义 | `asshc/domain/vcmd.go` | 定义虚拟命令结构（不实际执行，仅记录） | ⏳ |
-| X2.2 | 命令投放系统 | `asshc/service/vcmd.go` | 通过配置或远程下发虚拟命令到客户端 | ⏳ |
-| X2.3 | 命令执行跟踪 | `asshc/service/vcmd.go` | 记录虚拟命令的执行状态 (pending/running/completed) | ⏳ |
-| X2.4 | 结果收集 | `asshc/service/vcmd.go` | 收集虚拟命令的执行结果并上报 | ⏳ |
-| X2.5 | 实验命令 | `cmd/experiment.go` | 投放、执行、结果查看 | ⏳ |
-| **验证** | 手动测试 | | | ⏳ |
+| X2.1 | 虚拟命令实体 | `asshc/domain/virtual.go` | VirtualCommand 结构体定义 | ⏳ |
+| X2.2 | 命令处理器接口 | `asshc/port/virtual.go` | VirtualCommandHandler 接口 | ⏳ |
+| X2.3 | 命令服务 | `asshc/service/virtual.go` | VirtualCommandService 实现 | ⏳ |
+| X2.4 | 配置加载 | `asshc/infra/virtual/config.go` | 加载 virtual.yml 配置 | ⏳ |
+| X2.5 | @push 实现 | `asshc/infra/virtual/push.go` | 复用 SFTP 上传 | ⏳ |
+| X2.6 | @pull 实现 | `asshc/infra/virtual/pull.go` | 复用 SFTP 下载 | ⏳ |
+| X2.7 | @run 实现 | `asshc/infra/virtual/run.go` | 本地命令执行 | ⏳ |
+| X2.8 | @deploy 实现 | `asshc/infra/virtual/deploy.go` | 上传 + 执行 | ⏳ |
+| X2.9 | @help 实现 | `asshc/infra/virtual/help.go` | 帮助系统 | ⏳ |
+| X2.10 | 输入拦截 | `asshc/infra/virtual/handler.go` | SSH 会话输入拦截 | ⏳ |
+| X2.11 | 自定义命令 | `asshc/infra/virtual/custom.go` | YAML 配置的自定义命令解析 | ⏳ |
+| **验证** | 手动测试 | | @push/@pull/@help 功能验证 | ⏳ |
 
 ## 依赖顺序
 
