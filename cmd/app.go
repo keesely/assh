@@ -62,6 +62,7 @@ type App struct {
 	proxySvc       *service.ProxyService         // 代理 & 隧道服务
 	proxyRepo      transferport.ProxyServiceRepository  // 代理服务持久化
 	tunnelRepo     transferport.TunnelServiceRepository // 隧道服务持久化
+	serviceMgr     transferport.ServiceManager   // 统一服务管理器
 	syncSvc        *service.SyncService          // 云同步服务
 	healthSvc      *service.HealthService        // 健康检查服务
 	jumpSvc        *service.JumpService          // 跳板历史服务
@@ -70,7 +71,7 @@ type App struct {
 
 // NewApp 创建 CLI 应用，注入所有 service 依赖。
 // 注册全局标志（-v/-q/-F/-V）和子命令（server/login/run/bc/keygen）。
-func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService, proxyRepo transferport.ProxyServiceRepository, tunnelRepo transferport.TunnelServiceRepository, syncSvc *service.SyncService, healthSvc *service.HealthService, jumpSvc *service.JumpService, upgradeSvc *service.UpgradeService) *App {
+func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc *service.ServerService, knownRecorder transferport.KnownServerRecorder, keySvc *service.KeyService, keymgr transferport.KeyManager, proxySvc *service.ProxyService, proxyRepo transferport.ProxyServiceRepository, tunnelRepo transferport.TunnelServiceRepository, serviceMgr transferport.ServiceManager, syncSvc *service.SyncService, healthSvc *service.HealthService, jumpSvc *service.JumpService, upgradeSvc *service.UpgradeService) *App {
 	app := cli.NewApp()
 	app.Name = "ASSH - An SSH Client"
 	app.Usage = "An SSH Client"
@@ -89,6 +90,7 @@ func NewApp(version, build string, connectSvc *service.ConnectService, serverSvc
 		proxySvc:      proxySvc,
 		proxyRepo:     proxyRepo,
 		tunnelRepo:    tunnelRepo,
+		serviceMgr:    serviceMgr,
 		syncSvc:       syncSvc,
 		healthSvc:     healthSvc,
 		jumpSvc:       jumpSvc,
@@ -658,6 +660,7 @@ func (a *App) registerCommands() {
 	a.registerHealthCommands()
 	a.registerJumpCommands()
 	a.registerUpgradeCommands()
+	a.registerServiceCommands()
 }
 
 // beforeAction 是全局 Before 钩子，在每次命令执行前调用。

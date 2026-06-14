@@ -82,6 +82,9 @@ func main() {
 	tunnelMgr := proxy.NewTunnelManager()
 	proxySvc := service.NewProxyService(repo, connector, connectSvc, tunnelMgr)
 
+	// 7.1 创建统一服务管理器（NEXT-001）
+	serviceMgr := service.NewServiceManagerImpl(repo.ProxyServiceRepo(), repo.TunnelServiceRepo(), proxySvc)
+
 	// 8. 创建云同步服务（Phase 8）
 	// 初始使用空账户，实际账户在 Login 时从 DB 获取
 	syncer := qiniusync.NewSyncer(port.SyncAccount{})
@@ -111,7 +114,7 @@ func main() {
 	upgradeSvc := service.NewUpgradeService(versionChecker, downloader, installer)
 
 	// 12. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, repo.ProxyServiceRepo(), repo.TunnelServiceRepo(), syncSvc, healthSvc, jumpSvc, upgradeSvc)
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, repo.ProxyServiceRepo(), repo.TunnelServiceRepo(), serviceMgr, syncSvc, healthSvc, jumpSvc, upgradeSvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
