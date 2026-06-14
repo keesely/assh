@@ -5,9 +5,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	"assh/asshc/domain"
+	"assh/asshc/infra/proxy"
 	"assh/asshc/service"
 	"assh/config"
 
@@ -195,7 +197,30 @@ func (a *App) tunnelStopAction(c *cli.Context) error {
 	}
 
 	id := c.Args()[0]
-	return a.proxySvc.StopTunnel(id)
+
+	// Try in-process stop first
+	err := a.proxySvc.StopTunnel(id)
+	if err == nil {
+		fmt.Printf("tunnel %s stopped\n", id)
+		return nil
+	}
+
+	// Not found in-process, try daemon mode (PID file + signal)
+	pidPath := config.PidPath
+	proc, pidErr := proxy.ReadPidFile(pidPath)
+	if pidErr != nil {
+		// Neither in-process nor daemon found
+		return fmt.Errorf("tunnel %s not found: %w", id, err)
+	}
+
+	if sigErr := proc.Signal(syscall.SIGTERM); sigErr != nil {
+		return fmt.Errorf("send SIGTERM to daemon (PID %d): %w", proc.Pid, sigErr)
+	}
+
+	// Clean up PID file after sending signal
+	proxy.RemovePidFile(pidPath)
+	fmt.Printf("sent SIGTERM to daemon process (PID %d)\n", proc.Pid)
+	return nil
 }
 
 func (a *App) tunnelListAction(c *cli.Context) error {
