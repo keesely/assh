@@ -1430,7 +1430,12 @@ assh service restart --type tunnel            # 重启所有隧道服务
 
 **分支策略**: 实验阶段在 `dev/v2.0.1-phase-10` 分支上开发，独立包路径避免冲突。
 
-### 🆕 X1: AI 安全检查
+### ✅ X1: AI 安全检查
+
+**状态**: 🚧 开发中 (2026-06-14)
+**优先级**: 实验性
+**设计文档**: `docs/worklogs/2026-05-17-PhaseX-AI-Security-Design.md`
+**需求文档**: `docs/requirements/RQ-004-ai-security-check.md`
 
 目标：通过 AI 大模型自动生成漏洞检测脚本并执行安全检查
 
@@ -1438,30 +1443,49 @@ assh service restart --type tunnel            # 重启所有隧道服务
 
 > 本阶段为探索性实验，用于验证 AI 驱动的安全检测概念，不保证最终实现。
 
-**设计文档**: `docs/worklogs/2026-05-17-PhaseX-AI-Security-Design.md`
+**核心流程**:
+- 用户输入漏洞信息（CVE 编号或自由文本）
+- AI 自动生成检测脚本
+- 安全双重审查（自动规则 + 用户确认）
+- SSH 远程执行
+- 输出报告（终端 + Markdown）
 
-**设计决策**:
-- **AI 接口**: OpenAI 兼容 API (可配置 endpoint/model/api_key/max_tokens/temperature)
-- **输入**: CVE 编号 + 自由文本描述，自动从 NVD NIST 查询 CVE 详情
-- **安全审查**: 双重审查 — 自动规则过滤 + 高风险操作用户确认
-- **执行**: SSH 远程执行 + 本地脚本保存 (`~/.assh/security/scripts/`)
-- **输出**: 终端显示 + Markdown 报告文件
-- **日志**: 完整保存 (脚本 + 执行日志 + 结果 + 时间戳)
-- **目标**: 指定单个服务器 (`-s <server>`)
+**AI 配置**:
+- 独立配置文件：`~/.assh/v2/ai.yml`
+- 支持 OpenAI 兼容 API
+- 可配置 endpoint/model/api_key
+
+**安全规则**:
+- 内置规则 + 用户自定义规则
+- 高风险操作需用户确认
+
+**CVE 查询**:
+- 从 NVD NIST API 自动获取详情
+
+**输出**:
+- 终端显示 + Markdown 报告
+- 脚本保存到 `~/.assh/security/scripts/`
+
+**目标服务器**:
+- 支持单台、批量、分组检查
+
+**错误处理**:
+- 显示错误并继续
+- 完整日志记录
 
 | 编号 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|:----:|
-| X1.1 | AI 配置 | `config/` (合入现有配置) | OpenAI 兼容 API 配置 (endpoint/model/key/params) | ⬜ |
-| X1.2 | AI 接口定义 | `asshc/port/ai.go` | AIProvider 接口 (Generate/SecureCheck) | ⬜ |
-| X1.3 | AI 客户端 | `asshc/infra/ai/openai.go` | OpenAI 兼容 API 调用实现 | ⬜ |
-| X1.4 | CVE 查询 | `asshc/infra/cve/nvd.go` | NVD NIST API CVE 详情自动查询 | ⬜ |
-| X1.5 | 漏洞领域实体 | `asshc/domain/vuln.go` | VulnCheck/Script/Report 等领域类型 | ⬜ |
-| X1.6 | 安全审查引擎 | `asshc/infra/security/scanner.go` | 脚本自动安全审查 (危险命令/路径/操作) | ⬜ |
-| X1.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ⬜ |
-| X1.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ⬜ |
-| X1.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ⬜ |
-| X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ⬜ |
-| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ⬜ |
+| X1.1 | AI 配置 | `config/` (合入现有配置) | OpenAI 兼容 API 配置 (endpoint/model/key/params) | ✅ |
+| X1.2 | AI 接口定义 | `asshc/port/ai.go` | AIProvider 接口 (Generate/SecureCheck) | ✅ |
+| X1.3 | AI 客户端 | `asshc/infra/ai/openai.go` | OpenAI 兼容 API 调用实现 | ✅ |
+| X1.4 | CVE 查询 | `asshc/infra/cve/nvd.go` | NVD NIST API CVE 详情自动查询 | ✅ |
+| X1.5 | 漏洞领域实体 | `asshc/domain/vuln.go` | VulnCheck/Script/Report 等领域类型 | ✅ |
+| X1.6 | 安全审查引擎 | `asshc/infra/security/scanner.go` | 脚本自动安全审查 (危险命令/路径/操作) | ✅ |
+| X1.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ✅ |
+| X1.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ✅ |
+| X1.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ✅ |
+| X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ✅ |
+| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ✅ |
 
 **命令使用预览**:
 ```bash
@@ -1475,9 +1499,9 @@ assh security vuln-check -s myserver "检查是否存在未修补的 Log4j 漏�
 ls ~/.assh/security/scripts/
 ```
 
-### ✅ X2: 虚拟命令投放与执行
+### ❄️ X2: 虚拟命令投放与执行 (已冻结)
 
-**状态**: 🚧 开发中 (2026-06-14)
+**状态**: ❄️ 已冻结 (2026-06-14)
 **优先级**: 实验性
 **设计文档**: `docs/requirements/RQ-003-virtual-commands.md`
 **版本**: v2.2.0-preview.1
@@ -1509,12 +1533,14 @@ ls ~/.assh/security/scripts/
 | X2.4 | 配置加载 | `asshc/infra/virtual/config.go` | 加载 virtual.yml 配置 | ✅ |
 | X2.5 | @push 实现 | `asshc/infra/virtual/push.go` | 复用 SFTP 上传 | ✅ |
 | X2.6 | @pull 实现 | `asshc/infra/virtual/pull.go` | 复用 SFTP 下载 | ✅ |
-| X2.7 | @run 实现 | `asshc/infra/virtual/run.go` | 本地命令执行 | ⏳ |
-| X2.8 | @deploy 实现 | `asshc/infra/virtual/deploy.go` | 上传 + 执行 | ⏳ |
+| X2.7 | @run 实现 | `asshc/infra/virtual/run.go` | 本地命令执行 | ❄️ |
+| X2.8 | @deploy 实现 | `asshc/infra/virtual/deploy.go` | 上传 + 执行 | ❄️ |
 | X2.9 | @help 实现 | `asshc/infra/virtual/help.go` | 帮助系统 | ✅ |
 | X2.10 | 输入拦截 | `asshc/infra/virtual/handler.go` | SSH 会话输入拦截 | ✅ |
-| X2.11 | 自定义命令 | `asshc/infra/virtual/custom.go` | YAML 配置的自定义命令解析 | ⏳ |
-| **验证** | 手动测试 | | @push/@pull/@help 功能验证 | ⏳ |
+| X2.11 | 自定义命令 | `asshc/infra/virtual/custom.go` | YAML 配置的自定义命令解析 | ❄️ |
+| **验证** | 手动测试 | | @push/@pull/@help 功能验证 | ❄️ |
+
+**冻结说明**: X2 已完成基础框架，暂停开发，优先进入 X1 开发。
 
 ## 依赖顺序
 
