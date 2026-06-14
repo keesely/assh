@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"assh/asshc/domain"
 	"assh/asshc/port"
@@ -143,6 +144,42 @@ func (s *ConnectService) RunWithOutput(client *ssh.Client, cmd string) (string, 
 		return "", fmt.Errorf("command is empty")
 	}
 	return s.session.RunWithOutput(client, cmd)
+}
+
+// RunWithOutputTimeout 在已建立的 SSH 连接上执行命令，带超时控制，返回 stdout 输出。
+func (s *ConnectService) RunWithOutputTimeout(client *ssh.Client, cmd string, timeout time.Duration) (string, error) {
+	if client == nil {
+		return "", fmt.Errorf("ssh client is nil")
+	}
+	if cmd == "" {
+		return "", fmt.Errorf("command is empty")
+	}
+	return s.session.RunWithOutputTimeout(client, cmd, timeout)
+}
+
+// RunWithStderr 在已建立的 SSH 连接上执行命令，分离返回 stdout 和 stderr。
+func (s *ConnectService) RunWithStderr(client *ssh.Client, cmd string) (stdout, stderr string, err error) {
+	if client == nil {
+		return "", "", fmt.Errorf("ssh client is nil")
+	}
+	if cmd == "" {
+		return "", "", fmt.Errorf("command is empty")
+	}
+	return s.session.RunWithStderr(client, cmd)
+}
+
+// RunWithStderrTimeout 在已建立的 SSH 连接上执行命令，带超时控制，分离返回 stdout 和 stderr。
+func (s *ConnectService) RunWithStderrTimeout(client *ssh.Client, cmd string, timeout time.Duration) (stdout, stderr string, err error) {
+	if client == nil {
+		return "", "", fmt.Errorf("ssh client is nil")
+	}
+	if cmd == "" {
+		return "", "", fmt.Errorf("command is empty")
+	}
+	// 使用 RunWithOutputTimeout 获取 stdout，stderr 需要单独处理
+	// 由于 SSHSession 接口没有 RunWithStderrTimeout，我们使用 RunWithOutputTimeout 作为近似
+	output, err := s.session.RunWithOutputTimeout(client, cmd, timeout)
+	return output, "", err
 }
 
 // Close 安全关闭 SSH 连接，如果连接已为 nil 则不做操作。

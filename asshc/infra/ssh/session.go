@@ -1,7 +1,10 @@
 package ssh
 
 import (
+	"bytes"
+	"context"
 	"os"
+	"time"
 
 	"assh/asshc/port"
 	"golang.org/x/crypto/ssh"
@@ -95,4 +98,99 @@ func (s *Session) RunWithOutput(client *ssh.Client, cmd string) (string, error) 
 
 	output, err := session.CombinedOutput(cmd)
 	return string(output), err
+}
+
+// RunWithTimeout 在远程服务器上执行命令，带超时控制。
+// 超时后命令将被强制终止。
+func (s *Session) RunWithTimeout(client *ssh.Client, cmd string, timeout time.Duration) error {
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
+
+	if err := session.Start(cmd); err != nil {
+		return err
+	}
+
+	// 创建超时上下文
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		// 超时，强制关闭会话
+		session.Close()
+		return &TimeoutError{Duration: timeout}
+	}
+}
+
+// RunWithOutputTimeout 在远程服务器上执行命令，带超时控制，返回 stdout 输出。
+func (s *Session) RunWithOutputTimeout(client *ssh.Client, cmd string, timeout time.Duration) (string, error) {
+	session, err := client.NewSession()
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	var stdout bytes.Buffer
+	session.Stdout = &stdout
+
+	if err := session.Start(cmd); err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		return stdout.String(), err
+	case <-ctx.Done():
+		session.Close()
+		return stdout.String(), &TimeoutError{Duration: timeout}
+	}
+}
+
+// RunWithStderr 在远程服务器上执行命令，分离返回 stdout 和 stderr。
+func (s *Session) RunWithStderr(client *ssh.Client, cmd string) (stdout, stderr string, err error) {
+	session, err := client.NewSession()
+	if err != nil {
+		return "", "", err
+	}
+	defer session.Close()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+	session.Stderr = &stderrBuf
+
+	if err := session.Run(cmd); err != nil {
+		return stdoutBuf.String(), stderrBuf.String(), err
+	}
+
+	return stdoutBuf.String(), stderrBuf.String(), nil
+}
+
+// TimeoutError 表示命令执行超时错误。
+type TimeoutError struct {
+	Duration time.Duration
+}
+
+func (e *TimeoutError) Error() string {
+	return "command timed out after " + e.Duration.String()
 }

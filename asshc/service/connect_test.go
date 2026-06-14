@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"assh/asshc/domain"
 	"golang.org/x/crypto/ssh"
@@ -57,6 +58,28 @@ func (m *mockSession) RunWithOutput(client *ssh.Client, cmd string) (string, err
 	}
 	// 默认返回命令输出（模拟执行成功）
 	return "mock output for: " + cmd, nil
+}
+
+func (m *mockSession) RunWithTimeout(client *ssh.Client, cmd string, timeout time.Duration) error {
+	if m.runFunc != nil {
+		return m.runFunc(client, cmd)
+	}
+	return nil
+}
+
+func (m *mockSession) RunWithOutputTimeout(client *ssh.Client, cmd string, timeout time.Duration) (string, error) {
+	if m.runWithOutputFunc != nil {
+		return m.runWithOutputFunc(client, cmd)
+	}
+	return "mock output for: " + cmd, nil
+}
+
+func (m *mockSession) RunWithStderr(client *ssh.Client, cmd string) (stdout, stderr string, err error) {
+	if m.runWithOutputFunc != nil {
+		output, err := m.runWithOutputFunc(client, cmd)
+		return output, "", err
+	}
+	return "mock output for: " + cmd, "", nil
 }
 
 func TestNewConnectService(t *testing.T) {

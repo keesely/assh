@@ -58,6 +58,10 @@ func (a *App) registerConnectCommands() {
 				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
 				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
 				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
+				// Phase 13 新增
+				cli.StringFlag{Name: "timeout", Usage: "command timeout (e.g., 30s, 5m)"},
+				cli.StringFlag{Name: "format", Value: "plain", Usage: "output format: plain, json, table"},
+				cli.BoolFlag{Name: "stderr", Usage: "show stderr separately"},
 			},
 		},
 		{
@@ -76,6 +80,9 @@ func (a *App) registerConnectCommands() {
 				cli.StringFlag{Name: "P, password", Usage: "password override"},
 				cli.StringFlag{Name: "log", Usage: "output log path (default: ./bc-result-{timestamp}.json)"},
 				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
+				// Phase 13 新增
+				cli.StringFlag{Name: "timeout", Usage: "command timeout (e.g., 30s, 5m)"},
+				cli.StringFlag{Name: "format", Value: "json", Usage: "output format: plain, json, table"},
 			},
 		},
 	}...)
@@ -207,6 +214,7 @@ func (a *App) loginAction(c *cli.Context) error {
 }
 
 // runAction 处理 run 命令，在指定服务器上执行单条命令。
+// 支持 --timeout（超时）、--format（输出格式）、--stderr（分离输出）。
 func (a *App) runAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
@@ -217,6 +225,10 @@ func (a *App) runAction(c *cli.Context) error {
 	if cmd == "" {
 		return fmt.Errorf("command is required")
 	}
+
+	// 变量替换 (P13.6)
+	server, _ := a.serverSvc.GetServer(name)
+	cmd = expandVariables(cmd, server, name)
 
 	jumpExpr := c.String("jump")
 
@@ -246,6 +258,32 @@ func (a *App) runAction(c *cli.Context) error {
 		}
 	}
 	defer a.connectSvc.Close(client)
+
+	// 解析超时
+	timeout := c.String("timeout")
+	format := c.String("format")
+	showStderr := c.Bool("stderr")
+
+	// 执行命令
+	if timeout != "" {
+		duration, err := time.ParseDuration(timeout)
+		if err != nil {
+			return fmt.Errorf("invalid timeout: %w", err)
+		}
+
+		if showStderr {
+			stdout, stderr, err := a.connectSvc.RunWithStderrTimeout(client, cmd, duration)
+			return formatOutput(format, name, cmd, stdout, stderr, err)
+		}
+
+		output, err := a.connectSvc.RunWithOutputTimeout(client, cmd, duration)
+		return formatOutput(format, name, cmd, output, "", err)
+	}
+
+	if showStderr {
+		stdout, stderr, err := a.connectSvc.RunWithStderr(client, cmd)
+		return formatOutput(format, name, cmd, stdout, stderr, err)
+	}
 
 	return a.connectSvc.Run(client, cmd)
 }
@@ -518,4 +556,96 @@ func lookupShortFlag(c *cli.Context, shortName string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// expandVariables 替换命令中的变量占位符。
+// 支持的变量：
+//   - {{.Host}} - 服务器主机地址
+//   - {{.User}} - 用户名
+//   - {{.Name}} - 服务器名称
+//   - {{.Port}} - 端口号
+//   - {{.Group}} - 分组名
+func expandVariables(cmd string, server *domain.Server, name string) string {
+	if server == nil {
+		// 直连模式，使用 name 作为 host
+		parts := strings.SplitN(name, "@", 2)
+		user := "root"
+		host := name
+		if len(parts) == 2 {
+			user = parts[0]
+			host = parts[1]
+		}
+		cmd = strings.ReplaceAll(cmd, "{{.Host}}", host)
+		cmd = strings.ReplaceAll(cmd, "{{.User}}", user)
+		cmd = strings.ReplaceAll(cmd, "{{.Name}}", name)
+		cmd = strings.ReplaceAll(cmd, "{{.Port}}", "22")
+		cmd = strings.ReplaceAll(cmd, "{{.Group}}", "")
+		return cmd
+	}
+
+	cmd = strings.ReplaceAll(cmd, "{{.Host}}", server.Host)
+	cmd = strings.ReplaceAll(cmd, "{{.User}}", server.User)
+	cmd = strings.ReplaceAll(cmd, "{{.Name}}", server.Name)
+	cmd = strings.ReplaceAll(cmd, "{{.Port}}", strconv.Itoa(server.Port))
+	cmd = strings.ReplaceAll(cmd, "{{.Group}}", server.Group)
+	return cmd
+}
+
+// runOutput 用于格式化输出的数据结构。
+type runOutput struct {
+	Server string `json:"server"`
+	Cmd    string `json:"command"`
+	Stdout string `json:"stdout,omitempty"`
+	Stderr string `json:"stderr,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// formatOutput 根据指定格式输出命令执行结果。
+func formatOutput(format, serverName, cmd, stdout, stderr string, err error) error {
+	if err != nil {
+		if format == "plain" {
+			return err
+		}
+	}
+
+	switch format {
+	case "json":
+		output := runOutput{
+			Server: serverName,
+			Cmd:    cmd,
+			Stdout: stdout,
+			Stderr: stderr,
+		}
+		if err != nil {
+			output.Error = err.Error()
+		}
+		jsonData, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(jsonData))
+
+	case "table":
+		fmt.Printf("SERVER: %s\n", serverName)
+		fmt.Printf("CMD:    %s\n", cmd)
+		if stdout != "" {
+			fmt.Printf("STDOUT:\n%s\n", stdout)
+		}
+		if stderr != "" {
+			fmt.Printf("STDERR:\n%s\n", stderr)
+		}
+		if err != nil {
+			fmt.Printf("ERROR:  %v\n", err)
+		}
+
+	default: // plain
+		if stdout != "" {
+			fmt.Print(stdout)
+		}
+		if stderr != "" {
+			fmt.Fprintf(os.Stderr, "%s", stderr)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
