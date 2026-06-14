@@ -1475,9 +1475,9 @@ assh security vuln-check -s myserver "检查是否存在未修补的 Log4j 漏�
 ls ~/.assh/security/scripts/
 ```
 
-### ✅ X2: 虚拟命令投放与执行
+### ❄️ X2: 虚拟命令投放与执行 (已冻结)
 
-**状态**: 🚧 开发中 (2026-06-14)
+**状态**: ❄️ 已冻结 (2026-06-14)
 **优先级**: 实验性
 **设计文档**: `docs/requirements/RQ-003-virtual-commands.md`
 **版本**: v2.2.0-preview.1
@@ -1509,12 +1509,14 @@ ls ~/.assh/security/scripts/
 | X2.4 | 配置加载 | `asshc/infra/virtual/config.go` | 加载 virtual.yml 配置 | ✅ |
 | X2.5 | @push 实现 | `asshc/infra/virtual/push.go` | 复用 SFTP 上传 | ✅ |
 | X2.6 | @pull 实现 | `asshc/infra/virtual/pull.go` | 复用 SFTP 下载 | ✅ |
-| X2.7 | @run 实现 | `asshc/infra/virtual/run.go` | 本地命令执行 | ⏳ |
-| X2.8 | @deploy 实现 | `asshc/infra/virtual/deploy.go` | 上传 + 执行 | ⏳ |
+| X2.7 | @run 实现 | `asshc/infra/virtual/run.go` | 本地命令执行 | ❄️ |
+| X2.8 | @deploy 实现 | `asshc/infra/virtual/deploy.go` | 上传 + 执行 | ❄️ |
 | X2.9 | @help 实现 | `asshc/infra/virtual/help.go` | 帮助系统 | ✅ |
 | X2.10 | 输入拦截 | `asshc/infra/virtual/handler.go` | SSH 会话输入拦截 | ✅ |
-| X2.11 | 自定义命令 | `asshc/infra/virtual/custom.go` | YAML 配置的自定义命令解析 | ⏳ |
-| **验证** | 手动测试 | | @push/@pull/@help 功能验证 | ⏳ |
+| X2.11 | 自定义命令 | `asshc/infra/virtual/custom.go` | YAML 配置的自定义命令解析 | ❄️ |
+| **验证** | 手动测试 | | @push/@pull/@help 功能验证 | ❄️ |
+
+**冻结说明**: X2 已完成基础框架，暂停开发，优先进入 X1 开发。
 
 ## 依赖顺序
 
