@@ -8,18 +8,30 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"sync"
+	"sync/atomic"
 
 	_ "modernc.org/sqlite"
 )
 
+// closeAndLog 关闭 io.Closer 并在出错时记录警告日志。
+// 用于 defer 中不再需要检查错误的场景（如 rows.Close()、client.Close()）。
+func closeAndLog(c io.Closer, name string) {
+	if err := c.Close(); err != nil {
+		// 使用 fmt.Printf 代替 log.Warnf 避免循环依赖
+		fmt.Printf("WARN: %s close error: %v\n", name, err)
+	}
+}
+
 // Store 是 SQLite 存储的核心结构，实现 ServerRepository 接口。
 // 管理数据库连接、读写锁、以及 AES 加密密钥。
 type Store struct {
-	dbPath    string      // 数据库文件路径
-	db        *sql.DB     // SQLite 数据库连接
-	mu        sync.RWMutex // 读写锁，保证并发安全
-	cryptoKey []byte      // AES-GCM 加密密钥，首次使用时自动生成
+	dbPath    string        // 数据库文件路径
+	db        *sql.DB       // SQLite 数据库连接
+	mu        sync.RWMutex  // 读写锁，保证并发安全
+	cryptoKey atomic.Value  // AES-GCM 加密密钥，首次使用时自动生成（[]byte 类型）
+	keyOnce   sync.Once     // 确保密钥只加载一次
 }
 
 // NewStore 创建并初始化 SQLite 存储实例。
@@ -31,10 +43,8 @@ func NewStore(dbPath string) (*Store, error) {
 	}
 
 	store := &Store{
-		dbPath:    dbPath,
-		db:        db,
-		mu:        sync.RWMutex{},
-		cryptoKey: nil,
+		dbPath: dbPath,
+		db:     db,
 	}
 
 	if err := store.migrate(); err != nil {
@@ -42,8 +52,10 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
-	if key, err := store.getCryptoKey(); err == nil && key != nil {
-		store.cryptoKey = key
+	// 预加载加密密钥（如果存在）
+	if _, err := store.getCryptoKey(); err != nil {
+		store.db.Close()
+		return nil, fmt.Errorf("load crypto key: %w", err)
 	}
 
 	return store, nil
@@ -201,4 +213,9 @@ func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.db.Close()
+}
+
+// JumpRecorder 返回跳板历史记录器。
+func (s *Store) JumpRecorder() *JumpRecorder {
+	return NewJumpRecorder(s)
 }

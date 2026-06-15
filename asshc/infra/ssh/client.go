@@ -7,16 +7,23 @@ package ssh
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"assh/asshc/domain"
+	"assh/asshc/port"
 	"assh/config"
+	"assh/log"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 // DefaultTimeout 默认 SSH 连接建立超时时间（10 秒）。
@@ -25,9 +32,18 @@ const DefaultTimeout = 10 * time.Second
 // Connector 实现 port.SSHConnector 接口，负责 SSH 连接的建立和关闭。
 // 认证尝试顺序：SSH Agent → 密钥文件 → 密码。
 // 支持密钥备份优先策略（data/keys/）和加密密钥自动解密。
+//
+// 跳板链追踪：ConnectChain 返回的 *ssh.Client 关闭时，会自动级联关闭
+// 所有上游跳板机连接（参见 Close 方法）。
 type Connector struct {
 	accountPassphrase []byte // 用于解密 data/keys/ 中加密的备份密钥
+
+	mu           sync.Mutex
+	chainParents map[*ssh.Client][]*ssh.Client // 跳板链目标→父连接映射
 }
+
+// 编译期接口合规检查
+var _ port.SSHConnector = (*Connector)(nil)
 
 // NewConnector 创建 Connector 实例（不含 passphrase，用于向后兼容）。
 // 密钥备份优先策略不可用，备份密钥解密不可用。
@@ -42,6 +58,15 @@ func NewConnectorWithPassphrase(accountPassphrase []byte) *Connector {
 	return &Connector{
 		accountPassphrase: accountPassphrase,
 	}
+}
+
+// ClearSensitiveData 清零 Connector 中的敏感数据（如 accountPassphrase）。
+// 应在不再需要 Connector 时调用，防止敏感数据在内存中残留。
+func (c *Connector) ClearSensitiveData() {
+	for i := range c.accountPassphrase {
+		c.accountPassphrase[i] = 0
+	}
+	c.accountPassphrase = nil
 }
 
 // Connect 根据服务器配置建立 SSH 连接。
@@ -113,11 +138,113 @@ func (c *Connector) keepAlive(client *ssh.Client, interval time.Duration) {
 }
 
 // Close 关闭 SSH 连接，client 为 nil 时不做操作。
+// 如果 client 是通过 ConnectChain 返回的跳板链目标连接，
+// 会按"目标→最后一跳→...→第一跳"顺序级联关闭所有上游连接。
+// 直连（Connect）返回的 client 直接关闭，不做额外操作。
 func (c *Connector) Close(client *ssh.Client) error {
-	if client != nil {
-		return client.Close()
+	if client == nil {
+		return nil
 	}
+
+	// 先关闭目标连接
+	client.Close()
+
+	// 检查是否有跳板链父连接需要级联关闭
+	c.mu.Lock()
+	parents, ok := c.chainParents[client]
+	delete(c.chainParents, client)
+	c.mu.Unlock()
+
+	if ok {
+		// 按倒序关闭所有跳板连接：最后一跳 → ... → 第一跳
+		for i := len(parents) - 1; i >= 0; i-- {
+			parents[i].Close()
+		}
+	}
+
 	return nil
+}
+
+// ConnectChain 通过跳板链连接到目标服务器。
+// chain 参数为有序的跳板服务器列表，从第一个依次连接到最后的目标服务器。
+// 返回最终的 ssh.Client（连接到目标服务器）。
+func (c *Connector) ConnectChain(target *domain.Server, chain []*domain.Server) (*ssh.Client, error) {
+	if len(chain) == 0 {
+		return c.Connect(target)
+	}
+
+	var parents []*ssh.Client
+
+	// Step 1: 连接第一个跳板机
+	first := chain[0]
+	client, err := c.Connect(first)
+	if err != nil {
+		return nil, fmt.Errorf("jump[0] %s: %w", first.Host, err)
+	}
+	parents = append(parents, client)
+
+	// Step 2: 依次串联后续跳板机
+	for i := 1; i < len(chain); i++ {
+		hop := chain[i]
+		client, err = c.dialThrough(client, hop)
+		if err != nil {
+			c.closeAll(parents)
+			return nil, fmt.Errorf("jump[%d] %s: %w", i, hop.Host, err)
+		}
+		parents = append(parents, client)
+	}
+
+	// Step 3: 最后连接目标
+	targetClient, err := c.dialThrough(client, target)
+	if err != nil {
+		c.closeAll(parents)
+		return nil, fmt.Errorf("target %s: %w", target.Host, err)
+	}
+
+	// 注册跳板链追踪：Close 时会级联关闭所有上游连接
+	c.mu.Lock()
+	if c.chainParents == nil {
+		c.chainParents = make(map[*ssh.Client][]*ssh.Client)
+	}
+	c.chainParents[targetClient] = parents
+	c.mu.Unlock()
+
+	return targetClient, nil
+}
+
+// dialThrough 通过已有客户端拨号到目标服务器。
+// 连接建立后自动配置 Keepalive（与直连行为一致）。
+func (c *Connector) dialThrough(parent *ssh.Client, server *domain.Server) (*ssh.Client, error) {
+	addr := net.JoinHostPort(server.Host, fmt.Sprintf("%d", server.Port))
+	conn, err := parent.Dial("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("dial %s: %w", addr, err)
+	}
+	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, c.buildConfig(server))
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("handshake %s: %w", addr, err)
+	}
+	client := ssh.NewClient(sshConn, chans, reqs)
+	c.setupKeepalive(client, server)
+	return client, nil
+}
+
+// buildConfig 根据服务器配置构建 SSH ClientConfig。
+func (c *Connector) buildConfig(server *domain.Server) *ssh.ClientConfig {
+	return &ssh.ClientConfig{
+		User:            server.User,
+		Auth:            c.authMethods(server),
+		HostKeyCallback: c.getHostKeyCallback(server),
+		Timeout:         DefaultTimeout,
+	}
+}
+
+// closeAll 关闭所有跳板连接（用于错误回滚）。
+func (c *Connector) closeAll(clients []*ssh.Client) {
+	for _, client := range clients {
+		client.Close()
+	}
 }
 
 // authMethods 根据服务器配置，按优先级收集可用的认证方式。
@@ -265,32 +392,99 @@ func sha256Hash(s string) string {
 }
 
 // getHostKeyCallback 返回 HostKey 校验回调函数。
-// 如果 Options["insecure_skip_hostkey"] 为 true，则跳过校验。
-// 默认行为为使用 known_hosts 文件校验。
+// 默认使用 known_hosts 文件进行校验，仅当 Options["insecure_skip_hostkey"] 为 true 时跳过。
 func (c *Connector) getHostKeyCallback(server *domain.Server) ssh.HostKeyCallback {
+	// 检查是否跳过 host key 验证
 	if skip, ok := server.Options["insecure_skip_hostkey"]; ok {
 		if v, ok := skip.(bool); ok && v {
+			log.Warnf("⚠️  Host key verification disabled for %s (insecure_skip_hostkey=true)", server.Name)
+			log.Warnf("   This should only be used in trusted networks")
 			return ssh.InsecureIgnoreHostKey()
 		}
 	}
 
-	// 使用 known_hosts 文件校验
-	knownHostsPath := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
-	if path, ok := server.Options["known_hosts_path"]; ok {
-		if p, ok := path.(string); ok {
-			knownHostsPath = p
+	// 默认：使用 known_hosts 文件验证
+	knownHostsPath := c.getKnownHostsPath()
+	callback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		// 如果 known_hosts 文件无法加载（不存在或格式错误），
+		// 返回自定义回调，提示用户首次连接
+		return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return c.handleUnknownHost(hostname, key, knownHostsPath)
 		}
 	}
 
-	checker, err := NewKnownHostsChecker(knownHostsPath)
+	// 包装 knownhosts callback，未知主机时提示用户
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := callback(hostname, remote, key)
+		if err != nil {
+			var keyErr *knownhosts.KeyError
+			if errors.As(err, &keyErr) {
+				// 未知主机，提示用户
+				return c.handleUnknownHost(hostname, key, knownHostsPath)
+			}
+			// 其他错误（如已知主机但密钥不匹配）
+			return err
+		}
+		return nil
+	}
+}
+
+// getKnownHostsPath 返回 known_hosts 文件路径。
+func (c *Connector) getKnownHostsPath() string {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		// 如果无法加载 known_hosts，回退到不安全模式并记录警告
-		fmt.Printf("Warning: Failed to load known_hosts from %s: %v\n", knownHostsPath, err)
-		fmt.Println("Warning: Falling back to insecure host key verification")
-		return ssh.InsecureIgnoreHostKey()
+		home = "."
+	}
+	return filepath.Join(home, ".ssh", "known_hosts")
+}
+
+// handleUnknownHost 处理未知主机的情况。
+// 在终端环境中交互式提示用户，非终端环境拒绝连接。
+func (c *Connector) handleUnknownHost(hostname string, key ssh.PublicKey, knownHostsPath string) error {
+	fingerprint := ssh.FingerprintSHA256(key)
+
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Printf("The authenticity of host '%s' can't be established.\n", hostname)
+		fmt.Printf("%s key fingerprint is %s\n", key.Type(), fingerprint)
+		fmt.Printf("Are you sure you want to continue connecting (yes/no/[fingerprint])? ")
+
+		var response string
+		fmt.Scanln(&response)
+
+		switch strings.ToLower(response) {
+		case "yes", "y":
+			return c.addToKnownHosts(hostname, key, knownHostsPath)
+		case fingerprint:
+			return c.addToKnownHosts(hostname, key, knownHostsPath)
+		default:
+			return fmt.Errorf("host key verification failed: user rejected")
+		}
 	}
 
-	return checker.Check
+	// 非交互式环境：拒绝连接
+	return fmt.Errorf("host key verification failed: unknown host %s (fingerprint: %s)", hostname, fingerprint)
+}
+
+// addToKnownHosts 将主机密钥添加到 known_hosts 文件。
+func (c *Connector) addToKnownHosts(hostname string, key ssh.PublicKey, knownHostsPath string) error {
+	dir := filepath.Dir(knownHostsPath)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("failed to create known_hosts directory: %w", err)
+	}
+
+	f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open known_hosts: %w", err)
+	}
+	defer f.Close()
+
+	line := knownhosts.Line([]string{hostname}, key)
+	if _, err := f.WriteString(line + "\n"); err != nil {
+		return fmt.Errorf("failed to write known_hosts: %w", err)
+	}
+
+	return nil
 }
 
 // getKeepalive 从服务器配置中读取 Keepalive 心跳间隔（秒）。
