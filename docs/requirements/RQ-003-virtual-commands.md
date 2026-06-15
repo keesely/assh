@@ -1,3 +1,17 @@
+---
+id: RQ-003
+title: 虚拟命令系统
+status: accepted
+priority: high
+created: 2026-06-14
+updated: 2026-06-15
+source: user
+phase: x2
+related_adr: []
+related_rq: []
+tags: [ssh, ux, experimental]
+---
+
 # RQ-003: 虚拟命令投放与执行 (X2)
 
 > 状态：✅ 已确认
@@ -59,14 +73,16 @@
 - 相对路径基于当前工作目录
 - `~` 展开为用户主目录
 
-#### 执行命令
+#### 执行命令（后续迭代）
 
-| 命令 | 语法 | 说明 |
-|------|------|------|
-| `@run` | `@run <command>` | 在本地执行 shell 命令 |
-| `@deploy` | `@deploy <script>` | 上传脚本到远程并执行 |
+| 命令 | 语法 | 说明 | 状态 |
+|------|------|------|------|
+| `@run` | `@run <command>` | 在本地执行 shell 命令 | 🔜 后续迭代 |
+| `@deploy` | `@deploy <script>` | 上传脚本到远程并执行 | 🔜 后续迭代 |
 
-**@deploy 流程**：
+> **注意**：`@run` 和 `@deploy` 已在配置中预留，但尚未实现具体处理器。
+
+**@deploy 设计流程**（待实现）：
 1. 检查本地脚本文件是否存在
 2. 通过 SFTP 上传到远程 `/tmp/` 目录
 3. 设置执行权限
@@ -118,12 +134,9 @@
 Available virtual commands:
   @push    Upload file to remote server
   @pull    Download file from remote server
-  @run     Execute local command
-  @deploy  Upload and execute script
   @help    Show this help
   @version Show version
   @status  Show connection status
-  @reconnect Reconnect to server
 
 Use '@help <command>' for more information.
 ```
@@ -143,62 +156,65 @@ Use '@help <command>' for more information.
 
 ### 3.2 配置结构
 
+配置文件顶层直接对应 `VirtualCommandConfig` 结构体，无额外包装层。
+
+**超时格式说明**：`gopkg.in/yaml.v3` 将 `time.Duration` 序列化为整数纳秒。配置中需使用纳秒值（如 `30000000000` 表示 30s），或自行实现 `UnmarshalYAML` 支持人类可读格式。
+
 ```yaml
 # ~/.assh/v2/virtual.yml
+# 顶层字段对应 domain.VirtualCommandConfig
 
-# 虚拟命令配置
-virtual-commands:
-  # 内置命令配置
-  builtin:
-    push:
-      enabled: true
-      timeout: 30s
-    pull:
-      enabled: true
-      timeout: 30s
-    deploy:
-      enabled: true
-      timeout: 300s
-    run:
-      enabled: true
-      timeout: 60s
+# 内置命令配置 (map[string]BuiltinCommandConfig)
+builtin:
+  push:
+    enabled: true
+    timeout: 30000000000   # 30s = 30 * 1_000_000_000 ns
+  pull:
+    enabled: true
+    timeout: 30000000000   # 30s
+  run:
+    enabled: true
+    timeout: 60000000000   # 60s
+  deploy:
+    enabled: true
+    timeout: 300000000000  # 300s (5min)
+  help:
+    enabled: true
+    timeout: 5000000000    # 5s
+  version:
+    enabled: true
+    timeout: 5000000000    # 5s
+  status:
+    enabled: true
+    timeout: 10000000000   # 10s
+  reconnect:
+    enabled: true
+    timeout: 30000000000   # 30s
 
-  # 自定义命令
-  custom:
-    # 示例：快速部署
-    quick-deploy:
-      description: "Quick deploy to server"
-      script: |
-        echo "Deploying..."
-        @push ./dist/ /var/www/html/
-        @run "systemctl restart nginx"
-      timeout: 120s
+# 自定义命令 (map[string]CustomCommandConfig)
+custom:
+  # 示例：快速部署
+  quick-deploy:
+    description: "Quick deploy to server"
+    script: |
+      echo "Deploying..."
+    timeout: 120000000000  # 120s
 
-    # 示例：备份命令
-    backup:
-      description: "Backup remote database"
-      script: |
-        @run "mysqldump -u root mydb > /tmp/backup.sql"
-        @pull /tmp/backup.sql ./backups/
-      timeout: 600s
+  # 示例：备份命令
+  backup:
+    description: "Backup remote database"
+    script: |
+      echo "Backing up..."
+    timeout: 600000000000  # 600s (10min)
 
-    # 示例：健康检查
-    healthcheck:
-      description: "Check server health"
-      script: |
-        @run "uptime"
-        @run "df -h"
-        @run "free -m"
-      timeout: 30s
-
-  # 全局设置
-  settings:
-    # 错误处理：continue | exit
-    on-error: continue
-    # 输出格式：color | plain | json
-    output: color
-    # 命令历史：false
-    history: false
+# 全局设置 (VirtualCommandSettings)
+settings:
+  # 错误处理：continue | exit
+  on-error: continue
+  # 输出格式：color | plain | json
+  output: color
+  # 命令历史：false
+  history: false
 ```
 
 ### 3.3 自定义命令语法
@@ -206,9 +222,10 @@ virtual-commands:
 自定义命令使用 Shell 脚本语法，支持：
 
 - 变量替换：`$1`, `$2`, `$@`
-- 虚拟命令调用：`@push`, `@pull`, `@run`
 - 条件判断：`if [ ... ]; then ... fi`
 - 循环：`for i in ...; do ... done`
+
+**注意**：自定义命令中的虚拟命令嵌套调用（如 `@push`、`@run`）尚未实现。
 
 **示例**：
 
@@ -219,12 +236,11 @@ custom:
     script: |
       ENV=$1
       if [ "$ENV" = "prod" ]; then
-        @push ./dist/ /var/www/prod/
+        echo "Deploying to production..."
       else
-        @push ./dist/ /var/www/staging/
+        echo "Deploying to staging..."
       fi
-      @run "systemctl restart app"
-    timeout: 180s
+    timeout: 180000000000  # 180s
 ```
 
 ---
@@ -278,13 +294,19 @@ custom:
 
 ### 4.4 超时处理
 
+默认超时配置（来自 `config.go` 中 `getDefaultConfig()`）：
+
 | 命令 | 默认超时 | 可配置 |
 |------|----------|--------|
 | @push | 30s | ✅ |
 | @pull | 30s | ✅ |
-| @run | 60s | ✅ |
-| @deploy | 300s | ✅ |
-| 自定义命令 | 60s | ✅ |
+| @run | 60s | ✅（后续迭代） |
+| @deploy | 300s | ✅（后续迭代） |
+| @help | 5s | ✅ |
+| @version | 5s | ✅ |
+| @status | 10s | ✅ |
+| @reconnect | 30s | ✅（后续迭代） |
+| 自定义命令 | 30s | ✅ |
 
 超时后：
 1. 发送 SIGTERM 给正在执行的操作
@@ -308,9 +330,8 @@ Input Handler
     │                         │
     │                         ├── @push → SFTP Upload
     │                         ├── @pull → SFTP Download
-    │                         ├── @run → Local Exec
-    │                         ├── @deploy → Upload + Exec
-    │                         └── @help/@version/@status → ...
+    │                         ├── @help/@version/@status → System
+    │                         └── @run/@deploy → (后续迭代)
     │
     └── otherwise → Send to Remote Shell
 ```
@@ -320,20 +341,23 @@ Input Handler
 ```
 asshc/
 ├── domain/
-│   └── virtual.go        # VirtualCommand 实体
+│   └── virtual.go        # VirtualCommand 实体 + 配置类型
 ├── port/
-│   └── virtual.go        # VirtualCommandHandler 接口
+│   └── virtual.go        # VirtualCommandHandler/VirtualCommandService 接口
 ├── service/
 │   └── virtual.go        # VirtualCommandService 实现
 └── infra/
     └── virtual/
-        ├── handler.go    # 命令处理器
+        ├── handler.go    # 输入拦截处理器
         ├── push.go       # @push 实现
         ├── pull.go       # @pull 实现
-        ├── run.go        # @run 实现
-        ├── deploy.go     # @deploy 实现
-        └── config.go     # 配置加载
+        ├── help.go       # @help 实现
+        ├── version.go    # @version 实现
+        ├── status.go     # @status 实现
+        └── config.go     # 配置加载器
 ```
+
+> **注意**：`@run`、`@deploy`、`@reconnect` 尚未有对应实现文件，属于后续迭代范围。
 
 ### 5.3 复用现有组件
 
@@ -347,30 +371,42 @@ asshc/
 ### 5.4 接口定义
 
 ```go
-// VirtualCommand 虚拟命令实体
+// VirtualCommand 虚拟命令实体 (domain/virtual.go)
 type VirtualCommand struct {
-    Name        string
-    Description string
-    Usage       string
-    Handler     VirtualCommandHandler
-    Timeout     time.Duration
+    Name        string        `json:"name"`
+    Description string        `json:"description"`
+    Usage       string        `json:"usage"`
+    Handler     string        `json:"handler"`
+    Timeout     time.Duration `json:"timeout"`
+    Enabled     bool          `json:"enabled"`
+    Builtin     bool          `json:"builtin"`
 }
 
-// VirtualCommandHandler 命令处理器
+// VirtualCommandConfig 配置结构 (domain/virtual.go)
+type VirtualCommandConfig struct {
+    Builtin  map[string]BuiltinCommandConfig  `yaml:"builtin"`
+    Custom   map[string]CustomCommandConfig   `yaml:"custom"`
+    Settings VirtualCommandSettings           `yaml:"settings"`
+}
+
+// VirtualCommandHandler 命令处理器接口 (port/virtual.go)
 type VirtualCommandHandler interface {
-    Execute(ctx context.Context, args []string, session SSHSession) error
+    Execute(ctx context.Context, args []string, session SSHSession) (*domain.VirtualCommandResult, error)
+    Name() string
+    Description() string
+    Usage() string
+    IsEnabled() bool
 }
 
-// VirtualCommandService 虚拟命令服务
+// VirtualCommandService 虚拟命令服务接口 (port/virtual.go)
 type VirtualCommandService interface {
-    // Register 注册命令
-    Register(cmd *VirtualCommand) error
-    // Execute 执行命令
-    Execute(ctx context.Context, input string, session SSHSession) (bool, error)
-    // List 列出所有命令
-    List() []*VirtualCommand
-    // GetCommand 获取命令
-    GetCommand(name string) (*VirtualCommand, error)
+    Register(handler VirtualCommandHandler) error
+    RegisterBuiltin() error
+    Execute(ctx context.Context, input string, session SSHSession) (*domain.VirtualCommandResult, error)
+    GetCommand(name string) (VirtualCommandHandler, error)
+    ListCommands() []VirtualCommandHandler
+    IsVirtualCommand(input string) bool
+    ParseInput(input string) (command string, args []string, err error)
 }
 ```
 
@@ -378,33 +414,33 @@ type VirtualCommandService interface {
 
 ## 6. MVP 范围
 
-### 6.1 Phase 1: 核心框架
+### 6.1 Phase 1: 核心框架 ✅
 
-- [ ] 虚拟命令识别和拦截机制
-- [ ] 命令注册和路由
-- [ ] 配置文件加载
-- [ ] 帮助系统 (@help)
+- [x] 虚拟命令识别和拦截机制
+- [x] 命令注册和路由
+- [x] 配置文件加载
+- [x] 帮助系统 (@help)
 
-### 6.2 Phase 2: 文件传输
+### 6.2 Phase 2: 文件传输 ✅
 
-- [ ] @push 命令实现
-- [ ] @pull 命令实现
+- [x] @push 命令实现
+- [x] @pull 命令实现
 - [ ] 递归传输 (-r 参数)
 - [ ] 进度显示
 
-### 6.3 Phase 3: 执行命令
+### 6.3 Phase 3: 执行命令（后续迭代）
 
 - [ ] @run 命令实现
 - [ ] @deploy 命令实现
 - [ ] 超时处理
 
-### 6.4 Phase 4: 系统命令
+### 6.4 Phase 4: 系统命令 ✅
 
-- [ ] @version 命令
-- [ ] @status 命令
-- [ ] @reconnect 命令
+- [x] @version 命令
+- [x] @status 命令
+- [ ] @reconnect 命令（后续迭代）
 
-### 6.5 Phase 5: 自定义命令
+### 6.5 Phase 5: 自定义命令（后续迭代）
 
 - [ ] 自定义命令解析
 - [ ] 变量替换
@@ -422,56 +458,49 @@ assh login server1
 
 # 2. 测试 @push
 @push ./local-file.txt /remote/path/
-# 预期：文件上传成功，显示进度
+# 预期：文件上传成功
 
 # 3. 测试 @pull
 @pull /remote/file.txt ./local-path/
 # 预期：文件下载成功
 
-# 4. 测试 @run
-@run ls -la
-# 预期：本地执行 ls -la
-
-# 5. 测试 @deploy
-@deploy ./deploy.sh
-# 预期：脚本上传并执行
-
-# 6. 测试 @help
+# 4. 测试 @help
 @help
 # 预期：显示命令列表
 
 @help push
 # 预期：显示 @push 详细帮助
 
-# 7. 测试 @version
+# 5. 测试 @version
 @version
 # 预期：显示 assh 版本
 
-# 8. 测试 @status
+# 6. 测试 @status
 @status
 # 预期：显示连接状态
 
-# 9. 测试命令冲突
+# 7. 测试命令冲突
 @push file  # 本地执行
 push file   # 远程执行
 # 预期：@push 本地，push 远程
 ```
 
+> **注意**：`@run`、`@deploy`、`@reconnect` 的验收测试需在其实现完成后补充。
+
 ### 7.2 配置验收
 
 ```bash
-# 1. 创建配置文件
+# 1. 创建配置文件（注意：timeout 使用纳秒值）
 cat > ~/.assh/v2/virtual.yml << EOF
-virtual-commands:
-  builtin:
-    push:
-      enabled: true
-      timeout: 30s
-  custom:
-    hello:
-      description: "Say hello"
-      script: echo "Hello from virtual command!"
-      timeout: 10s
+builtin:
+  push:
+    enabled: true
+    timeout: 30000000000
+custom:
+  hello:
+    description: "Say hello"
+    script: echo "Hello from virtual command!"
+    timeout: 10000000000
 EOF
 
 # 2. 测试内置命令
@@ -482,6 +511,8 @@ EOF
 @hello
 # 预期：输出 "Hello from virtual command!"
 ```
+
+**路径说明**：配置文件路径使用 `$HOME`（即 `~/.assh/v2/virtual.yml`），Go 的 `os.UserHomeDir()` 原生支持。不支持 Windows `%USERPROFILE%` 语法。
 
 ### 7.3 错误处理验收
 
@@ -494,9 +525,9 @@ EOF
 @push
 # 预期：显示用法提示
 
-# 3. 测试超时
-@run "sleep 100"  # 假设超时 60s
-# 预期：60s 后超时错误
+# 3. 测试未知命令
+@nonexistent
+# 预期：命令不存在错误信息
 ```
 
 ---
@@ -534,3 +565,4 @@ EOF
 | 日期 | 版本 | 变更内容 |
 |------|------|----------|
 | 2026-06-14 | 1.0 | 初始需求确认 |
+| 2026-06-15 | 1.1 | 修正文档与代码对齐：配置格式、timeout 纳秒、标记未实现命令、添加 frontmatter |
