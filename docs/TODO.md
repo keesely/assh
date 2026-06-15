@@ -1452,7 +1452,7 @@ assh service restart --type tunnel            # 重启所有隧道服务
 
 ### ✅ X1: AI 安全检查
 
-**状态**: ✅ 需求已确认 (2026-06-14)
+**状态**: 🚧 开发中 (2026-06-14)
 **优先级**: 实验性
 **设计文档**: `docs/worklogs/2026-05-17-PhaseX-AI-Security-Design.md`
 **需求文档**: `docs/requirements/RQ-004-ai-security-check.md`
@@ -1495,17 +1495,17 @@ assh service restart --type tunnel            # 重启所有隧道服务
 
 | 编号 | 任务 | 文件 | 说明 | 状态 |
 |------|------|------|------|:----:|
-| X1.1 | AI 配置 | `config/` (合入现有配置) | OpenAI 兼容 API 配置 (endpoint/model/key/params) | ⬜ |
-| X1.2 | AI 接口定义 | `asshc/port/ai.go` | AIProvider 接口 (Generate/SecureCheck) | ⬜ |
-| X1.3 | AI 客户端 | `asshc/infra/ai/openai.go` | OpenAI 兼容 API 调用实现 | ⬜ |
-| X1.4 | CVE 查询 | `asshc/infra/cve/nvd.go` | NVD NIST API CVE 详情自动查询 | ⬜ |
-| X1.5 | 漏洞领域实体 | `asshc/domain/vuln.go` | VulnCheck/Script/Report 等领域类型 | ⬜ |
-| X1.6 | 安全审查引擎 | `asshc/infra/security/scanner.go` | 脚本自动安全审查 (危险命令/路径/操作) | ⬜ |
-| X1.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ⬜ |
-| X1.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ⬜ |
-| X1.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ⬜ |
-| X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ⬜ |
-| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ⬜ |
+| X1.1 | AI 配置 | `config/` (合入现有配置) | OpenAI 兼容 API 配置 (endpoint/model/key/params) | ✅ |
+| X1.2 | AI 接口定义 | `asshc/port/ai.go` | AIProvider 接口 (Generate/SecureCheck) | ✅ |
+| X1.3 | AI 客户端 | `asshc/infra/ai/openai.go` | OpenAI 兼容 API 调用实现 | ✅ |
+| X1.4 | CVE 查询 | `asshc/infra/cve/nvd.go` | NVD NIST API CVE 详情自动查询 | ✅ |
+| X1.5 | 漏洞领域实体 | `asshc/domain/vuln.go` | VulnCheck/Script/Report 等领域类型 | ✅ |
+| X1.6 | 安全审查引擎 | `asshc/infra/security/scanner.go` | 脚本自动安全审查 (危险命令/路径/操作) | ✅ |
+| X1.7 | 安全检查接口 | `asshc/port/vuln.go` | VulnerabilityChecker 接口 | ✅ |
+| X1.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ✅ |
+| X1.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ✅ |
+| X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ✅ |
+| **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ✅ |
 
 **命令使用预览**:
 ```bash
