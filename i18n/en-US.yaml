@@ -34,21 +34,145 @@ cli:
   description: "An SSH Client"
   fs_name: "ASSH-FS - SFTP File Transfer"
   fs_description: "SFTP File Transfer Client"
+  cmd:
+    version: "Print version information"
+    push: "Push local file to remote server"
+    pull: "Pull remote file to local"
+    sftp: "Start interactive SFTP session"
+  flag:
+    recursive: "upload directory recursively"
+    resume: "resume interrupted transfer"
+    force: "force overwrite"
+    skip_existing: "skip existing files"
+    verify: "verify SHA256 checksum after transfer"
+    concurrency: "number of concurrent transfers"
+    host: "remote host address (direct connection)"
+    verbose: "verbose output"
+    quiet: "quiet mode"
+    config: "config file path (default: ~/.assh/v2/assh.yml)"
+    port: "port"
+    user: "username"
+    login: "username (same as --user)"
+    password: "password"
+    identity_file: "identity file path"
+    key: "key file path (same as --identity-file)"
+    host_address: "host address"
+    jump: "jump host chain (comma-separated): name,user@host[:port]"
+    command: "run command on remote server"
+  sftp:
+    connected: "Connected to {{.Name}}"
+    welcome: "Type 'help' for available commands, 'quit' to exit."
+    goodbye: "Goodbye!"
+    unknown_command: "Unknown command: {{.Cmd}}"
+    found_uploading: "Found {{.Count}} files matching pattern, uploading..."
+    found_downloading: "Found {{.Count}} files matching pattern, downloading..."
+    push_completed: "push completed"
+    pull_completed: "pull completed"
+    usage: "Usage: assh-fs sftp <server>"
+    usage_get: "Usage: get <remote> [local]"
+    usage_put: "Usage: put <local> [remote]"
+    usage_mkdir: "Usage: mkdir <path>"
+    usage_rmdir: "Usage: rmdir <path>"
+    usage_rm: "Usage: rm <path>"
+    usage_rename: "Usage: rename <old> <new>"
+    usage_ln: "Usage: ln <target> <link>"
+    usage_chmod: "Usage: chmod <mode> <path>"
+    help:
+      text: |
+        Available commands:
+          ls [path]           - list remote directory
+          cd <path>           - change remote directory
+          pwd                 - print working directory
+          get <remote> [local] - download file
+          put <local> [remote] - upload file
+          mkdir <path>        - create remote directory
+          rmdir <path>        - remove remote directory
+          rm <path>           - remove remote file
+          rename <old> <new>  - rename file
+          ln <src> <target>   - create symbolic link
+          chmod <mode> <path> - change permissions
+          df                  - show disk usage
+          lls                 - list local directory
+          lcd <path>          - change local directory
+          lpwd                - print local working directory
+          !<command>          - execute local command
+          help                - show this help
+          quit                - exit
+    downloaded: "Downloaded: {{.Remote}} -> {{.Local}}"
+    uploaded: "Uploaded: {{.Local}} -> {{.Remote}}"
+    created_dir: "Created directory: {{.Path}}"
+    removed_dir: "Removed directory: {{.Path}}"
+    removed_file: "Removed file: {{.Path}}"
+    renamed: "Renamed: {{.Old}} -> {{.New}}"
+    created_symlink: "Created symlink: {{.Link}} -> {{.Target}}"
+    remote_dir: "Remote directory: {{.Path}}"
+    type_dir: "Type: Directory"
+    type_file: "Type: File"
+    changed_mode: "Changed mode: {{.Path}}"
+    allowed_commands: "Allowed commands: "
+    error:
+      invalid_glob: "invalid glob pattern: %w"
+      list_remote_failed: "list remote directory failed: %w"
+      push_failed: "push %s failed: %w"
+      pull_failed: "pull %s failed: %w"
+      no_match: "no matching files for pattern: %s"
+      server_not_found: "server %q not found: %w"
+      ssh_failed: "SSH connection failed: %w"
+      sftp_failed: "SFTP connection failed: %w"
+      did_you_mean: "server not found, did you mean [%s]?"
+      ls_failed: "ls failed: {{.Error}}"
+      lls_failed: "lls failed: {{.Error}}"
+      cd_failed: "cd failed: {{.Error}}"
+      lcd_failed: "lcd failed: {{.Error}}"
+      get_failed: "get failed: {{.Error}}"
+      put_failed: "put failed: {{.Error}}"
+      mkdir_failed: "mkdir failed: {{.Error}}"
+      rmdir_failed: "rmdir failed: {{.Error}}"
+      rm_failed: "rm failed: {{.Error}}"
+      rename_failed: "rename failed: {{.Error}}"
+      ln_failed: "ln failed: {{.Error}}"
+      df_failed: "df failed: {{.Error}}"
+      chmod_failed: "chmod failed: {{.Error}}"
+      invalid_mode: "chmod: invalid mode"
+      not_allowed: "Error: command '{{.Cmd}}' is not allowed in SFTP interactive mode"
+  environment:
+    config_dir: "ENVIRONMENT:\n   ASSH_CONFIG_DIR   config directory (default: ~/.assh/v2)"
 
 # ============================================================
 # Server Management Commands
 # ============================================================
 cmd:
   server:
+    flag:
+      host: "host address (required)"
+      port: "port"
+      user: "username"
+      login: "username (same as --user)"
+      password: "password (omit for interactive prompt)"
+      identity_file: "identity file path"
+      key: "key file path (same as --identity-file)"
+      option: "option in key=value format"
+      remark: "remark"
+      group: "group"
+      clear_password: "clear the password"
+      clear_key: "clear the key file"
+      option_replace: "add/replace option in key=value format"
+      filter_group: "filter by group"
+      search: "search by keyword"
+      list: "show changelog versions"
+      host_new: "host address (required for new)"
     add:
       description: "Add a server"
+      enter_password: "Enter password: "
       success: "Server {{.Name}} added (v{{.Version}})"
       error:
         name_required: "Server name is required"
         host_required: "--host/-H is required"
+        host_required_new: "--host/-H is required for a new server"
     set:
       description: "Create or update server parameters"
       success: "Server {{.Name}} updated (v{{.Version}})"
+      success_no_version: "Server {{.Name}} updated"
       created: "Server {{.Name}} created (v{{.Version}})"
       hint: "Hint: use flags to modify parameters, e.g. --host, -p, -P, --remark"
     ls:
@@ -64,7 +188,20 @@ cmd:
     info:
       description: "Show server details"
       title: "Server Details"
-      not_found: "Server {{.Name}} not found, did you mean {{.Suggestion}}?"
+      not_found: "Server {{.Name}} not found, did you mean [{{.Suggestion}}]?"
+    warning:
+      key_failed: "Warning: key handling failed: {{.Error}}"
+    key_file: "Key file: {{.Path}}"
+    detail:
+      name: "Server Name"
+      host: "Server Host"
+      port: "Server Port"
+      user: "Server User"
+      auth_type: "Auth Type"
+      password: "Password"
+      key_file: "Key File"
+      remark: "Remark"
+      option: "Option"
     rm:
       description: "Remove a server"
       success: "Server {{.Name}} removed"
@@ -91,6 +228,10 @@ cmd:
       options: "Options:"
     changelog:
       title: "Changelog for {{.Name}}:"
+      header:
+        version: "Version"
+        type: "Type"
+        date: "Date"
     confirm:
       prompt: " [Y/n]: "
     password:
@@ -103,6 +244,19 @@ cmd:
 
   # Connection Commands
   connect:
+    flag:
+      host: "host address"
+      port: "port"
+      user: "username"
+      login: "username (same as --user)"
+      password: "password"
+      identity_file: "identity file path"
+      key: "key file path (same as --identity-file)"
+      jump: "jump host chain (comma-separated): name,@id,user@host[:port]"
+    error:
+      no_target: "no target specified: use <name>, <user@host>, or -H <host>"
+      both_target_host: "cannot specify both target and -H/--host"
+      command_required: "command is required"
     login:
       description: "SSH login (auto-detect: name / user@host / -H host)"
       error:
@@ -115,41 +269,58 @@ cmd:
         cmd_required: "Command is required"
     bc:
       description: "Batch execute command on multiple servers"
+      flag:
+        servers: "comma-separated server list"
+        group: "server group"
+        port_override: "port override"
+        user_override: "username override"
+        password_override: "password override"
+        log: "output log path (default: ./bc-result-{timestamp}.json)"
       error:
         cmd_required: "Command is required"
         servers_or_group_required: "Either --servers or --group is required"
+        no_target: "either --servers or --group is required"
         no_servers: "No servers to execute on"
+        get_group: "failed to get group {{.Group}}: {{.Error}}"
+        write_result: "error: failed to write result: "
       output:
-        result_written: "Result written to {{.Path}}"
+        result_written: "result written to {{.Path}}"
         result_error: "Failed to write result: {{.Error}}"
 
   # Upgrade Command
   upgrade:
     description: "Check and upgrade ASSH to latest version"
-    check:
-      current_version: "Current version: {{.Version}}"
-      checking: "Checking for updates..."
-      already_latest: "Already up to date!"
-      update_available: "New version available: {{.Version}}"
-      release_date: "Release date: {{.Date}}"
-      download_size: "Download size: {{.Size}}"
-      release_notes: "Release notes: ..."
-    rollback:
-      rolling_back: "Rolling back to previous version..."
-      success: "Rollback successful!"
-    upgrade:
-      prompt: "Do you want to upgrade? [y/N]: "
-      cancelled: "Upgrade cancelled."
-      downloading: "Downloading update..."
-      progress: "Downloading: {{.Percent}} ({{.Current}}/{{.Total}})"
-      success: "Successfully upgraded to {{.Version}}!"
-      restart_hint: "Please restart ASSH to use the new version."
+    flag:
+      check_only: "Only check for updates, don't upgrade"
+      version: "Upgrade to specific version"
+      force: "Force upgrade (skip version check)"
+      rollback: "Rollback to previous version"
+      yes: "Auto-confirm (no prompt)"
+    current_version: "Current version: {{.Version}}"
+    checking: "Checking for updates..."
+    up_to_date: "Already up to date!"
+    new_version: "New version available: {{.Version}}"
+    release_date: "Release date: {{.Date}}"
+    download_size: "Download size: {{.Size}}"
+    release_notes: "Release notes:"
+    rolling_back: "Rolling back to previous version..."
+    rollback_success: "Rollback successful!"
+    confirm: "Do you want to upgrade? [y/N]: "
+    cancelled: "Upgrade cancelled."
+    downloading: "Downloading update..."
+    downloading_progress: "Downloading: {{.Percent}} ({{.Current}}/{{.Total}})"
+    success: "Successfully upgraded to {{.Version}}!"
+    restart_hint: "Please restart ASSH to use the new version."
     error:
       service_unavailable: "Upgrade service not available"
 
   # Health Check Command
   health:
-    description: "Check server health status"
+    description: "Check server health status via SSH connection."
+    flag:
+      details: "show system details (uptime/load/memory/disk)"
+      group: "check specific group only"
+      concurrency: "max concurrent checks"
     check:
       status: "Status"
       latency: "Latency"
@@ -163,50 +334,67 @@ cmd:
       healthy: "Healthy"
       unhealthy: "Unhealthy"
       timeout: "Timeout"
+    result:
+      server: "{{.Icon}} {{.Server}} ({{.Host}}:{{.Port}})"
+      status: "  Status:   {{.Status}}"
+      latency: "  Latency:  {{.Latency}}"
+      checked: "  Checked:  {{.Checked}}"
+      error: "  Error:    {{.Error}}"
+      system_info: "  --- System Info ---"
+      uptime: "  Uptime:   {{.Uptime}}"
+      load: "  Load:     {{.Load}}"
+      memory: "  Memory:   {{.Memory}}"
+      disk: "  Disk:     {{.Disk}}"
     list:
-      header:
-        server: "SERVER"
-        status: "STATUS"
-        latency: "LATENCY"
-        error: "ERROR"
-    summary:
-      total: "Total: {{.Count}}"
-      healthy: "{{.Count}} healthy"
-      unhealthy: "{{.Count}} unhealthy"
-      timeout: "{{.Count}} timeout"
-      error: "{{.Count}} error"
+      header: "SERVER\tSTATUS\tLATENCY\tERROR"
+      total: "Total: {{.Count}} | "
+      healthy: "✓ {{.Count}} healthy"
+      unhealthy: "⚠ {{.Count}} unhealthy"
+      timeout: "⏱ {{.Count}} timeout"
+      error: "✗ {{.Count}} error"
     error:
       service_unavailable: "Health service not available"
 
   # Key Generation Command
   keygen:
     description: "Generate SSH key pair"
-    success:
-      standalone: "SSH key pair generated successfully"
-      direct: "SSH key pair generated successfully (direct mode)"
-      managed: "SSH key pair generated successfully"
+    flag:
+      type: "key type: rsa|ed25519|ecdsa"
+      bits: "key bits (for RSA/ECDSA)"
+      output: "output path (directory or file path, standalone mode)"
+      comment: "key comment (default: user@host)"
+      passphrase: "passphrase for private key (default: account password)"
+      host: "host address (direct connection mode)"
+      user: "username (direct connection mode)"
+      login: "username (same as --user)"
+      port: "SSH port (direct connection mode)"
+      password: "password (direct connection mode)"
+    success: "SSH key pair generated successfully"
+    success_direct: "SSH key pair generated successfully (direct mode)"
     info:
       server: "  Server:     {{.Server}}"
       type: "  Type:       {{.Type}} ({{.Bits}} bits)"
       comment: "  Comment:    {{.Comment}}"
       key_file: "  Key file:   {{.Path}}"
-      auth: "  Auth:       {{.Auth}}"
+      auth_password_key: "  Auth:       password + key"
+      auth_key: "  Auth:       key"
       private_key: "  Private key: {{.Path}}"
       public_key: "  Public key:  {{.Path}}"
       fingerprint: "  Fingerprint: {{.Fingerprint}}"
       public_key_contents: "  Public key contents:"
       host: "  Host:       {{.Host}}:{{.Port}}"
       user: "  User:       {{.User}}"
-    warning:
-      deploy_failed: "Warning: failed to deploy public key: {{.Error}}"
-    info_msg:
       deployed: "Info: public key deployed to {{.User}}@{{.Host}}:{{.Port}}"
       already_exists: "Info: public key already exists on {{.User}}@{{.Host}}:{{.Port}} (skipped)"
+    warning:
+      deploy_failed: "Warning: failed to deploy public key: {{.Error}}"
+      record_failed: "Warning: failed to record known server: {{.Error}}"
+      backup_failed: "Warning: failed to update key backup path: {{.Error}}"
     interactive:
       generating: "Generating public/private SSH key pair."
-      key_type: "Key type (rsa/ed25519/ecdsa) [{{.Default}}]: "
-      key_bits: "Key bits [{{.Default}}]: "
-      save_path: "Enter file in which to save the key ({{.Default}}): "
+      type_prompt: "Key type (rsa/ed25519/ecdsa) [{{.Default}}]: "
+      bits_prompt: "Key bits [{{.Default}}]: "
+      file_prompt: "Enter file in which to save the key ({{.Default}}): "
       passphrase: "Enter passphrase (empty for no passphrase): "
       passphrase_confirm: "Enter same passphrase again: "
     error:
@@ -214,22 +402,74 @@ cmd:
 
   # Proxy Command
   proxy:
-    description: "Start SOCKS5/HTTP CONNECT proxy"
+    description: "Start SOCKS5/HTTP CONNECT proxy with Smart Proxy support"
+    description_long: |
+      Start a proxy through SSH tunnel.
+
+      Examples:
+        assh proxy myserver                          # SOCKS5 :1080 (default)
+        assh proxy myserver --socks5 :1080 --http :8080  # SOCKS5 + HTTP CONNECT
+        assh proxy myserver --auth user:pass         # with authentication
+        assh proxy myserver --daemon                 # background daemon
+        assh proxy myserver --auto-reconnect=3/5s    # with auto-reconnect
+        assh proxy -H 192.168.1.1 -u root -P pass   # direct connection
+        assh proxy myserver --autoproxy ./list.txt   # with AutoProxy rules
+        assh proxy myserver --reverse --ports 80:3000  # reverse proxy
+        assh proxy rule reload                       # hot-reload rules
+    flag:
+      socks: "SOCKS5 proxy listen address (local, default :1080)"
+      socks5: "alias for --socks (deprecated)"
+      http: "HTTP CONNECT proxy listen address"
+      tcp: "TCP proxy listen address"
+      reverse: "reverse proxy mode (target is local)"
+      listen_type: "listen type for remote server: tcp|http"
+      ports: "port mapping rules (e.g. 80,443:80)"
+      auth: "proxy authentication (user:pass)"
+      autoproxy: "AutoProxy rule file path"
+      log_dir: "proxy log directory"
+      daemon: "run in background as daemon"
+      reconnect: "auto reconnect [retries/]interval (e.g. 3/5s)"
+      jump: "jump host chain (comma-separated): name,@id,user@host[:port]"
     error:
       service_unavailable: "Proxy service not available"
+    rules:
+      description: "Manage AutoProxy rules"
+      reload:
+        description: "Reload AutoProxy rules from file"
+      status:
+        description: "Show AutoProxy rule status"
+      loaded: "AutoProxy rules loaded (status check via --autoproxy)"
+    log:
+      description: "View proxy session logs"
+      viewer_tbd: "Session log for {{.Session}}: (log viewer TBD)"
     autoproxy:
       loaded: "AutoProxy rules loaded"
-    log:
-      session_log: "Session log for {{.Session}}: (log viewer TBD)"
+    session_log: "Session log for {{.Session}}: (log viewer TBD)"
 
   # Tunnel Command
   tunnel:
     description: "Manage SSH port forwarding tunnels"
-    error:
-      service_unavailable: "Proxy service not available"
-      no_forward: "At least one -L or -R flag is required"
-      invalid_spec: "Invalid {{.Type}} spec: {{.Spec}} (expected [bind_addr:]port:host:hostport)"
+    description_long: |
+      Start SSH port forwarding tunnels.
+
+      Examples:
+        assh tunnel myserver -L 8080:localhost:80        # local forward
+        assh tunnel myserver -R 8080:localhost:80        # remote forward
+        assh tunnel myserver -L 80:web:80 -L 443:web:443  # multiple forwards
+        assh tunnel myserver -L 8080:localhost:80 --daemon  # background
+        assh tunnel stop <id>                            # stop tunnel
+        assh tunnel list                                 # list tunnels
+    flag:
+      local: "local forward spec [bind_addr:]port:host:hostport"
+      remote: "remote forward spec [bind_addr:]port:host:hostport"
+      listen_type: "listen type: tcp|http"
+      daemon: "run in background as daemon"
+      reconnect: "auto reconnect [retries/]interval"
+      jump: "jump host chain (comma-separated): name,@id,user@host[:port]"
+    stop:
+      description: "Stop a running tunnel"
     list:
+      description: "List all running tunnels"
       empty: "No active tunnels"
       header:
         id: "ID"
@@ -237,13 +477,40 @@ cmd:
         local: "LOCAL"
         remote: "REMOTE"
       total: "Total: {{.Count}} tunnel(s)"
+    error:
+      service_unavailable: "Proxy service not available"
+      spec_required: "at least one -L or -R flag is required"
+      invalid_local: "invalid -L spec: %q (expected [bind_addr:]port:host:hostport)"
+      invalid_remote: "invalid -R spec: %q (expected [bind_addr:]port:host:hostport)"
+      no_forward: "At least one -L or -R flag is required"
+      invalid_spec: "Invalid {{.Type}} spec: {{.Spec}} (expected [bind_addr:]port:host:hostport)"
 
   # Sync Command
   sync:
     description: "Cloud synchronization of server configurations"
+    flag:
+      access_key: "Qiniu Access Key"
+      secret_key: "Qiniu Secret Key"
+      bucket: "Qiniu bucket name"
+      zone: "Qiniu zone (huadong/huabei/huanan/beimei/xinjiapo)"
     account:
+      description: "Configure cloud sync account"
+      set:
+        description: "Configure or update cloud account (interactive)"
+      show:
+        description: "Show current cloud account info"
+      delete:
+        description: "Delete cloud account configuration"
+      test:
+        description: "Test cloud account connection"
       configuring: "Configuring cloud sync account (Qiniu)"
       enter_values: "Enter values (press Enter to keep current value if shown):"
+      prompt:
+        access_key: "Access Key"
+        secret_key: "Secret Key"
+        bucket: "Bucket"
+        zone: "Zone (huadong/huabei/huanan/beimei/xinjiapo)"
+      already_set: "[already set]"
       success: "Cloud account configured successfully."
       info: "Cloud Sync Account:"
       type: "  Type:"
@@ -257,15 +524,18 @@ cmd:
       testing: "Testing cloud account connection..."
       test_success: "Connection successful!"
       error:
-        required: "Access key, secret key, and bucket are required"
+        required: "access key, secret key, and bucket are required"
     push:
+      description: "Push local server configs to cloud"
       pushing: "Pushing server configurations to cloud..."
       completed: "Push completed: {{.Time}}"
     pull:
+      description: "Pull server configs from cloud"
       pulling: "Pulling server configurations from cloud..."
       completed: "Pull completed: {{.Time}}"
       conflicts: "  Conflicts: {{.Count}} (cloud versions saved with _cloud_<ts> suffix)"
     history:
+      description: "Show sync history"
       empty: "No sync history."
       title: "Sync History:"
       direction:
@@ -275,7 +545,15 @@ cmd:
   # Jump Command
   jump:
     description: "Manage jump host history"
+    description_long: |
+      Show recent jump host connection history.
+
+      Examples:
+        assh jump history          # list recent jump history (default 10)
+        assh jump history --clear  # clear all jump history
+        assh jump history -n 20    # show last 20 records
     list:
+      description: "List jump host history"
       empty: "No jump history records found"
       header:
         id: "ID"
@@ -285,17 +563,37 @@ cmd:
         use: "USE"
         last_used: "LAST USED"
       total: "Total: {{.Count}} record(s)"
+    flag:
+      clear: "clear all jump history"
+      delete: "delete a specific history entry by ID"
+      limit: "number of records to show"
     clear:
       success: "Jump history cleared"
     delete:
       success: "Jump history #{{.ID}} deleted"
+    cleared: "Jump history cleared"
+    deleted: "Jump history #{{.ID}} deleted"
     error:
       service_unavailable: "Jump service not available"
       invalid_id: "Invalid ID: {{.ID}}"
+      clear_failed: "failed to clear jump history: {{.Error}}"
+      delete_failed: "failed to delete jump history #{{.ID}}: {{.Error}}"
+      list_failed: "failed to list jump history: {{.Error}}"
 
   # Security Command (X1)
   security:
     description: "Security vulnerability checking"
+    check:
+      description: "Check vulnerability using AI"
+      checking_server: "Checking server: {{.Server}} for vulnerability: {{.Vuln}}"
+      checking_group: "Checking group: {{.Group}} for vulnerability: {{.Vuln}}"
+    flag:
+      server: "Target server (comma separated)"
+      group: "Target server group"
+      format: "Output format (text/json/markdown)"
+      dry_run: "Only generate script, don't execute"
+      skip_confirm: "Skip high-risk operation confirmation"
+      timeout: "Execution timeout"
     vuln:
       title: "AI Security Check"
       vulnerability: "Vulnerability:"
@@ -309,11 +607,18 @@ cmd:
       status_vulnerable: "Vulnerable"
       status_error: "Error"
       status_unknown: "Unknown"
-    check:
-      checking_server: "Checking server: {{.Server}} for vulnerability: {{.Vuln}}"
-      checking_group: "Checking group: {{.Group}} for vulnerability: {{.Vuln}}"
+      json_not_impl: "JSON output not implemented yet"
     rules:
+      description: "Manage security rules"
+      list:
+        description: "List all security rules"
+      add:
+        description: "Add a security rule"
+      remove:
+        description: "Remove a security rule"
       title: "Security Rules:"
+      header: "Security Rules:"
+      not_implemented: "  [Implementation needed]"
       name_required: "Rule name is required"
       pattern_required: "Rule pattern is required"
       added: "Rule added: {{.Name}}"
@@ -321,6 +626,8 @@ cmd:
     error:
       vuln_required: "Vulnerability information is required"
       target_required: "Server or group is required"
+      rule_name_required: "Rule name is required"
+      rule_pattern_required: "Rule pattern is required"
 
 # ============================================================
 # Service Layer Messages
@@ -346,10 +653,29 @@ service:
       file_not_exist: "Local file does not exist: {{.Path}}"
       directory_omitted: "Omitting directory, use -r to upload directory"
       remote_dir_not_exist: "Remote directory {{.Path}} does not exist, create? "
-      create_dir_failed: "Create remote directory failed: {{.Error}}"
+      create_dir_failed: "Create remote directory failed"
       aborted: "Aborted"
       no_matching_files: "No matching files: {{.Pattern}}"
       glob_found: "Found {{.Count}} files matching pattern, {{.Action}}..."
+      jump_chain_not_available: "Jump chain support not available"
+      jump_connection_failed: "Jump connection failed"
+      push_failed: "Push failed"
+      verification_failed: "Verification failed"
+      pull_failed: "Pull failed"
+      local_dir_not_exist: "Local directory {{.Path}} does not exist, create? "
+      create_local_dir_failed: "Create local directory failed"
+      sftp_client_creation_failed: "SFTP client creation failed"
+      remote_path_not_exist: "Remote path does not exist: {{.Path}}"
+      omit_download_dir: "Omitting directory, use -r to download directory"
+      list_failed: "List failed"
+      remove_failed: "Remove failed"
+      mkdir_failed: "Mkdir failed"
+      server_not_found: "Server not found: {{.Name}}"
+      host_required: "Host is required"
+      glob_failed: "Glob failed"
+    progress:
+      file_counter: "({{.Current}}/{{.Total}}) {{.Name}}"
+      failed: "  failed: {{.Error}}"
     key:
       warning:
         deploy_failed: "Warning: failed to deploy public key: {{.Error}}"
@@ -377,8 +703,20 @@ infra:
       resuming: "Resuming from offset {{.Offset}}"
     download:
       resuming: "Resuming from offset {{.Offset}}"
+    verify:
+      verification_error: "  ✗ verification error: {{.Error}}"
+      size_match: "  ✓ size match: {{.Size}}"
+      size_mismatch: "  ✗ size mismatch"
+      sha256: "  ✓ sha256: {{.Hash}}"
+      hash_match: "  ✓ hash match"
+      hash_mismatch: "  ✗ hash mismatch"
+    progress:
+      eta_unknown: "ETA ?"
   virtual:
     error: "[ERROR] {{.Error}}"
+  store:
+    warn:
+      close_error: "WARN: {{.Name}} close error: {{.Error}}"
 
 # ============================================================
 # Initialization Messages

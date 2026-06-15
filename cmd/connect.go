@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"assh/asshc/domain"
+	"assh/internal/i18n"
 	"assh/log"
 
 	"github.com/urfave/cli"
@@ -31,51 +32,51 @@ func (a *App) registerConnectCommands() {
 	a.cli.Commands = append(a.cli.Commands, []cli.Command{
 		{
 			Name:      "login",
-			Usage:     "SSH login (auto-detect: name / user@host / -H host)",
+			Usage:     i18n.T("cmd.connect.login.description"),
 			ArgsUsage: "[target]",
 			Action:    a.loginAction,
 			Flags: []cli.Flag{
-				cli.StringFlag{Name: "H, host", Usage: "host address"},
-				cli.IntFlag{Name: "p, port", Value: 0, Usage: "port"},
-				cli.StringFlag{Name: "u, user", Usage: "username"},
-				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
-				cli.StringFlag{Name: "P, password", Usage: "password"},
-				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
-				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
-				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
+				cli.StringFlag{Name: "H, host", Usage: i18n.T("cmd.connect.flag.host")},
+				cli.IntFlag{Name: "p, port", Value: 0, Usage: i18n.T("cmd.connect.flag.port")},
+				cli.StringFlag{Name: "u, user", Usage: i18n.T("cmd.connect.flag.user")},
+				cli.StringFlag{Name: "l, login", Usage: i18n.T("cmd.connect.flag.login")},
+				cli.StringFlag{Name: "P, password", Usage: i18n.T("cmd.connect.flag.password")},
+				cli.StringFlag{Name: "i, identity-file", Usage: i18n.T("cmd.connect.flag.identity_file")},
+				cli.StringFlag{Name: "k, key", Usage: i18n.T("cmd.connect.flag.key")},
+				cli.StringFlag{Name: "J, jump", Usage: i18n.T("cmd.connect.flag.jump")},
 			},
 		},
 		{
 			Name:      "run",
-			Usage:     "Run a command on a remote server",
+			Usage:     i18n.T("cmd.connect.run.description"),
 			ArgsUsage: "<name> <command>",
 			Action:    a.runAction,
 			Flags: []cli.Flag{
-				cli.IntFlag{Name: "p, port", Value: 0, Usage: "port"},
-				cli.StringFlag{Name: "u, user", Usage: "username"},
-				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
-				cli.StringFlag{Name: "P, password", Usage: "password"},
-				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
-				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
-				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
+				cli.IntFlag{Name: "p, port", Value: 0, Usage: i18n.T("cmd.connect.flag.port")},
+				cli.StringFlag{Name: "u, user", Usage: i18n.T("cmd.connect.flag.user")},
+				cli.StringFlag{Name: "l, login", Usage: i18n.T("cmd.connect.flag.login")},
+				cli.StringFlag{Name: "P, password", Usage: i18n.T("cmd.connect.flag.password")},
+				cli.StringFlag{Name: "i, identity-file", Usage: i18n.T("cmd.connect.flag.identity_file")},
+				cli.StringFlag{Name: "k, key", Usage: i18n.T("cmd.connect.flag.key")},
+				cli.StringFlag{Name: "J, jump", Usage: i18n.T("cmd.connect.flag.jump")},
 			},
 		},
 		{
 			Name:      "bc",
-			Usage:     "Batch execute command on multiple servers",
+			Usage:     i18n.T("cmd.connect.bc.description"),
 			ArgsUsage: "<command>",
 			Action:    a.bcAction,
 			Flags: []cli.Flag{
-				cli.StringFlag{Name: "servers", Usage: "comma-separated server list"},
-				cli.StringFlag{Name: "group", Usage: "server group"},
-				cli.IntFlag{Name: "p, port", Value: 0, Usage: "port override"},
-				cli.StringFlag{Name: "u, user", Usage: "username override"},
-				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
-				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
-				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
-				cli.StringFlag{Name: "P, password", Usage: "password override"},
-				cli.StringFlag{Name: "log", Usage: "output log path (default: ./bc-result-{timestamp}.json)"},
-				cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,@id,user@host[:port]"},
+				cli.StringFlag{Name: "servers", Usage: i18n.T("cmd.connect.bc.flag.servers")},
+				cli.StringFlag{Name: "group", Usage: i18n.T("cmd.connect.bc.flag.group")},
+				cli.IntFlag{Name: "p, port", Value: 0, Usage: i18n.T("cmd.connect.bc.flag.port_override")},
+				cli.StringFlag{Name: "u, user", Usage: i18n.T("cmd.connect.bc.flag.user_override")},
+				cli.StringFlag{Name: "l, login", Usage: i18n.T("cmd.connect.flag.login")},
+				cli.StringFlag{Name: "i, identity-file", Usage: i18n.T("cmd.connect.flag.identity_file")},
+				cli.StringFlag{Name: "k, key", Usage: i18n.T("cmd.connect.flag.key")},
+				cli.StringFlag{Name: "P, password", Usage: i18n.T("cmd.connect.bc.flag.password_override")},
+				cli.StringFlag{Name: "log", Usage: i18n.T("cmd.connect.bc.flag.log")},
+				cli.StringFlag{Name: "J, jump", Usage: i18n.T("cmd.connect.flag.jump")},
 			},
 		},
 	}...)
@@ -107,10 +108,10 @@ func (a *App) loginCore(c *cli.Context) (*ssh.Client, *directConnectInfo, error)
 	jumpExpr := resolveFlag(c, "jump", "J")
 
 	if target == "" && host == "" {
-		return nil, nil, fmt.Errorf("no target specified: use <name>, <user@host>, or -H <host>")
+		return nil, nil, fmt.Errorf("%s", i18n.T("cmd.connect.error.no_target"))
 	}
 	if target != "" && host != "" {
-		return nil, nil, fmt.Errorf("cannot specify both target and -H/--host")
+		return nil, nil, fmt.Errorf("%s", i18n.T("cmd.connect.error.both_target_host"))
 	}
 
 	// 如果有 -J 参数，使用 ConnectChain
@@ -210,12 +211,12 @@ func (a *App) loginAction(c *cli.Context) error {
 func (a *App) runAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
-		return fmt.Errorf("server name is required")
+		return fmt.Errorf("%s", i18n.T("cmd.server.error.name_required"))
 	}
 
 	cmd := strings.Join(c.Args()[1:], " ")
 	if cmd == "" {
-		return fmt.Errorf("command is required")
+		return fmt.Errorf("%s", i18n.T("cmd.connect.error.command_required"))
 	}
 
 	jumpExpr := c.String("jump")
@@ -277,14 +278,14 @@ type bcSummary struct {
 func (a *App) bcAction(c *cli.Context) error {
 	cmd := c.Args().Get(0)
 	if cmd == "" {
-		return fmt.Errorf("command is required")
+		return fmt.Errorf("%s", i18n.T("cmd.connect.error.command_required"))
 	}
 
 	serversFlag := c.String("servers")
 	groupFlag := c.String("group")
 
 	if serversFlag == "" && groupFlag == "" {
-		return fmt.Errorf("either --servers or --group is required")
+		return fmt.Errorf("%s", i18n.T("cmd.connect.bc.error.no_target"))
 	}
 
 	var names []string
@@ -299,7 +300,7 @@ func (a *App) bcAction(c *cli.Context) error {
 	if groupFlag != "" {
 		groupServers, err := a.serverSvc.GetGroup(groupFlag)
 		if err != nil {
-			return fmt.Errorf("failed to get group %q: %w", groupFlag, err)
+			return fmt.Errorf("%s", i18n.T("cmd.connect.bc.error.get_group", map[string]interface{}{"Group": groupFlag, "Error": err}))
 		}
 		for name, server := range groupServers {
 			names = append(names, domain.JoinName(server.Group, name))
@@ -307,7 +308,7 @@ func (a *App) bcAction(c *cli.Context) error {
 	}
 
 	if len(names) == 0 {
-		return fmt.Errorf("no servers to execute on")
+		return fmt.Errorf("%s", i18n.T("cmd.connect.bc.error.no_servers"))
 	}
 
 	logDir := "/tmp/assh/bclogs"
@@ -442,9 +443,9 @@ func (a *App) bcAction(c *cli.Context) error {
 	}
 
 	if err := os.WriteFile(logPath, jsonData, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "error: failed to write result: %v\n", err)
+		fmt.Fprintf(os.Stderr, i18n.T("cmd.connect.bc.error.write_result")+"\n", err)
 	} else {
-		fmt.Printf("result written to %s\n", logPath)
+		fmt.Println(i18n.T("cmd.connect.bc.result_written", map[string]interface{}{"Path": logPath}))
 	}
 
 	return nil

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"assh/asshc/domain"
+	"assh/internal/i18n"
 
 	"github.com/urfave/cli"
 	"golang.org/x/term"
@@ -19,75 +20,75 @@ func (a *App) registerServerCommands() {
 	a.cli.Commands = append(a.cli.Commands, []cli.Command{
 		{
 			Name:      "add",
-			Usage:     "Add a server",
+			Usage:     i18n.T("cmd.server.add.description"),
 			ArgsUsage: "<name>",
 			Action:    a.serverAddAction,
 			Flags: []cli.Flag{
-				cli.StringFlag{Name: "H, host", Usage: "host address (required)"},
-				cli.IntFlag{Name: "p, port", Value: 22, Usage: "port"},
-				cli.StringFlag{Name: "u, user", Usage: "username"},
-				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
-				cli.StringFlag{Name: "P, password", Usage: "password (omit for interactive prompt)"},
-				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
-				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
-				cli.StringSliceFlag{Name: "o, option", Usage: "option in key=value format"},
-				cli.StringFlag{Name: "remark", Usage: "remark"},
-				cli.StringFlag{Name: "group", Usage: "group"},
+				cli.StringFlag{Name: "H, host", Usage: i18n.T("cmd.server.flag.host")},
+				cli.IntFlag{Name: "p, port", Value: 22, Usage: i18n.T("cmd.server.flag.port")},
+				cli.StringFlag{Name: "u, user", Usage: i18n.T("cmd.server.flag.user")},
+				cli.StringFlag{Name: "l, login", Usage: i18n.T("cmd.server.flag.login")},
+				cli.StringFlag{Name: "P, password", Usage: i18n.T("cmd.server.flag.password")},
+				cli.StringFlag{Name: "i, identity-file", Usage: i18n.T("cmd.server.flag.identity_file")},
+				cli.StringFlag{Name: "k, key", Usage: i18n.T("cmd.server.flag.key")},
+				cli.StringSliceFlag{Name: "o, option", Usage: i18n.T("cmd.server.flag.option")},
+				cli.StringFlag{Name: "remark", Usage: i18n.T("cmd.server.flag.remark")},
+				cli.StringFlag{Name: "group", Usage: i18n.T("cmd.server.flag.group")},
 			},
 		},
 		{
 			Name:      "set",
-			Usage:     "Create or update server parameters (upsert)",
+			Usage:     i18n.T("cmd.server.set.description"),
 			ArgsUsage: "<name>",
 			Action:    a.serverSetAction,
 			Flags: []cli.Flag{
-				cli.StringFlag{Name: "H, host", Usage: "host address (required for new)"},
-				cli.IntFlag{Name: "p, port", Usage: "port"},
-				cli.StringFlag{Name: "u, user", Usage: "username"},
-				cli.StringFlag{Name: "l, login", Usage: "username (same as --user)"},
-				cli.StringFlag{Name: "P, password", Usage: "password"},
-				cli.StringFlag{Name: "i, identity-file", Usage: "identity file path"},
-				cli.StringFlag{Name: "k, key", Usage: "key file path (same as --identity-file)"},
-				cli.StringSliceFlag{Name: "o, option", Usage: "add/replace option in key=value format"},
-				cli.StringFlag{Name: "remark", Usage: "remark"},
-				cli.BoolFlag{Name: "clear-password", Usage: "clear the password"},
-				cli.BoolFlag{Name: "clear-key", Usage: "clear the key file"},
+				cli.StringFlag{Name: "H, host", Usage: i18n.T("cmd.server.flag.host_new")},
+				cli.IntFlag{Name: "p, port", Usage: i18n.T("cmd.server.flag.port")},
+				cli.StringFlag{Name: "u, user", Usage: i18n.T("cmd.server.flag.user")},
+				cli.StringFlag{Name: "l, login", Usage: i18n.T("cmd.server.flag.login")},
+				cli.StringFlag{Name: "P, password", Usage: i18n.T("cmd.server.flag.password")},
+				cli.StringFlag{Name: "i, identity-file", Usage: i18n.T("cmd.server.flag.identity_file")},
+				cli.StringFlag{Name: "k, key", Usage: i18n.T("cmd.server.flag.key")},
+				cli.StringSliceFlag{Name: "o, option", Usage: i18n.T("cmd.server.flag.option_replace")},
+				cli.StringFlag{Name: "remark", Usage: i18n.T("cmd.server.flag.remark")},
+				cli.BoolFlag{Name: "clear-password", Usage: i18n.T("cmd.server.flag.clear_password")},
+				cli.BoolFlag{Name: "clear-key", Usage: i18n.T("cmd.server.flag.clear_key")},
 			},
 		},
 		{
 			Name:   "ls",
-			Usage:  "List servers",
+			Usage:  i18n.T("cmd.server.ls.description"),
 			Action: a.serverListAction,
 			Flags: []cli.Flag{
-				cli.StringFlag{Name: "group", Usage: "filter by group"},
-				cli.StringFlag{Name: "search", Usage: "search by keyword"},
+				cli.StringFlag{Name: "group", Usage: i18n.T("cmd.server.flag.filter_group")},
+				cli.StringFlag{Name: "search", Usage: i18n.T("cmd.server.flag.search")},
 			},
 		},
 		{
 			Name:      "info",
-			Usage:     "Show server details",
+			Usage:     i18n.T("cmd.server.info.description"),
 			ArgsUsage: "<name>",
 			Action:    a.serverInfoAction,
 		},
 		{
 			Name:      "rm",
-			Usage:     "Remove a server",
+			Usage:     i18n.T("cmd.server.rm.description"),
 			ArgsUsage: "<name>",
 			Action:    a.serverRemoveAction,
 		},
 		{
 			Name:      "mv",
-			Usage:     "Rename/move a server",
+			Usage:     i18n.T("cmd.server.mv.description"),
 			ArgsUsage: "<from> <to>",
 			Action:    a.serverMoveAction,
 		},
 		{
 			Name:      "rollback",
-			Usage:     "Rollback server configuration to a previous version",
+			Usage:     i18n.T("cmd.server.rollback.description"),
 			ArgsUsage: "<name> [version]",
 			Action:    a.serverRollbackAction,
 			Flags: []cli.Flag{
-				cli.BoolFlag{Name: "list", Usage: "show changelog versions"},
+				cli.BoolFlag{Name: "list", Usage: i18n.T("cmd.server.flag.list")},
 			},
 		},
 	}...)
@@ -99,12 +100,12 @@ func (a *App) registerServerCommands() {
 func (a *App) serverAddAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
-		return fmt.Errorf("server name is required")
+		return fmt.Errorf("%s", i18n.T("cmd.server.error.name_required"))
 	}
 
 	host := c.String("host")
 	if host == "" {
-		return fmt.Errorf("--host/-H is required")
+		return fmt.Errorf("%s", i18n.T("cmd.server.error.host_required"))
 	}
 
 	if group := c.String("group"); group != "" {
@@ -117,7 +118,7 @@ func (a *App) serverAddAction(c *cli.Context) error {
 	keyFile := firstNonEmpty(c.String("identity-file"), c.String("key"))
 
 	if password == "" && keyFile == "" {
-		fmt.Fprint(os.Stderr, "Enter password: ")
+		fmt.Fprint(os.Stderr, i18n.T("cmd.server.add.enter_password"))
 		passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
 		fmt.Fprintln(os.Stderr)
 		if err == nil && len(passwordBytes) > 0 {
@@ -161,8 +162,8 @@ func (a *App) serverAddAction(c *cli.Context) error {
 	a.previewServer(server, name)
 
 	// 3) Confirm
-	if !a.askConfirmation(fmt.Sprintf("Add server %q?", name)) {
-		fmt.Println("cancelled")
+	if !a.askConfirmation(fmt.Sprintf(i18n.T("cmd.server.add.description")+" %q? ", name)) {
+		fmt.Println(i18n.T("common.cancelled"))
 		return nil
 	}
 
@@ -175,13 +176,13 @@ func (a *App) serverAddAction(c *cli.Context) error {
 	if keyValue != "" && a.keySvc != nil {
 		updatedPath, err := a.keySvc.HandleKeyFlag(name, keyValue)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: key handling failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "%s\n", i18n.T("cmd.server.warning.key_failed", map[string]interface{}{"Error": err}))
 		} else if updatedPath != "" {
-			fmt.Printf("Key file: %s\n", updatedPath)
+			fmt.Println(i18n.T("cmd.server.key_file", map[string]interface{}{"Path": updatedPath}))
 		}
 	}
 
-	fmt.Printf("server %q added (v%d)\n", name, 1)
+	fmt.Println(i18n.T("cmd.server.add.success", map[string]interface{}{"Name": name, "Version": 1}))
 	return nil
 }
 
@@ -191,7 +192,7 @@ func (a *App) serverAddAction(c *cli.Context) error {
 func (a *App) serverSetAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
-		return fmt.Errorf("server name is required")
+		return fmt.Errorf("%s", i18n.T("cmd.server.error.name_required"))
 	}
 
 	existing, err := a.serverSvc.GetServer(name)
@@ -218,12 +219,12 @@ func (a *App) serverSetAction(c *cli.Context) error {
 	if isNew {
 		// --- 创建分支 ---
 		if !hasChanges {
-			return fmt.Errorf("--host/-H is required for a new server")
+			return fmt.Errorf("%s", i18n.T("cmd.server.error.host_required_new"))
 		}
 
 		host := c.String("host")
 		if host == "" {
-			return fmt.Errorf("--host/-H is required for a new server")
+			return fmt.Errorf("%s", i18n.T("cmd.server.error.host_required_new"))
 		}
 
 		port := 22
@@ -274,9 +275,9 @@ func (a *App) serverSetAction(c *cli.Context) error {
 			// 2) 处理密钥（生成/导入/备份）
 			keyFilePath, err := a.keySvc.HandleKeyFlag(name, keyValue)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: key handling failed: %v\n", err)
+				fmt.Fprintf(os.Stderr, "%s\n", i18n.T("cmd.server.warning.key_failed", map[string]interface{}{"Error": err}))
 			} else if keyFilePath != "" {
-				fmt.Printf("Key file: %s\n", keyFilePath)
+				fmt.Println(i18n.T("cmd.server.key_file", map[string]interface{}{"Path": keyFilePath}))
 			}
 
 			// 3) 重新获取服务器信息（包含更新的密钥路径）
@@ -299,7 +300,7 @@ func (a *App) serverSetAction(c *cli.Context) error {
 		// --- 更新分支 ---
 		if !hasChanges {
 			a.printServerDetail(existing)
-			fmt.Println("\nhint: use flags to modify parameters, e.g. --host, -p, -P, --remark")
+			fmt.Println("\n" + i18n.T("cmd.server.set.hint"))
 			return nil
 		}
 
@@ -395,9 +396,9 @@ func (a *App) serverSetAction(c *cli.Context) error {
 	a.previewServer(serverToSave, name)
 
 	// 2) Confirm
-	confirmMsg := fmt.Sprintf("%s server %q?", action, name)
+	confirmMsg := fmt.Sprintf("%s server %q? ", action, name)
 	if !a.askConfirmation(confirmMsg) {
-		fmt.Println("cancelled")
+		fmt.Println(i18n.T("common.cancelled"))
 		return nil
 	}
 
@@ -407,13 +408,13 @@ func (a *App) serverSetAction(c *cli.Context) error {
 	}
 
 	if action == "create" {
-		fmt.Printf("server %q created (v%d)\n", name, 1)
+		fmt.Println(i18n.T("cmd.server.set.created", map[string]interface{}{"Name": name, "Version": 1}))
 	} else {
 		after, err := a.serverSvc.GetServer(name)
 		if err == nil {
-			fmt.Printf("server %q updated (v%d)\n", name, after.Version)
+			fmt.Println(i18n.T("cmd.server.set.success", map[string]interface{}{"Name": name, "Version": after.Version}))
 		} else {
-			fmt.Printf("server %q updated\n", name)
+			fmt.Println(i18n.T("cmd.server.set.success_no_version", map[string]interface{}{"Name": name}))
 		}
 	}
 
@@ -425,7 +426,7 @@ func (a *App) serverSetAction(c *cli.Context) error {
 func (a *App) serverRollbackAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
-		return fmt.Errorf("server name is required")
+		return fmt.Errorf("%s", i18n.T("cmd.server.error.name_required"))
 	}
 
 	// --list 模式：显示变更历史
@@ -434,8 +435,11 @@ func (a *App) serverRollbackAction(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Changelog for %q:\n", name)
-		fmt.Printf("%-8s %-12s %-19s\n", "Version", "Type", "Date")
+		fmt.Println(i18n.T("cmd.server.rollback.changelog.title", map[string]interface{}{"Name": name}))
+		fmt.Printf("%-8s %-12s %-19s\n",
+			i18n.T("cmd.server.rollback.changelog.header.version"),
+			i18n.T("cmd.server.rollback.changelog.header.type"),
+			i18n.T("cmd.server.rollback.changelog.header.date"))
 		fmt.Println(strings.Repeat("-", 42))
 		for _, e := range entries {
 			date := e.CreatedAt
@@ -450,19 +454,19 @@ func (a *App) serverRollbackAction(c *cli.Context) error {
 	// 回滚到指定版本
 	versionStr := c.Args().Get(1)
 	if versionStr == "" {
-		return fmt.Errorf("version number is required (use --list to see available versions)")
+		return fmt.Errorf("%s", i18n.T("cmd.server.rollback.error.version_required"))
 	}
 
 	version, err := strconv.Atoi(versionStr)
 	if err != nil {
-		return fmt.Errorf("invalid version number: %s", versionStr)
+		return fmt.Errorf("%s", i18n.T("cmd.server.rollback.error.invalid_version", map[string]interface{}{"Version": versionStr}))
 	}
 
 	if err := a.serverSvc.RollbackServer(name, version); err != nil {
 		return err
 	}
 
-	fmt.Printf("server %q rolled back to v%d\n", name, version)
+	fmt.Println(i18n.T("cmd.server.rollback.success", map[string]interface{}{"Name": name, "Version": version}))
 	return nil
 }
 
@@ -492,47 +496,44 @@ func (a *App) printServerDetail(s *domain.Server) {
 	fmt.Println(strings.Repeat("=", headerWidth))
 
 	// ---- detail items (label right-aligned, no excess indent) ----
-	// label style: "Server Name", "Server Host", "Server Port", "Server User",
-	//              "Password", "Key File", "Remark", "Auth"
-	// labelWidth = longest label length ("Server Name" = 11) so longest label has 0 padding
 	const labelWidth = 11
 	pl := func(label string, value interface{}) {
 		fmt.Printf("%*s: %v\n", labelWidth, label, value)
 	}
 
-	pl("Server Name", fullName)
-	pl("Server Host", s.Host)
-	pl("Server Port", s.Port)
-	pl("Server User", s.User)
+	pl(i18n.T("cmd.server.detail.name"), fullName)
+	pl(i18n.T("cmd.server.detail.host"), s.Host)
+	pl(i18n.T("cmd.server.detail.port"), s.Port)
+	pl(i18n.T("cmd.server.detail.user"), s.User)
 
 	if s.Auth != nil {
 		hasPwd := s.Auth.Password != ""
 		hasKey := s.Auth.KeyFile != ""
 		switch {
 		case hasPwd && hasKey:
-			pl("Auth Type", "password+key")
+			pl(i18n.T("cmd.server.detail.auth_type"), i18n.T("cmd.server.auth.password_key"))
 		case hasPwd:
-			pl("Auth Type", "password")
+			pl(i18n.T("cmd.server.detail.auth_type"), i18n.T("cmd.server.auth.password"))
 		case hasKey:
-			pl("Auth Type", "key")
+			pl(i18n.T("cmd.server.detail.auth_type"), i18n.T("cmd.server.auth.key"))
 		default:
-			pl("Auth Type", "none")
+			pl(i18n.T("cmd.server.detail.auth_type"), i18n.T("cmd.server.auth.none"))
 		}
 		if hasPwd {
-			pl("Password", s.Auth.Password)
+			pl(i18n.T("cmd.server.detail.password"), s.Auth.Password)
 		}
 		if hasKey {
-			pl("Key File", s.Auth.KeyFile)
+			pl(i18n.T("cmd.server.detail.key_file"), s.Auth.KeyFile)
 		}
 	} else {
-		pl("Auth Type", "none")
+		pl(i18n.T("cmd.server.detail.auth_type"), i18n.T("cmd.server.auth.none"))
 	}
 
 	if s.Remark != "" {
-		pl("Remark", s.Remark)
+		pl(i18n.T("cmd.server.detail.remark"), s.Remark)
 	}
 	for k, v := range s.Options {
-		pl("Option: "+k, v)
+		pl(i18n.T("cmd.server.detail.option")+": "+k, v)
 	}
 }
 
@@ -562,7 +563,7 @@ func (a *App) serverListAction(c *cli.Context) error {
 	}
 
 	if len(result) == 0 {
-		fmt.Println("no servers found")
+		fmt.Println(i18n.T("cmd.server.ls.empty"))
 		return nil
 	}
 
@@ -576,15 +577,15 @@ func (a *App) serverListAction(c *cli.Context) error {
 		for _, s := range servers {
 			hostStr := fmt.Sprintf("%s@%s:%d", s.User, s.Host, s.Port)
 
-			auth := "none"
+			auth := i18n.T("cmd.server.auth.none")
 			if s.Auth != nil {
 				switch {
 				case s.Auth.Password != "" && s.Auth.KeyFile != "":
-					auth = "password+key"
+					auth = i18n.T("cmd.server.auth.password_key")
 				case s.Auth.Password != "":
-					auth = "password"
+					auth = i18n.T("cmd.server.auth.password")
 				case s.Auth.KeyFile != "":
-					auth = "key"
+					auth = i18n.T("cmd.server.auth.key")
 				}
 			}
 
@@ -600,7 +601,7 @@ func (a *App) serverListAction(c *cli.Context) error {
 	}
 
 	// 2) calculate adaptive column widths
-	maxGroup, maxName, maxHost := len("Group"), len("Name"), len("Host")
+	maxGroup, maxName, maxHost := len(i18n.T("cmd.server.ls.header.group")), len(i18n.T("cmd.server.ls.header.name")), len(i18n.T("cmd.server.ls.header.host"))
 	for _, r := range rows {
 		if l := len(r.group); l > maxGroup {
 			maxGroup = l
@@ -617,7 +618,13 @@ func (a *App) serverListAction(c *cli.Context) error {
 	authWidth := 14
 	headerFmt := fmt.Sprintf("%%%ds %%-%ds %%-%ds %%-4s %%-%ds %%s",
 		maxGroup, maxName, maxHost, authWidth)
-	fmt.Printf(headerFmt+"\n", "Group", "Name", "Host", "Ver", "Auth", "Remark")
+	fmt.Printf(headerFmt+"\n",
+		i18n.T("cmd.server.ls.header.group"),
+		i18n.T("cmd.server.ls.header.name"),
+		i18n.T("cmd.server.ls.header.host"),
+		i18n.T("cmd.server.ls.header.ver"),
+		i18n.T("cmd.server.ls.header.auth"),
+		i18n.T("cmd.server.ls.header.remark"))
 
 	// fixed-width area: Group + 1sp + Name + 1sp + Host + 1sp + Ver(4) + 1sp + Auth + 1sp
 	sepLen := maxGroup + maxName + maxHost + authWidth + 10
@@ -673,14 +680,14 @@ func (a *App) serverListAction(c *cli.Context) error {
 func (a *App) serverInfoAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
-		return fmt.Errorf("server name is required")
+		return fmt.Errorf("%s", i18n.T("cmd.server.error.name_required"))
 	}
 
 	server, err := a.serverSvc.GetServer(name)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			if suggestion, ok := a.serverSvc.SuggestServer(name); ok {
-				return fmt.Errorf("%q not found, did you mean [%s]?", name, suggestion)
+				return fmt.Errorf("%s", i18n.T("cmd.server.info.not_found", map[string]interface{}{"Name": name, "Suggestion": suggestion}))
 			}
 		}
 		return err
@@ -694,14 +701,14 @@ func (a *App) serverInfoAction(c *cli.Context) error {
 func (a *App) serverRemoveAction(c *cli.Context) error {
 	name := c.Args().Get(0)
 	if name == "" {
-		return fmt.Errorf("server name is required")
+		return fmt.Errorf("%s", i18n.T("cmd.server.error.name_required"))
 	}
 
 	if err := a.serverSvc.RemoveServer(name); err != nil {
 		return err
 	}
 
-	fmt.Printf("server %q removed\n", name)
+	fmt.Println(i18n.T("cmd.server.rm.success", map[string]interface{}{"Name": name}))
 	return nil
 }
 
@@ -711,14 +718,14 @@ func (a *App) serverMoveAction(c *cli.Context) error {
 	to := c.Args().Get(1)
 
 	if from == "" || to == "" {
-		return fmt.Errorf("both <from> and <to> names are required")
+		return fmt.Errorf("%s", i18n.T("cmd.server.mv.error.names_required"))
 	}
 
 	if err := a.serverSvc.MoveServer(from, to); err != nil {
 		return err
 	}
 
-	fmt.Printf("server %q moved to %q\n", from, to)
+	fmt.Println(i18n.T("cmd.server.mv.success", map[string]interface{}{"Name": from, "NewName": to}))
 	return nil
 }
 
@@ -728,37 +735,37 @@ func (a *App) previewServer(s *domain.Server, name string) {
 	group, serverName := domain.ParseName(name)
 	fullName := domain.JoinName(group, serverName)
 
-	fmt.Println("=== Server Preview ===")
-	fmt.Printf("Name:    %s\n", fullName)
-	fmt.Printf("Host:    %s\n", s.Host)
-	fmt.Printf("Port:    %d\n", s.Port)
-	fmt.Printf("User:    %s\n", s.User)
+	fmt.Println(i18n.T("cmd.server.preview.title"))
+	fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.name"), fullName)
+	fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.host"), s.Host)
+	fmt.Printf("%-9s %d\n", i18n.T("cmd.server.preview.port"), s.Port)
+	fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.user"), s.User)
 
 	if s.Auth != nil {
 		hasPwd := s.Auth.Password != ""
 		hasKey := s.Auth.KeyFile != ""
 		switch {
 		case hasPwd && hasKey:
-			fmt.Printf("Auth:    password+key\n")
+			fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.auth"), i18n.T("cmd.server.auth.password_key"))
 		case hasPwd:
-			fmt.Printf("Auth:    password\n")
+			fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.auth"), i18n.T("cmd.server.auth.password"))
 		case hasKey:
-			fmt.Printf("Auth:    key\n")
+			fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.auth"), i18n.T("cmd.server.auth.key"))
 		default:
-			fmt.Printf("Auth:    none\n")
+			fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.auth"), i18n.T("cmd.server.auth.none"))
 		}
 		if hasKey {
-			fmt.Printf("Key:     %s\n", s.Auth.KeyFile)
+			fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.key"), s.Auth.KeyFile)
 		}
 	} else {
-		fmt.Printf("Auth:    none\n")
+		fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.auth"), i18n.T("cmd.server.auth.none"))
 	}
 
 	if s.Remark != "" {
-		fmt.Printf("Remark:  %s\n", s.Remark)
+		fmt.Printf("%-9s %s\n", i18n.T("cmd.server.preview.remark"), s.Remark)
 	}
 	if len(s.Options) > 0 {
-		fmt.Printf("Options: %v\n", s.Options)
+		fmt.Printf("%-9s %v\n", i18n.T("cmd.server.preview.options"), s.Options)
 	}
 }
 

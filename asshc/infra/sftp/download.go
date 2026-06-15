@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"assh/internal/i18n"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -85,7 +86,7 @@ func pullSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Cli
 							if resumeOffset >= remoteSize {
 								return nil
 							}
-							fmt.Printf("resuming from offset %d\n", resumeOffset)
+							fmt.Println(i18n.T("infra.sftp.download.resuming", map[string]interface{}{"Offset": resumeOffset}))
 						}
 					}
 				}

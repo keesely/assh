@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"assh/internal/i18n"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -190,27 +191,27 @@ func VerifyDownload(client *sftp.Client, localPath, remotePath string, verifyChe
 
 func PrintVerifyResult(result *VerifyResult) {
 	if result.Error != nil {
-		fmt.Printf("  ✗ verification error: %v\n", result.Error)
+		fmt.Println(i18n.T("infra.sftp.verify.verification_error", map[string]interface{}{"Error": result.Error}))
 		return
 	}
 
 	if result.SizeMatch {
-		fmt.Printf("  ✓ size match: %s\n", formatSize(result.Path))
+		fmt.Println(i18n.T("infra.sftp.verify.size_match", map[string]interface{}{"Size": formatSize(result.Path)}))
 	} else {
-		fmt.Printf("  ✗ size mismatch\n")
+		fmt.Println(i18n.T("infra.sftp.verify.size_mismatch"))
 	}
 
 	if result.SHA256Local != "" {
-		fmt.Printf("  ✓ sha256: %s", result.SHA256Local[:16])
+		fmt.Print(i18n.T("infra.sftp.verify.sha256", map[string]interface{}{"Hash": result.SHA256Local[:16]}))
 		if result.SHA256Remote != "" {
 			fmt.Printf("... (%s)\n", result.SHA256Remote[:16])
 		} else {
 			fmt.Println()
 		}
 		if result.HashMatch {
-			fmt.Println("  ✓ hash match")
+			fmt.Println(i18n.T("infra.sftp.verify.hash_match"))
 		} else if result.SHA256Remote != "" {
-			fmt.Println("  ✗ hash mismatch")
+			fmt.Println(i18n.T("infra.sftp.verify.hash_mismatch"))
 		}
 	}
 }

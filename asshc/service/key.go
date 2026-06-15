@@ -12,6 +12,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/port"
+	"assh/internal/i18n"
 )
 
 // KeyService 封装 SSH 密钥管理的业务逻辑。
@@ -111,12 +112,12 @@ func (s *KeyService) GenerateAndDeploy(name string, keyType string, bits int, co
 	deployed, deployErr := s.deployer.DeployToServer(server, pubKey)
 	if deployErr != nil {
 		// 部署失败不影响主流程，记录警告
-		fmt.Fprintf(os.Stderr, "Warning: failed to deploy public key: %v\n", deployErr)
+		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("service.key.warning.deploy_failed", map[string]interface{}{"Error": deployErr}))
 	} else if deployed {
-		fmt.Fprintf(os.Stderr, "Info: public key deployed to %s\n", name)
+		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("service.key.info.deployed", map[string]interface{}{"Server": name}))
 	} else {
 		// 公钥已存在（幂等）
-		fmt.Fprintf(os.Stderr, "Info: public key already exists on %s (skipped)\n", name)
+		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("service.key.info.already_exists", map[string]interface{}{"Server": name}))
 	}
 
 	// 4. 更新服务器配置 Auth.KeyFile

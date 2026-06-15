@@ -34,21 +34,145 @@ cli:
   description: "一个 SSH 客户端"
   fs_name: "ASSH-FS - SFTP 文件传输"
   fs_description: "SFTP 文件传输客户端"
+  cmd:
+    version: "打印版本信息"
+    push: "推送本地文件到远程服务器"
+    pull: "拉取远程文件到本地"
+    sftp: "启动交互式 SFTP 会话"
+  flag:
+    recursive: "递归上传目录"
+    resume: "恢复中断的传输"
+    force: "强制覆盖"
+    skip_existing: "跳过已存在的文件"
+    verify: "传输后校验 SHA256"
+    concurrency: "并发传输数"
+    host: "远程主机地址（直连模式）"
+    verbose: "详细输出"
+    quiet: "静默模式"
+    config: "配置文件路径（默认: ~/.assh/v2/assh.yml）"
+    port: "端口"
+    user: "用户名"
+    login: "用户名（同 --user）"
+    password: "密码"
+    identity_file: "密钥文件路径"
+    key: "密钥文件路径（同 --identity-file）"
+    host_address: "主机地址"
+    jump: "跳板机链（逗号分隔）: name,user@host[:port]"
+    command: "在远程服务器上执行命令"
+  sftp:
+    connected: "已连接到 {{.Name}}"
+    welcome: "输入 'help' 查看可用命令，'quit' 退出。"
+    goodbye: "再见!"
+    unknown_command: "未知命令: {{.Cmd}}"
+    found_uploading: "找到 {{.Count}} 个匹配文件，正在上传..."
+    found_downloading: "找到 {{.Count}} 个匹配文件，正在下载..."
+    push_completed: "推送完成"
+    pull_completed: "拉取完成"
+    usage: "用法: assh-fs sftp <server>"
+    usage_get: "用法: get <remote> [local]"
+    usage_put: "用法: put <local> [remote]"
+    usage_mkdir: "用法: mkdir <path>"
+    usage_rmdir: "用法: rmdir <path>"
+    usage_rm: "用法: rm <path>"
+    usage_rename: "用法: rename <old> <new>"
+    usage_ln: "用法: ln <target> <link>"
+    usage_chmod: "用法: chmod <mode> <path>"
+    help:
+      text: |
+        可用命令:
+          ls [path]           - 列出远程目录
+          cd <path>           - 切换远程目录
+          pwd                 - 显示当前工作目录
+          get <remote> [local] - 下载文件
+          put <local> [remote] - 上传文件
+          mkdir <path>        - 创建远程目录
+          rmdir <path>        - 删除远程目录
+          rm <path>           - 删除远程文件
+          rename <old> <new>  - 重命名文件
+          ln <src> <target>   - 创建符号链接
+          chmod <mode> <path> - 修改权限
+          df                  - 显示磁盘用量
+          lls                 - 列出本地目录
+          lcd <path>          - 切换本地目录
+          lpwd                - 显示本地工作目录
+          !<command>          - 执行本地命令
+          help                - 显示此帮助
+          quit                - 退出
+    downloaded: "已下载: {{.Remote}} -> {{.Local}}"
+    uploaded: "已上传: {{.Local}} -> {{.Remote}}"
+    created_dir: "已创建目录: {{.Path}}"
+    removed_dir: "已删除目录: {{.Path}}"
+    removed_file: "已删除文件: {{.Path}}"
+    renamed: "已重命名: {{.Old}} -> {{.New}}"
+    created_symlink: "已创建符号链接: {{.Link}} -> {{.Target}}"
+    remote_dir: "远程目录: {{.Path}}"
+    type_dir: "类型: 目录"
+    type_file: "类型: 文件"
+    changed_mode: "已修改权限: {{.Path}}"
+    allowed_commands: "允许的命令: "
+    error:
+      invalid_glob: "无效的通配符模式: %w"
+      list_remote_failed: "列出远程目录失败: %w"
+      push_failed: "推送 %s 失败: %w"
+      pull_failed: "拉取 %s 失败: %w"
+      no_match: "没有匹配的文件: %s"
+      server_not_found: "服务器 %q 未找到: %w"
+      ssh_failed: "SSH 连接失败: %w"
+      sftp_failed: "SFTP 连接失败: %w"
+      did_you_mean: "服务器未找到，是否指 [%s]?"
+      ls_failed: "ls 失败: {{.Error}}"
+      lls_failed: "lls 失败: {{.Error}}"
+      cd_failed: "cd 失败: {{.Error}}"
+      lcd_failed: "lcd 失败: {{.Error}}"
+      get_failed: "get 失败: {{.Error}}"
+      put_failed: "put 失败: {{.Error}}"
+      mkdir_failed: "mkdir 失败: {{.Error}}"
+      rmdir_failed: "rmdir 失败: {{.Error}}"
+      rm_failed: "rm 失败: {{.Error}}"
+      rename_failed: "rename 失败: {{.Error}}"
+      ln_failed: "ln 失败: {{.Error}}"
+      df_failed: "df 失败: {{.Error}}"
+      chmod_failed: "chmod 失败: {{.Error}}"
+      invalid_mode: "chmod: 无效的权限模式"
+      not_allowed: "错误: 命令 '{{.Cmd}}' 不允许在 SFTP 交互模式下执行"
+  environment:
+    config_dir: "ENVIRONMENT:\n   ASSH_CONFIG_DIR   配置目录（默认: ~/.assh/v2）"
 
 # ============================================================
 # 服务器管理命令
 # ============================================================
 cmd:
   server:
+    flag:
+      host: "主机地址（必填）"
+      port: "端口"
+      user: "用户名"
+      login: "用户名（同 --user）"
+      password: "密码（省略则交互式输入）"
+      identity_file: "密钥文件路径"
+      key: "密钥文件路径（同 --identity-file）"
+      option: "键值对格式的选项"
+      remark: "备注"
+      group: "分组"
+      clear_password: "清除密码"
+      clear_key: "清除密钥文件"
+      option_replace: "添加/替换键值对格式的选项"
+      filter_group: "按分组筛选"
+      search: "按关键字搜索"
+      list: "显示变更历史版本"
+      host_new: "主机地址（新建时必填）"
     add:
       description: "添加服务器"
+      enter_password: "请输入密码: "
       success: "服务器 {{.Name}} 已添加 (v{{.Version}})"
       error:
         name_required: "服务器名称不能为空"
         host_required: "必须指定 --host/-H 参数"
+        host_required_new: "新建服务器时必须指定 --host/-H 参数"
     set:
       description: "创建或更新服务器参数"
       success: "服务器 {{.Name}} 已更新 (v{{.Version}})"
+      success_no_version: "服务器 {{.Name}} 已更新"
       created: "服务器 {{.Name}} 已创建 (v{{.Version}})"
       hint: "提示: 使用标志修改参数，如 --host, -p, -P, --remark"
     ls:
@@ -64,7 +188,20 @@ cmd:
     info:
       description: "显示服务器详情"
       title: "服务器详情"
-      not_found: "服务器 {{.Name}} 未找到，是否指 {{.Suggestion}}？"
+      not_found: "服务器 {{.Name}} 未找到，是否指 [{{.Suggestion}}]？"
+    warning:
+      key_failed: "警告: 密钥处理失败: {{.Error}}"
+    key_file: "密钥文件: {{.Path}}"
+    detail:
+      name: "服务器名称"
+      host: "服务器地址"
+      port: "服务器端口"
+      user: "服务器用户"
+      auth_type: "认证类型"
+      password: "密码"
+      key_file: "密钥文件"
+      remark: "备注"
+      option: "选项"
     rm:
       description: "删除服务器"
       success: "服务器 {{.Name}} 已删除"
@@ -91,6 +228,10 @@ cmd:
       options: "选项:"
     changelog:
       title: "{{.Name}} 的变更历史:"
+      header:
+        version: "版本"
+        type: "类型"
+        date: "日期"
     confirm:
       prompt: " [Y/n]: "
     password:
@@ -103,6 +244,19 @@ cmd:
 
   # 连接命令
   connect:
+    flag:
+      host: "主机地址"
+      port: "端口"
+      user: "用户名"
+      login: "用户名（同 --user）"
+      password: "密码"
+      identity_file: "密钥文件路径"
+      key: "密钥文件路径（同 --identity-file）"
+      jump: "跳板机链（逗号分隔）：name,@id,user@host[:port]"
+    error:
+      no_target: "未指定目标：使用 <名称>, <user@host>, 或 -H <host>"
+      both_target_host: "不能同时指定 target 和 -H/--host"
+      command_required: "命令不能为空"
     login:
       description: "SSH 登录（自动检测：名称 / user@host / -H host）"
       error:
@@ -115,10 +269,20 @@ cmd:
         cmd_required: "命令不能为空"
     bc:
       description: "批量执行命令"
+      flag:
+        servers: "逗号分隔的服务器列表"
+        group: "服务器分组"
+        port_override: "端口覆盖"
+        user_override: "用户名覆盖"
+        password_override: "密码覆盖"
+        log: "输出日志路径（默认：./bc-result-{timestamp}.json）"
       error:
         cmd_required: "命令不能为空"
         servers_or_group_required: "需要 --servers 或 --group 参数"
+        no_target: "需要 --servers 或 --group 参数"
         no_servers: "没有可执行的服务器"
+        get_group: "获取分组 {{.Group}} 失败: {{.Error}}"
+        write_result: "写入结果失败: "
       output:
         result_written: "结果已写入 {{.Path}}"
         result_error: "写入结果失败: {{.Error}}"
@@ -126,30 +290,37 @@ cmd:
   # 升级命令
   upgrade:
     description: "检查并升级 ASSH 到最新版本"
-    check:
-      current_version: "当前版本: {{.Version}}"
-      checking: "正在检查更新..."
-      already_latest: "已是最新版本!"
-      update_available: "发现新版本: {{.Version}}"
-      release_date: "发布日期: {{.Date}}"
-      download_size: "下载大小: {{.Size}}"
-      release_notes: "发布说明: ..."
-    rollback:
-      rolling_back: "正在回滚到上一版本..."
-      success: "回滚成功!"
-    upgrade:
-      prompt: "是否升级? [y/N]: "
-      cancelled: "升级已取消"
-      downloading: "正在下载更新..."
-      progress: "下载中: {{.Percent}} ({{.Current}}/{{.Total}})"
-      success: "已成功升级到 {{.Version}}!"
-      restart_hint: "请重启 ASSH 以使用新版本"
+    flag:
+      check_only: "仅检查更新，不升级"
+      version: "升级到指定版本"
+      force: "强制升级（跳过版本检查）"
+      rollback: "回滚到上一版本"
+      yes: "自动确认（无提示）"
+    current_version: "当前版本: {{.Version}}"
+    checking: "正在检查更新..."
+    up_to_date: "已是最新版本!"
+    new_version: "发现新版本: {{.Version}}"
+    release_date: "发布日期: {{.Date}}"
+    download_size: "下载大小: {{.Size}}"
+    release_notes: "发布说明:"
+    rolling_back: "正在回滚到上一版本..."
+    rollback_success: "回滚成功!"
+    confirm: "是否升级? [y/N]: "
+    cancelled: "升级已取消"
+    downloading: "正在下载更新..."
+    downloading_progress: "下载中: {{.Percent}} ({{.Current}}/{{.Total}})"
+    success: "已成功升级到 {{.Version}}!"
+    restart_hint: "请重启 ASSH 以使用新版本"
     error:
       service_unavailable: "升级服务不可用"
 
   # 健康检查命令
   health:
     description: "检查服务器健康状态"
+    flag:
+      details: "显示系统详情（运行时间/负载/内存/磁盘）"
+      group: "仅检查指定分组"
+      concurrency: "最大并发检查数"
     check:
       status: "状态"
       latency: "延迟"
@@ -163,50 +334,67 @@ cmd:
       healthy: "健康"
       unhealthy: "异常"
       timeout: "超时"
+    result:
+      server: "{{.Icon}} {{.Server}} ({{.Host}}:{{.Port}})"
+      status: "  状态:     {{.Status}}"
+      latency: "  延迟:     {{.Latency}}"
+      checked: "  检查时间: {{.Checked}}"
+      error: "  错误:     {{.Error}}"
+      system_info: "  --- 系统信息 ---"
+      uptime: "  运行时间: {{.Uptime}}"
+      load: "  负载:     {{.Load}}"
+      memory: "  内存:     {{.Memory}}"
+      disk: "  磁盘:     {{.Disk}}"
     list:
-      header:
-        server: "服务器"
-        status: "状态"
-        latency: "延迟"
-        error: "错误"
-    summary:
-      total: "总计: {{.Count}}"
-      healthy: "{{.Count}} 健康"
-      unhealthy: "{{.Count}} 异常"
-      timeout: "{{.Count}} 超时"
-      error: "{{.Count}} 错误"
+      header: "服务器\t状态\t延迟\t错误"
+      total: "总计: {{.Count}} | "
+      healthy: "✓ {{.Count}} 健康"
+      unhealthy: "⚠ {{.Count}} 异常"
+      timeout: "⏱ {{.Count}} 超时"
+      error: "✗ {{.Count}} 错误"
     error:
       service_unavailable: "健康检查服务不可用"
 
   # 密钥生成命令
   keygen:
     description: "生成 SSH 密钥对"
-    success:
-      standalone: "SSH 密钥对生成成功"
-      direct: "SSH 密钥对生成成功（直连模式）"
-      managed: "SSH 密钥对生成成功"
+    flag:
+      type: "密钥类型: rsa|ed25519|ecdsa"
+      bits: "密钥位数（RSA/ECDSA）"
+      output: "输出路径（目录或文件路径，独立模式）"
+      comment: "密钥注释（默认: user@host）"
+      passphrase: "私钥密码短语（默认: 账户密码）"
+      host: "主机地址（直连模式）"
+      user: "用户名（直连模式）"
+      login: "用户名（同 --user）"
+      port: "SSH 端口（直连模式）"
+      password: "密码（直连模式）"
+    success: "SSH 密钥对生成成功"
+    success_direct: "SSH 密钥对生成成功（直连模式）"
     info:
       server: "  服务器:     {{.Server}}"
       type: "  类型:       {{.Type}} ({{.Bits}} 位)"
       comment: "  注释:       {{.Comment}}"
       key_file: "  密钥文件:   {{.Path}}"
-      auth: "  认证:       {{.Auth}}"
+      auth_password_key: "  认证:       密码+密钥"
+      auth_key: "  认证:       密钥"
       private_key: "  私钥: {{.Path}}"
       public_key: "  公钥: {{.Path}}"
       fingerprint: "  指纹: {{.Fingerprint}}"
       public_key_contents: "  公钥内容:"
       host: "  主机:       {{.Host}}:{{.Port}}"
       user: "  用户:       {{.User}}"
-    warning:
-      deploy_failed: "警告: 部署公钥失败: {{.Error}}"
-    info_msg:
       deployed: "信息: 公钥已部署到 {{.User}}@{{.Host}}:{{.Port}}"
       already_exists: "信息: 公钥已存在于 {{.User}}@{{.Host}}:{{.Port}}（已跳过）"
+    warning:
+      deploy_failed: "警告: 部署公钥失败: {{.Error}}"
+      record_failed: "警告: 记录已知服务器失败: {{.Error}}"
+      backup_failed: "警告: 更新密钥备份路径失败: {{.Error}}"
     interactive:
       generating: "正在生成公/私 SSH 密钥对。"
-      key_type: "密钥类型 (rsa/ed25519/ecdsa) [{{.Default}}]: "
-      key_bits: "密钥位数 [{{.Default}}]: "
-      save_path: "输入保存密钥的文件 ({{.Default}}): "
+      type_prompt: "密钥类型 (rsa/ed25519/ecdsa) [{{.Default}}]: "
+      bits_prompt: "密钥位数 [{{.Default}}]: "
+      file_prompt: "输入保存密钥的文件 ({{.Default}}): "
       passphrase: "输入密码短语（无密码短语直接回车）: "
       passphrase_confirm: "再次输入密码短语: "
     error:
@@ -214,22 +402,71 @@ cmd:
 
   # 代理命令
   proxy:
-    description: "启动 SOCKS5/HTTP CONNECT 代理"
+    description: "启动 SOCKS5/HTTP CONNECT 代理（Smart Proxy 模式）"
+    description_long: |
+      通过 SSH 隧道启动代理。
+
+      示例:
+        assh proxy myserver                          # SOCKS5 :1080（默认）
+        assh proxy myserver --socks5 :1080 --http :8080  # SOCKS5 + HTTP CONNECT
+        assh proxy myserver --auth user:pass         # 带认证
+        assh proxy myserver --daemon                 # 后台守护进程
+        assh proxy myserver --auto-reconnect=3/5s    # 自动重连
+        assh proxy -H 192.168.1.1 -u root -P pass   # 直连模式
+        assh proxy myserver --autoproxy ./list.txt   # AutoProxy 规则
+        assh proxy myserver --reverse --ports 80:3000  # 反向代理
+        assh proxy rule reload                       # 热加载规则
+    flag:
+      socks: "SOCKS5 代理监听地址（本地，默认 :1080）"
+      socks5: "--socks 的别名（已弃用）"
+      http: "HTTP CONNECT 代理监听地址"
+      tcp: "TCP 代理监听地址"
+      reverse: "反向代理模式（目标为本地）"
+      listen_type: "远程服务器监听类型: tcp|http"
+      ports: "端口映射规则（如 80,443:80）"
+      auth: "代理认证（user:pass）"
+      autoproxy: "AutoProxy 规则文件路径"
+      log_dir: "代理日志目录"
+      daemon: "后台运行（守护进程模式）"
+      reconnect: "自动重连 [重试次数/]间隔（如 3/5s）"
+      jump: "跳板机链（逗号分隔）: name,@id,user@host[:port]"
     error:
       service_unavailable: "代理服务不可用"
-    autoproxy:
-      loaded: "AutoProxy 规则已加载"
+    rules:
+      description: "管理 AutoProxy 规则"
+      reload:
+        description: "从文件重新加载 AutoProxy 规则"
+      status:
+        description: "显示 AutoProxy 规则状态"
+      loaded: "AutoProxy 规则已加载（通过 --autoproxy 检查状态）"
     log:
-      session_log: "{{.Session}} 的会话日志: (日志查看器待实现)"
+      description: "查看代理会话日志"
+      viewer_tbd: "会话日志 {{.Session}}:（日志查看器待实现）"
 
   # 隧道命令
   tunnel:
     description: "管理 SSH 端口转发隧道"
-    error:
-      service_unavailable: "代理服务不可用"
-      no_forward: "至少需要一个 -L 或 -R 参数"
-      invalid_spec: "无效的 {{.Type}} 规范: {{.Spec}}（预期 [bind_addr:]port:host:hostport）"
+    description_long: |
+      启动 SSH 端口转发隧道。
+
+      示例:
+        assh tunnel myserver -L 8080:localhost:80        # 本地转发
+        assh tunnel myserver -R 8080:localhost:80        # 远程转发
+        assh tunnel myserver -L 80:web:80 -L 443:web:443  # 多端口转发
+        assh tunnel myserver -L 8080:localhost:80 --daemon  # 后台运行
+        assh tunnel stop <id>                            # 停止隧道
+        assh tunnel list                                 # 列出隧道
+    flag:
+      local: "本地转发规则 [bind_addr:]port:host:hostport"
+      remote: "远程转发规则 [bind_addr:]port:host:hostport"
+      listen_type: "监听类型: tcp|http"
+      daemon: "后台运行（守护进程模式）"
+      reconnect: "自动重连 [重试次数/]间隔"
+      jump: "跳板机链（逗号分隔）: name,@id,user@host[:port]"
+    stop:
+      description: "停止运行中的隧道"
     list:
+      description: "列出所有运行中的隧道"
       empty: "没有活动的隧道"
       header:
         id: "ID"
@@ -237,13 +474,40 @@ cmd:
         local: "本地"
         remote: "远程"
       total: "总计: {{.Count}} 个隧道"
+    error:
+      service_unavailable: "代理服务不可用"
+      spec_required: "至少需要一个 -L 或 -R 参数"
+      invalid_local: "无效的 -L 规则: %q（预期 [bind_addr:]port:host:hostport）"
+      invalid_remote: "无效的 -R 规则: %q（预期 [bind_addr:]port:host:hostport）"
+      no_forward: "至少需要一个 -L 或 -R 参数"
+      invalid_spec: "无效的 {{.Type}} 规范: {{.Spec}}（预期 [bind_addr:]port:host:hostport）"
 
   # 云同步命令
   sync:
     description: "云同步服务器配置"
+    flag:
+      access_key: "七牛云 Access Key"
+      secret_key: "七牛云 Secret Key"
+      bucket: "七牛云 Bucket 名称"
+      zone: "七牛云区域 (huadong/huabei/huanan/beimei/xinjiapo)"
     account:
+      description: "配置云同步账户"
+      set:
+        description: "配置或更新云账户（交互式）"
+      show:
+        description: "显示当前云账户信息"
+      delete:
+        description: "删除云账户配置"
+      test:
+        description: "测试云账户连接"
       configuring: "正在配置云同步账户 (七牛云)"
       enter_values: "输入值（如果显示当前值，按 Enter 保持）:"
+      prompt:
+        access_key: "Access Key"
+        secret_key: "Secret Key"
+        bucket: "Bucket"
+        zone: "Zone (huadong/huabei/huanan/beimei/xinjiapo)"
+      already_set: "[已设置]"
       success: "云账户配置成功"
       info: "云同步账户:"
       type: "  类型:"
@@ -259,13 +523,16 @@ cmd:
       error:
         required: "access key, secret key, 和 bucket 不能为空"
     push:
+      description: "推送本地服务器配置到云端"
       pushing: "正在推送服务器配置到云端..."
       completed: "推送完成: {{.Time}}"
     pull:
+      description: "从云端拉取服务器配置"
       pulling: "正在从云端拉取服务器配置..."
       completed: "拉取完成: {{.Time}}"
       conflicts: "  冲突: {{.Count}}（云端版本保存为 _cloud_<ts> 后缀）"
     history:
+      description: "查看同步历史"
       empty: "没有同步历史"
       title: "同步历史:"
       direction:
@@ -275,7 +542,15 @@ cmd:
   # 跳板机历史命令
   jump:
     description: "管理跳板机历史"
+    description_long: |
+      显示最近的跳板机连接历史。
+
+      示例:
+        assh jump history          # 列出最近的跳板历史（默认 10 条）
+        assh jump history --clear  # 清除所有跳板历史
+        assh jump history -n 20    # 显示最近 20 条记录
     list:
+      description: "列出跳板机历史"
       empty: "没有跳板机历史记录"
       header:
         id: "ID"
@@ -285,17 +560,37 @@ cmd:
         use: "使用次数"
         last_used: "最后使用"
       total: "总计: {{.Count}} 条记录"
+    flag:
+      clear: "清除所有跳板历史"
+      delete: "按 ID 删除特定历史记录"
+      limit: "显示记录数"
     clear:
       success: "跳板机历史已清除"
     delete:
       success: "跳板机历史 #{{.ID}} 已删除"
+    cleared: "跳板机历史已清除"
+    deleted: "跳板机历史 #{{.ID}} 已删除"
     error:
       service_unavailable: "跳板机服务不可用"
       invalid_id: "无效的 ID: {{.ID}}"
+      clear_failed: "清除跳板历史失败: {{.Error}}"
+      delete_failed: "删除跳板历史 #{{.ID}} 失败: {{.Error}}"
+      list_failed: "列出跳板历史失败: {{.Error}}"
 
   # 安全检查命令 (X1)
   security:
     description: "安全漏洞检查"
+    check:
+      description: "使用 AI 检查漏洞"
+      checking_server: "正在检查服务器: {{.Server}}，漏洞: {{.Vuln}}"
+      checking_group: "正在检查分组: {{.Group}}，漏洞: {{.Vuln}}"
+    flag:
+      server: "目标服务器（逗号分隔）"
+      group: "目标服务器分组"
+      format: "输出格式 (text/json/markdown)"
+      dry_run: "仅生成脚本，不执行"
+      skip_confirm: "跳过危险操作确认"
+      timeout: "执行超时时间"
     vuln:
       title: "AI 安全检查"
       vulnerability: "漏洞:"
@@ -309,11 +604,18 @@ cmd:
       status_vulnerable: "存在漏洞"
       status_error: "错误"
       status_unknown: "未知"
-    check:
-      checking_server: "正在检查服务器: {{.Server}}，漏洞: {{.Vuln}}"
-      checking_group: "正在检查分组: {{.Group}}，漏洞: {{.Vuln}}"
+      json_not_impl: "JSON 输出尚未实现"
     rules:
+      description: "管理安全规则"
+      list:
+        description: "列出所有安全规则"
+      add:
+        description: "添加安全规则"
+      remove:
+        description: "移除安全规则"
       title: "安全规则:"
+      header: "安全规则:"
+      not_implemented: "  [待实现]"
       name_required: "规则名称不能为空"
       pattern_required: "规则模式不能为空"
       added: "规则已添加: {{.Name}}"
@@ -321,6 +623,8 @@ cmd:
     error:
       vuln_required: "漏洞信息不能为空"
       target_required: "服务器或分组不能为空"
+      rule_name_required: "规则名称不能为空"
+      rule_pattern_required: "规则模式不能为空"
 
 # ============================================================
 # 服务层消息
@@ -346,10 +650,29 @@ service:
       file_not_exist: "本地文件不存在: {{.Path}}"
       directory_omitted: "忽略目录，使用 -r 上传目录"
       remote_dir_not_exist: "远程目录 {{.Path}} 不存在，是否创建? "
-      create_dir_failed: "创建远程目录失败: {{.Error}}"
+      create_dir_failed: "创建远程目录失败"
       aborted: "已中止"
       no_matching_files: "没有匹配的文件: {{.Pattern}}"
       glob_found: "找到 {{.Count}} 个匹配的文件，{{.Action}}中..."
+      jump_chain_not_available: "跳板链支持不可用"
+      jump_connection_failed: "跳板连接失败"
+      push_failed: "推送失败"
+      verification_failed: "校验失败"
+      pull_failed: "拉取失败"
+      local_dir_not_exist: "本地目录 {{.Path}} 不存在，是否创建? "
+      create_local_dir_failed: "创建本地目录失败"
+      sftp_client_creation_failed: "SFTP 客户端创建失败"
+      remote_path_not_exist: "远程路径不存在: {{.Path}}"
+      omit_download_dir: "忽略目录，使用 -r 下载目录"
+      list_failed: "列表失败"
+      remove_failed: "删除失败"
+      mkdir_failed: "创建目录失败"
+      server_not_found: "服务器未找到: {{.Name}}"
+      host_required: "必须指定主机地址"
+      glob_failed: "通配符匹配失败"
+    progress:
+      file_counter: "({{.Current}}/{{.Total}}) {{.Name}}"
+      failed: "  失败: {{.Error}}"
     key:
       warning:
         deploy_failed: "警告: 部署公钥失败: {{.Error}}"
@@ -377,8 +700,20 @@ infra:
       resuming: "从偏移 {{.Offset}} 处恢复"
     download:
       resuming: "从偏移 {{.Offset}} 处恢复"
+    verify:
+      verification_error: "  ✗ 校验错误: {{.Error}}"
+      size_match: "  ✓ 大小匹配: {{.Size}}"
+      size_mismatch: "  ✗ 大小不匹配"
+      sha256: "  ✓ sha256: {{.Hash}}"
+      hash_match: "  ✓ 哈希匹配"
+      hash_mismatch: "  ✗ 哈希不匹配"
+    progress:
+      eta_unknown: "ETA ?"
   virtual:
     error: "[错误] {{.Error}}"
+  store:
+    warn:
+      close_error: "警告: {{.Name}} 关闭失败: {{.Error}}"
 
 # ============================================================
 # 初始化消息

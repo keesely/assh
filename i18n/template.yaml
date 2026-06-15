@@ -112,6 +112,19 @@ cmd:
 
   # Connection Commands
   connect:
+    flag:
+      host: ""
+      port: ""
+      user: ""
+      login: ""
+      password: ""
+      identity_file: ""
+      key: ""
+      jump: ""
+    error:
+      no_target: ""
+      both_target_host: ""
+      command_required: ""
     login:
       description: ""
       error:
@@ -124,10 +137,20 @@ cmd:
         cmd_required: ""
     bc:
       description: ""
+      flag:
+        servers: ""
+        group: ""
+        port_override: ""
+        user_override: ""
+        password_override: ""
+        log: ""
       error:
         cmd_required: ""
         servers_or_group_required: ""
+        no_target: ""
         no_servers: ""
+        get_group: ""
+        write_result: ""
       output:
         result_written: ""
         result_error: ""
@@ -190,32 +213,43 @@ cmd:
   # Key Generation Command
   keygen:
     description: ""
-    success:
-      standalone: ""
-      direct: ""
-      managed: ""
+    flag:
+      type: ""
+      bits: ""
+      output: ""
+      comment: ""
+      passphrase: ""
+      host: ""
+      user: ""
+      login: ""
+      port: ""
+      password: ""
+    success: ""
+    success_direct: ""
     info:
       server: ""
       type: ""
       comment: ""
       key_file: ""
-      auth: ""
+      auth_password_key: ""
+      auth_key: ""
       private_key: ""
       public_key: ""
       fingerprint: ""
       public_key_contents: ""
       host: ""
       user: ""
-    warning:
-      deploy_failed: ""
-    info_msg:
       deployed: ""
       already_exists: ""
+    warning:
+      deploy_failed: ""
+      record_failed: ""
+      backup_failed: ""
     interactive:
       generating: ""
-      key_type: ""
-      key_bits: ""
-      save_path: ""
+      type_prompt: ""
+      bits_prompt: ""
+      file_prompt: ""
       passphrase: ""
       passphrase_confirm: ""
     error:

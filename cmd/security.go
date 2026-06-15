@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"assh/asshc/domain"
+	"assh/internal/i18n"
 	"github.com/urfave/cli"
 )
 
@@ -13,36 +14,36 @@ import (
 func SecurityCommand() cli.Command {
 	return cli.Command{
 		Name:  "security",
-		Usage: "Security vulnerability checking",
+		Usage: i18n.T("cmd.security.description"),
 		Subcommands: []cli.Command{
 			{
 				Name:  "vuln-check",
-				Usage: "Check vulnerability using AI",
+				Usage: i18n.T("cmd.security.check.description"),
 				Flags: []cli.Flag{
 					cli.StringFlag{
 						Name:  "server, s",
-						Usage: "Target server (comma separated)",
+						Usage: i18n.T("cmd.security.flag.server"),
 					},
 					cli.StringFlag{
 						Name:  "group, g",
-						Usage: "Target server group",
+						Usage: i18n.T("cmd.security.flag.group"),
 					},
 					cli.StringFlag{
 						Name:  "output, o",
-						Usage: "Output format (text/json/markdown)",
+						Usage: i18n.T("cmd.security.flag.format"),
 						Value: "text",
 					},
 					cli.BoolFlag{
 						Name:  "no-execute",
-						Usage: "Only generate script, don't execute",
+						Usage: i18n.T("cmd.security.flag.dry_run"),
 					},
 					cli.BoolFlag{
 						Name:  "no-confirm",
-						Usage: "Skip high-risk operation confirmation",
+						Usage: i18n.T("cmd.security.flag.skip_confirm"),
 					},
 					cli.DurationFlag{
 						Name:  "timeout",
-						Usage: "Execution timeout",
+						Usage: i18n.T("cmd.security.flag.timeout"),
 						Value: 300 * time.Second,
 					},
 				},
@@ -50,21 +51,21 @@ func SecurityCommand() cli.Command {
 			},
 			{
 				Name:  "rules",
-				Usage: "Manage security rules",
+				Usage: i18n.T("cmd.security.rules.description"),
 				Subcommands: []cli.Command{
 					{
 						Name:   "list",
-						Usage:  "List all security rules",
+						Usage:  i18n.T("cmd.security.rules.list.description"),
 						Action: rulesListAction,
 					},
 					{
 						Name:   "add",
-						Usage:  "Add a security rule",
+						Usage:  i18n.T("cmd.security.rules.add.description"),
 						Action: rulesAddAction,
 					},
 					{
 						Name:   "remove",
-						Usage:  "Remove a security rule",
+						Usage:  i18n.T("cmd.security.rules.remove.description"),
 						Action: rulesRemoveAction,
 					},
 				},
@@ -82,11 +83,11 @@ func vulnCheckAction(c *cli.Context) error {
 
 	// 验证参数
 	if vulnInfo == "" {
-		return fmt.Errorf("vulnerability information is required")
+		return fmt.Errorf("%s", i18n.T("cmd.security.error.vuln_required"))
 	}
 
 	if server == "" && group == "" {
-		return fmt.Errorf("server or group is required")
+		return fmt.Errorf("%s", i18n.T("cmd.security.error.target_required"))
 	}
 
 	// TODO: 获取应用组件并执行检查
@@ -102,11 +103,11 @@ func vulnCheckAction(c *cli.Context) error {
 			}
 
 			// TODO: 获取服务器配置并执行检查
-			fmt.Printf("Checking server: %s for vulnerability: %s\n", s, vulnInfo)
+			fmt.Println(i18n.T("cmd.security.checking_server", map[string]interface{}{"Server": s, "Vuln": vulnInfo}))
 		}
 	} else if group != "" {
 		// 检查分组服务器
-		fmt.Printf("Checking group: %s for vulnerability: %s\n", group, vulnInfo)
+		fmt.Println(i18n.T("cmd.security.checking_group", map[string]interface{}{"Group": group, "Vuln": vulnInfo}))
 	}
 
 	return nil
@@ -126,43 +127,41 @@ func outputReport(report *domain.VulnReport, format string) {
 
 // outputText 输出文本格式。
 func outputText(report *domain.VulnReport) {
-	fmt.Println("┌─ AI 安全检查 ─────────────────────┐")
-	fmt.Printf("│ 漏洞: %-28s │\n", report.VulnID)
-	fmt.Printf("│ 目标: %-28s │\n", report.Target)
-	fmt.Printf("│ 状态: %-28s │\n", getStatusText(report.Status))
-	fmt.Printf("│ 详情: %-28s │\n", truncate(report.Details, 28))
-	fmt.Printf("│ 建议: %-28s │\n", truncate(report.Suggestion, 28))
-	fmt.Println("└────────────────────────────────────┘")
+	fmt.Println(i18n.T("cmd.security.vuln.title"))
+	fmt.Println(i18n.T("cmd.security.vuln.vulnerability"), report.VulnID)
+	fmt.Println(i18n.T("cmd.security.vuln.target"), report.Target)
+	fmt.Println(i18n.T("cmd.security.vuln.status"), getStatusText(report.Status))
+	fmt.Println(i18n.T("cmd.security.vuln.details"), truncate(report.Details, 28))
+	fmt.Println(i18n.T("cmd.security.vuln.suggestion"), truncate(report.Suggestion, 28))
 }
 
 // outputJSON 输出 JSON 格式。
 func outputJSON(report *domain.VulnReport) {
-	// TODO: 实现 JSON 输出
-	fmt.Printf("JSON output not implemented yet\n")
+	fmt.Println(i18n.T("cmd.security.vuln.json_not_impl"))
 }
 
 // outputMarkdown 输出 Markdown 格式。
 func outputMarkdown(report *domain.VulnReport) {
-	fmt.Printf("# AI 安全检查报告\n\n")
-	fmt.Printf("- **漏洞**: %s\n", report.VulnID)
-	fmt.Printf("- **目标**: %s\n", report.Target)
-	fmt.Printf("- **时间**: %s\n", report.Timestamp.Format("2006-01-02 15:04:05"))
-	fmt.Printf("- **状态**: %s\n", getStatusText(report.Status))
-	fmt.Printf("- **详情**: %s\n", report.Details)
-	fmt.Printf("- **建议**: %s\n", report.Suggestion)
+	fmt.Printf("# %s\n\n", i18n.T("cmd.security.vuln.report_title"))
+	fmt.Printf("- %s %s\n", i18n.T("cmd.security.vuln.vulnerability"), report.VulnID)
+	fmt.Printf("- %s %s\n", i18n.T("cmd.security.vuln.target"), report.Target)
+	fmt.Printf("- %s %s\n", i18n.T("cmd.security.vuln.time"), report.Timestamp.Format("2006-01-02 15:04:05"))
+	fmt.Printf("- %s %s\n", i18n.T("cmd.security.vuln.status"), getStatusText(report.Status))
+	fmt.Printf("- %s %s\n", i18n.T("cmd.security.vuln.details"), report.Details)
+	fmt.Printf("- %s %s\n", i18n.T("cmd.security.vuln.suggestion"), report.Suggestion)
 }
 
 // getStatusText 获取状态文本。
 func getStatusText(status domain.VulnResult) string {
 	switch status {
 	case domain.VulnResultSafe:
-		return "✅ 安全"
+		return i18n.T("cmd.security.vuln.status_safe")
 	case domain.VulnResultVulnerable:
-		return "⚠️ 存在漏洞"
+		return i18n.T("cmd.security.vuln.status_vulnerable")
 	case domain.VulnResultError:
-		return "❌ 错误"
+		return i18n.T("cmd.security.vuln.status_error")
 	default:
-		return "❓ 未知"
+		return i18n.T("cmd.security.vuln.status_unknown")
 	}
 }
 
@@ -176,10 +175,9 @@ func truncate(s string, maxLen int) string {
 
 // rulesListAction 列出所有安全规则。
 func rulesListAction(c *cli.Context) error {
-	// TODO: 获取安全扫描器并列出规则
-	fmt.Printf("Security Rules:\n")
+	fmt.Println(i18n.T("cmd.security.rules.header"))
 	fmt.Println("─────────────────────────────────────────")
-	fmt.Printf("  [Implementation needed]\n")
+	fmt.Println(i18n.T("cmd.security.rules.not_implemented"))
 
 	return nil
 }
@@ -188,16 +186,15 @@ func rulesListAction(c *cli.Context) error {
 func rulesAddAction(c *cli.Context) error {
 	name := c.Args().First()
 	if name == "" {
-		return fmt.Errorf("rule name is required")
+		return fmt.Errorf("%s", i18n.T("cmd.security.error.rule_name_required"))
 	}
 
 	pattern := c.Args().Get(1)
 	if pattern == "" {
-		return fmt.Errorf("rule pattern is required")
+		return fmt.Errorf("%s", i18n.T("cmd.security.error.rule_pattern_required"))
 	}
 
-	// TODO: 添加安全规则
-	fmt.Printf("Rule added: %s\n", name)
+	fmt.Println(i18n.T("cmd.security.rules.added", map[string]interface{}{"Name": name}))
 	return nil
 }
 
@@ -205,10 +202,9 @@ func rulesAddAction(c *cli.Context) error {
 func rulesRemoveAction(c *cli.Context) error {
 	name := c.Args().First()
 	if name == "" {
-		return fmt.Errorf("rule name is required")
+		return fmt.Errorf("%s", i18n.T("cmd.security.error.rule_name_required"))
 	}
 
-	// TODO: 移除安全规则
-	fmt.Printf("Rule removed: %s\n", name)
+	fmt.Println(i18n.T("cmd.security.rules.removed", map[string]interface{}{"Name": name}))
 	return nil
 }

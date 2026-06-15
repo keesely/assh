@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"assh/internal/i18n"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -20,7 +22,7 @@ import (
 func closeAndLog(c io.Closer, name string) {
 	if err := c.Close(); err != nil {
 		// 使用 fmt.Printf 代替 log.Warnf 避免循环依赖
-		fmt.Printf("WARN: %s close error: %v\n", name, err)
+		fmt.Println(i18n.T("infra.store.warn.close_error", map[string]interface{}{"Name": name, "Error": err}))
 	}
 }
 

@@ -3,6 +3,8 @@ package sftp
 import (
 	"fmt"
 	"time"
+
+	"assh/internal/i18n"
 )
 
 type ProgressInfo struct {
@@ -52,7 +54,7 @@ func NewProgressCallback(total int) TransferProgress {
 		}
 		eta := info.ETA
 		if eta == "" {
-			eta = "ETA ?"
+			eta = i18n.T("infra.sftp.progress.eta_unknown")
 		}
 
 		name := info.FileName

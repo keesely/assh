@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"assh/asshc/port"
+	"assh/internal/i18n"
 
 	"github.com/urfave/cli"
 )
@@ -17,24 +18,14 @@ func (a *App) registerHealthCommands() {
 	a.cli.Commands = append(a.cli.Commands, cli.Command{
 		Name:  "health",
 		Usage: "Server health check",
-		Description: `Check server health status via SSH connection.
-
-Examples:
-  assh health check myserver                  # Single server check
-  assh health check myserver --detail         # With system details
-  assh health check server1,server2           # Multiple servers
-  assh health list                            # Check all servers
-  assh health list --group prod               # Check group
-  assh health list --concurrency 10           # With concurrency limit
-  assh health list --detail                   # With system details
-`,
+		Description: i18n.T("cmd.health.description"),
 		Subcommands: []cli.Command{
 			{
 				Name:      "check",
 				Usage:     "Check single or multiple servers",
 				ArgsUsage: "<server>[,<server>...]",
 				Flags: []cli.Flag{
-					cli.BoolFlag{Name: "detail, d", Usage: "show system details (uptime/load/memory/disk)"},
+					cli.BoolFlag{Name: "detail, d", Usage: i18n.T("cmd.health.flag.details")},
 				},
 				Action: a.healthCheckAction,
 			},
@@ -42,9 +33,9 @@ Examples:
 				Name:  "list",
 				Usage: "Check all servers or a group",
 				Flags: []cli.Flag{
-					cli.StringFlag{Name: "group, g", Usage: "check specific group only"},
-					cli.BoolFlag{Name: "detail, d", Usage: "show system details"},
-					cli.IntFlag{Name: "concurrency, c", Value: 5, Usage: "max concurrent checks"},
+					cli.StringFlag{Name: "group, g", Usage: i18n.T("cmd.health.flag.group")},
+					cli.BoolFlag{Name: "detail, d", Usage: i18n.T("cmd.health.flag.details")},
+					cli.IntFlag{Name: "concurrency, c", Value: 5, Usage: i18n.T("cmd.health.flag.concurrency")},
 				},
 				Action: a.healthListAction,
 			},
@@ -56,7 +47,7 @@ Examples:
 // 支持逗号分隔的多服务器检查。
 func (a *App) healthCheckAction(c *cli.Context) error {
 	if a.healthSvc == nil {
-		return fmt.Errorf("health service not available")
+		return fmt.Errorf("%s", i18n.T("cmd.health.error.service_unavailable"))
 	}
 
 	if c.NArg() < 1 {
@@ -100,7 +91,7 @@ func (a *App) checkSingleServer(name string, detail bool) error {
 // healthListAction 处理 `assh health list` 命令。
 func (a *App) healthListAction(c *cli.Context) error {
 	if a.healthSvc == nil {
-		return fmt.Errorf("health service not available")
+		return fmt.Errorf("%s", i18n.T("cmd.health.error.service_unavailable"))
 	}
 
 	detail := c.Bool("detail")
@@ -127,28 +118,28 @@ func (a *App) healthListAction(c *cli.Context) error {
 // printSingleResult 输出单台服务器的检查结果。
 func (a *App) printSingleResult(r *port.HealthResult, detail bool) {
 	statusIcon := statusIcon(r.Status)
-	fmt.Printf("%s %s (%s:%d)\n", statusIcon, r.Server, r.Host, r.Port)
-	fmt.Printf("  Status:   %s\n", r.Status)
-	fmt.Printf("  Latency:  %s\n", formatDuration(r.Latency))
-	fmt.Printf("  Checked:  %s\n", r.CheckedAt.Format("2006-01-02 15:04:05"))
+	fmt.Println(i18n.T("cmd.health.result.server", map[string]interface{}{"Icon": statusIcon, "Server": r.Server, "Host": r.Host, "Port": r.Port}))
+	fmt.Println(i18n.T("cmd.health.result.status", map[string]interface{}{"Status": r.Status}))
+	fmt.Println(i18n.T("cmd.health.result.latency", map[string]interface{}{"Latency": formatDuration(r.Latency)}))
+	fmt.Println(i18n.T("cmd.health.result.checked", map[string]interface{}{"Checked": r.CheckedAt.Format("2006-01-02 15:04:05")}))
 
 	if r.Error != "" {
-		fmt.Printf("  Error:    %s\n", r.Error)
+		fmt.Println(i18n.T("cmd.health.result.error", map[string]interface{}{"Error": r.Error}))
 	}
 
 	if detail && r.Details != nil {
-		fmt.Println("  --- System Info ---")
+		fmt.Println(i18n.T("cmd.health.result.system_info"))
 		if r.Details.Uptime != "" {
-			fmt.Printf("  Uptime:   %s\n", r.Details.Uptime)
+			fmt.Println(i18n.T("cmd.health.result.uptime", map[string]interface{}{"Uptime": r.Details.Uptime}))
 		}
 		if r.Details.LoadAvg != "" {
-			fmt.Printf("  Load:     %s\n", r.Details.LoadAvg)
+			fmt.Println(i18n.T("cmd.health.result.load", map[string]interface{}{"Load": r.Details.LoadAvg}))
 		}
 		if r.Details.Memory != "" {
-			fmt.Printf("  Memory:   %s\n", r.Details.Memory)
+			fmt.Println(i18n.T("cmd.health.result.memory", map[string]interface{}{"Memory": r.Details.Memory}))
 		}
 		if r.Details.Disk != "" {
-			fmt.Printf("  Disk:     %s\n", r.Details.Disk)
+			fmt.Println(i18n.T("cmd.health.result.disk", map[string]interface{}{"Disk": r.Details.Disk}))
 		}
 	}
 }
@@ -172,7 +163,7 @@ func (a *App) printHealthResults(results []*port.HealthResult, detail bool) {
 	// 表格模式
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
-	fmt.Fprintf(w, "SERVER\tSTATUS\tLATENCY\tERROR\n")
+	fmt.Fprintf(w, "%s\n", i18n.T("cmd.health.list.header"))
 	fmt.Fprintf(w, "------\t------\t-------\t-----\n")
 	for _, r := range results {
 		errMsg := r.Error
@@ -205,16 +196,16 @@ func printHealthSummary(results []*port.HealthResult) {
 		}
 	}
 
-	fmt.Printf("\nTotal: %d | ", len(results))
-	fmt.Printf("✓ %d healthy", healthy)
+	fmt.Printf("\n%s", i18n.T("cmd.health.list.total", map[string]interface{}{"Count": len(results)}))
+	fmt.Printf("%s", i18n.T("cmd.health.list.healthy", map[string]interface{}{"Count": healthy}))
 	if unhealthy > 0 {
-		fmt.Printf(" | ⚠ %d unhealthy", unhealthy)
+		fmt.Printf(" | %s", i18n.T("cmd.health.list.unhealthy", map[string]interface{}{"Count": unhealthy}))
 	}
 	if timeout > 0 {
-		fmt.Printf(" | ⏱ %d timeout", timeout)
+		fmt.Printf(" | %s", i18n.T("cmd.health.list.timeout", map[string]interface{}{"Count": timeout}))
 	}
 	if errCount > 0 {
-		fmt.Printf(" | ✗ %d error", errCount)
+		fmt.Printf(" | %s", i18n.T("cmd.health.list.error", map[string]interface{}{"Count": errCount}))
 	}
 	fmt.Println()
 }

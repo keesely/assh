@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"assh/asshc/service"
+	"assh/internal/i18n"
 
 	"github.com/urfave/cli"
 )
@@ -12,37 +13,28 @@ import (
 func (a *App) registerTunnelCommands() {
 	a.cli.Commands = append(a.cli.Commands, cli.Command{
 		Name:      "tunnel",
-		Usage:     "Manage SSH port forwarding tunnels",
+		Usage:     i18n.T("cmd.tunnel.description"),
 		ArgsUsage: "<server> [-L/-R spec] or stop/list",
-		Description: `Start SSH port forwarding tunnels.
-
-Examples:
-  assh tunnel myserver -L 8080:localhost:80        # local forward
-  assh tunnel myserver -R 8080:localhost:80        # remote forward
-  assh tunnel myserver -L 80:web:80 -L 443:web:443  # multiple forwards
-  assh tunnel myserver -L 8080:localhost:80 --daemon  # background
-  assh tunnel stop <id>                            # stop tunnel
-  assh tunnel list                                 # list tunnels
-`,
+		Description: i18n.T("cmd.tunnel.description_long"),
 		Flags: []cli.Flag{
-			cli.StringSliceFlag{Name: "L", Usage: "local forward spec [bind_addr:]port:host:hostport"},
-			cli.StringSliceFlag{Name: "R", Usage: "remote forward spec [bind_addr:]port:host:hostport"},
-			cli.StringFlag{Name: "listen", Value: "tcp", Usage: "listen type: tcp|http"},
-			cli.BoolFlag{Name: "daemon, d", Usage: "run in background as daemon"},
-			cli.StringFlag{Name: "auto-reconnect", Usage: "auto reconnect [retries/]interval"},
-			cli.StringFlag{Name: "J, jump", Usage: "jump host chain (comma-separated): name,user@host[:port]"},
+			cli.StringSliceFlag{Name: "L", Usage: i18n.T("cmd.tunnel.flag.local")},
+			cli.StringSliceFlag{Name: "R", Usage: i18n.T("cmd.tunnel.flag.remote")},
+			cli.StringFlag{Name: "listen", Value: "tcp", Usage: i18n.T("cmd.tunnel.flag.listen_type")},
+			cli.BoolFlag{Name: "daemon, d", Usage: i18n.T("cmd.tunnel.flag.daemon")},
+			cli.StringFlag{Name: "auto-reconnect", Usage: i18n.T("cmd.tunnel.flag.reconnect")},
+			cli.StringFlag{Name: "J, jump", Usage: i18n.T("cmd.tunnel.flag.jump")},
 		},
 		Action: a.tunnelAction,
 		Subcommands: []cli.Command{
 			{
 				Name:      "stop",
-				Usage:     "Stop a running tunnel",
+				Usage:     i18n.T("cmd.tunnel.stop.description"),
 				ArgsUsage: "<id>",
 				Action:    a.tunnelStopAction,
 			},
 			{
 				Name:   "list",
-				Usage:  "List all running tunnels",
+				Usage:  i18n.T("cmd.tunnel.list.description"),
 				Action: a.tunnelListAction,
 			},
 		},
@@ -51,7 +43,7 @@ Examples:
 
 func (a *App) tunnelAction(c *cli.Context) error {
 	if a.proxySvc == nil {
-		return fmt.Errorf("proxy service not available")
+		return fmt.Errorf("%s", i18n.T("cmd.proxy.error.service_unavailable"))
 	}
 
 	if c.NArg() < 1 {
@@ -66,7 +58,7 @@ func (a *App) tunnelAction(c *cli.Context) error {
 	remoteForwards := c.StringSlice("R")
 
 	if len(localForwards) == 0 && len(remoteForwards) == 0 {
-		return fmt.Errorf("at least one -L or -R flag is required")
+		return fmt.Errorf("%s", i18n.T("cmd.tunnel.error.spec_required"))
 	}
 
 	var specs []service.ForwardSpec
@@ -74,7 +66,7 @@ func (a *App) tunnelAction(c *cli.Context) error {
 	for _, lf := range localForwards {
 		localAddr, remoteAddr := parseForwardSpec(lf)
 		if localAddr == "" {
-			return fmt.Errorf("invalid -L spec: %q (expected [bind_addr:]port:host:hostport)", lf)
+			return fmt.Errorf(i18n.T("cmd.tunnel.error.invalid_local"), lf)
 		}
 		specs = append(specs, service.ForwardSpec{
 			LocalAddr:  localAddr,
@@ -87,7 +79,7 @@ func (a *App) tunnelAction(c *cli.Context) error {
 	for _, rf := range remoteForwards {
 		remoteAddr, localAddr := parseForwardSpec(rf)
 		if remoteAddr == "" {
-			return fmt.Errorf("invalid -R spec: %q (expected [bind_addr:]port:host:hostport)", rf)
+			return fmt.Errorf(i18n.T("cmd.tunnel.error.invalid_remote"), rf)
 		}
 		specs = append(specs, service.ForwardSpec{
 			LocalAddr:  localAddr,
@@ -112,7 +104,7 @@ func (a *App) tunnelAction(c *cli.Context) error {
 
 func (a *App) tunnelStopAction(c *cli.Context) error {
 	if a.proxySvc == nil {
-		return fmt.Errorf("proxy service not available")
+		return fmt.Errorf("%s", i18n.T("cmd.proxy.error.service_unavailable"))
 	}
 
 	if c.NArg() < 1 {
@@ -125,21 +117,25 @@ func (a *App) tunnelStopAction(c *cli.Context) error {
 
 func (a *App) tunnelListAction(c *cli.Context) error {
 	if a.proxySvc == nil {
-		return fmt.Errorf("proxy service not available")
+		return fmt.Errorf("%s", i18n.T("cmd.proxy.error.service_unavailable"))
 	}
 
 	tunnels := a.proxySvc.ListTunnels()
 	if len(tunnels) == 0 {
-		fmt.Println("No active tunnels")
+		fmt.Println(i18n.T("cmd.tunnel.list.empty"))
 		return nil
 	}
 
-	fmt.Printf("%-10s  %-6s  %-30s  %-30s\n", "ID", "TYPE", "LOCAL", "REMOTE")
+	fmt.Printf("%-10s  %-6s  %-30s  %-30s\n",
+		i18n.T("cmd.tunnel.list.header.id"),
+		i18n.T("cmd.tunnel.list.header.type"),
+		i18n.T("cmd.tunnel.list.header.local"),
+		i18n.T("cmd.tunnel.list.header.remote"))
 	fmt.Println(strings.Repeat("-", 80))
 	for _, t := range tunnels {
 		fmt.Printf("%-10s  %-6s  %-30s  %-30s\n", t.ID(), t.Type(), t.LocalAddr(), t.RemoteAddr())
 	}
-	fmt.Printf("\nTotal: %d tunnel(s)\n", len(tunnels))
+	fmt.Printf("\n%s\n", i18n.T("cmd.tunnel.list.total", map[string]interface{}{"Count": len(tunnels)}))
 	return nil
 }
 

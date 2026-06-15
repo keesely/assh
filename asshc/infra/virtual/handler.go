@@ -8,6 +8,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/port"
+	"assh/internal/i18n"
 )
 
 // InputHandler 处理 SSH 会话中的输入，拦截虚拟命令。
@@ -36,7 +37,7 @@ func (h *InputHandler) HandleInput(ctx context.Context, input string, session po
 	result, err := h.service.Execute(ctx, input, session)
 	if err != nil {
 		// 显示错误信息
-		fmt.Printf("[ERROR] %v\n", err)
+		fmt.Println(i18n.T("infra.virtual.error", map[string]interface{}{"Error": err}))
 		return true, nil
 	}
 
@@ -59,7 +60,7 @@ func (h *InputHandler) HandleInputWithWriter(ctx context.Context, input string, 
 	result, err := h.service.Execute(ctx, input, session)
 	if err != nil {
 		// 显示错误信息
-		fmt.Fprintf(writer, "[ERROR] %v\n", err)
+		fmt.Fprintln(writer, i18n.T("infra.virtual.error", map[string]interface{}{"Error": err}))
 		return true, nil
 	}
 
@@ -84,7 +85,7 @@ func (h *InputHandler) displayResult(result *domain.VirtualCommandResult) {
 
 	// 显示错误
 	if result.Error != "" {
-		fmt.Printf("[ERROR] %s\n", result.Error)
+		fmt.Println(i18n.T("infra.virtual.error", map[string]interface{}{"Error": result.Error}))
 	}
 }
 
@@ -101,7 +102,7 @@ func (h *InputHandler) displayResultToWriter(result *domain.VirtualCommandResult
 
 	// 显示错误
 	if result.Error != "" {
-		fmt.Fprintf(writer, "[ERROR] %s\n", result.Error)
+		fmt.Fprintln(writer, i18n.T("infra.virtual.error", map[string]interface{}{"Error": result.Error}))
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"assh/asshc/domain"
+	"assh/internal/i18n"
 
 	"github.com/urfave/cli"
 )
@@ -22,53 +23,53 @@ import (
 func (a *App) registerSyncCommands() {
 	a.cli.Commands = append(a.cli.Commands, cli.Command{
 		Name:  "sync",
-		Usage: "Cloud synchronization of server configurations",
+		Usage: i18n.T("cmd.sync.description"),
 		Subcommands: []cli.Command{
 			{
 				Name:  "account",
-				Usage: "Configure cloud sync account",
+				Usage: i18n.T("cmd.sync.account.description"),
 				Subcommands: []cli.Command{
 					{
 						Name:   "set",
-						Usage:  "Configure or update cloud account (interactive)",
+						Usage:  i18n.T("cmd.sync.account.set.description"),
 						Action: a.syncAccountSetAction,
 						Flags: []cli.Flag{
-							cli.StringFlag{Name: "access-key", Usage: "Qiniu Access Key"},
-							cli.StringFlag{Name: "secret-key", Usage: "Qiniu Secret Key"},
-							cli.StringFlag{Name: "bucket", Usage: "Qiniu bucket name"},
-							cli.StringFlag{Name: "zone", Usage: "Qiniu zone (huadong/huabei/huanan/beimei/xinjiapo)"},
+							cli.StringFlag{Name: "access-key", Usage: i18n.T("cmd.sync.flag.access_key")},
+							cli.StringFlag{Name: "secret-key", Usage: i18n.T("cmd.sync.flag.secret_key")},
+							cli.StringFlag{Name: "bucket", Usage: i18n.T("cmd.sync.flag.bucket")},
+							cli.StringFlag{Name: "zone", Usage: i18n.T("cmd.sync.flag.zone")},
 						},
 					},
 					{
 						Name:   "show",
-						Usage:  "Show current cloud account info",
+						Usage:  i18n.T("cmd.sync.account.show.description"),
 						Action: a.syncAccountShowAction,
 					},
 					{
 						Name:   "delete",
-						Usage:  "Delete cloud account configuration",
+						Usage:  i18n.T("cmd.sync.account.delete.description"),
 						Action: a.syncAccountDeleteAction,
 					},
 					{
 						Name:   "test",
-						Usage:  "Test cloud account connection",
+						Usage:  i18n.T("cmd.sync.account.test.description"),
 						Action: a.syncAccountTestAction,
 					},
 				},
 			},
 			{
 				Name:   "push",
-				Usage:  "Push local server configs to cloud",
+				Usage:  i18n.T("cmd.sync.push.description"),
 				Action: a.syncPushAction,
 			},
 			{
 				Name:   "pull",
-				Usage:  "Pull server configs from cloud",
+				Usage:  i18n.T("cmd.sync.pull.description"),
 				Action: a.syncPullAction,
 			},
 			{
 				Name:   "history",
-				Usage:  "Show sync history",
+				Usage:  i18n.T("cmd.sync.history.description"),
 				Action: a.syncHistoryAction,
 				Flags: []cli.Flag{
 					cli.IntFlag{Name: "n", Value: 10, Usage: "number of history entries to show"},
@@ -95,8 +96,8 @@ func (a *App) syncAccountSetAction(c *cli.Context) error {
 
 	// 如果未提供参数，使用交互模式
 	if accessKey == "" || secretKey == "" || bucket == "" {
-		fmt.Println("Configuring cloud sync account (Qiniu)")
-		fmt.Println("Enter values (press Enter to keep current value if shown):")
+		fmt.Println(i18n.T("cmd.sync.account.configuring"))
+		fmt.Println(i18n.T("cmd.sync.account.enter_values"))
 		fmt.Println()
 
 		// 读取当前配置（如果有）
@@ -105,7 +106,7 @@ func (a *App) syncAccountSetAction(c *cli.Context) error {
 		reader := bufio.NewReader(os.Stdin)
 
 		// AccessKey
-		prompt := "Access Key"
+		prompt := i18n.T("cmd.sync.account.prompt.access_key")
 		if current != nil && current.AccessKey != "" {
 			prompt += " [" + maskString(current.AccessKey, 4) + "]"
 		}
@@ -120,9 +121,9 @@ func (a *App) syncAccountSetAction(c *cli.Context) error {
 		}
 
 		// SecretKey
-		prompt = "Secret Key"
+		prompt = i18n.T("cmd.sync.account.prompt.secret_key")
 		if current != nil && current.SecretKey != "" {
-			prompt += " [already set]"
+			prompt += " " + i18n.T("cmd.sync.account.already_set")
 		}
 		prompt += ": "
 		fmt.Print(prompt)
@@ -135,7 +136,7 @@ func (a *App) syncAccountSetAction(c *cli.Context) error {
 		}
 
 		// Bucket
-		prompt = "Bucket"
+		prompt = i18n.T("cmd.sync.account.prompt.bucket")
 		if current != nil && current.Bucket != "" {
 			prompt += " [" + current.Bucket + "]"
 		}
@@ -150,7 +151,7 @@ func (a *App) syncAccountSetAction(c *cli.Context) error {
 		}
 
 		// Zone
-		prompt = "Zone (huadong/huabei/huanan/beimei/xinjiapo)"
+		prompt = i18n.T("cmd.sync.account.prompt.zone")
 		if current != nil && current.Zone != "" {
 			prompt += " [" + current.Zone + "]"
 		} else {
@@ -170,7 +171,7 @@ func (a *App) syncAccountSetAction(c *cli.Context) error {
 	}
 
 	if accessKey == "" || secretKey == "" || bucket == "" {
-		return fmt.Errorf("access key, secret key, and bucket are required")
+		return fmt.Errorf("%s", i18n.T("cmd.sync.account.error.required"))
 	}
 
 	if zone == "" {
@@ -191,7 +192,7 @@ func (a *App) syncAccountSetAction(c *cli.Context) error {
 		return fmt.Errorf("failed to save account: %w", err)
 	}
 
-	fmt.Println("Cloud account configured successfully.")
+	fmt.Println(i18n.T("cmd.sync.account.success"))
 	return nil
 }
 
@@ -206,13 +207,13 @@ func (a *App) syncAccountShowAction(c *cli.Context) error {
 		return fmt.Errorf("failed to get account: %w", err)
 	}
 
-	fmt.Println("Cloud Sync Account:")
-	fmt.Printf("  Type:      %s\n", acct.Type)
-	fmt.Printf("  AccessKey: %s\n", acct.AccessKey)
-	fmt.Printf("  SecretKey: %s\n", maskString(acct.SecretKey, 4))
-	fmt.Printf("  Bucket:    %s\n", acct.Bucket)
-	fmt.Printf("  Zone:      %s\n", acct.Zone)
-	fmt.Printf("  Enabled:   %v\n", acct.Enabled)
+	fmt.Println(i18n.T("cmd.sync.account.info"))
+	fmt.Printf("%s      %s\n", i18n.T("cmd.sync.account.type"), acct.Type)
+	fmt.Printf("%s %s\n", i18n.T("cmd.sync.account.access_key"), acct.AccessKey)
+	fmt.Printf("%s %s\n", i18n.T("cmd.sync.account.secret_key"), maskString(acct.SecretKey, 4))
+	fmt.Printf("%s    %s\n", i18n.T("cmd.sync.account.bucket"), acct.Bucket)
+	fmt.Printf("%s      %s\n", i18n.T("cmd.sync.account.zone"), acct.Zone)
+	fmt.Printf("%s   %v\n", i18n.T("cmd.sync.account.enabled"), acct.Enabled)
 
 	return nil
 }
@@ -223,11 +224,11 @@ func (a *App) syncAccountDeleteAction(c *cli.Context) error {
 		return fmt.Errorf("sync service not available")
 	}
 
-	fmt.Print("Are you sure you want to delete the cloud account? [y/N]: ")
+	fmt.Print(i18n.T("cmd.sync.account.confirm_delete"))
 	var confirm string
 	fmt.Scanln(&confirm)
 	if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
-		fmt.Println("Canceled.")
+		fmt.Println(i18n.T("common.cancelled"))
 		return nil
 	}
 
@@ -235,7 +236,7 @@ func (a *App) syncAccountDeleteAction(c *cli.Context) error {
 		return fmt.Errorf("failed to delete account: %w", err)
 	}
 
-	fmt.Println("Cloud account deleted.")
+	fmt.Println(i18n.T("cmd.sync.account.deleted"))
 	return nil
 }
 
@@ -245,13 +246,13 @@ func (a *App) syncAccountTestAction(c *cli.Context) error {
 		return fmt.Errorf("sync service not available")
 	}
 
-	fmt.Println("Testing cloud account connection...")
+	fmt.Println(i18n.T("cmd.sync.account.testing"))
 
 	if err := a.syncSvc.TestAccount(); err != nil {
 		return fmt.Errorf("connection test failed: %w", err)
 	}
 
-	fmt.Println("Connection successful!")
+	fmt.Println(i18n.T("cmd.sync.account.test_success"))
 	return nil
 }
 
@@ -261,7 +262,7 @@ func (a *App) syncPushAction(c *cli.Context) error {
 		return fmt.Errorf("sync service not available")
 	}
 
-	fmt.Println("Pushing server configurations to cloud...")
+	fmt.Println(i18n.T("cmd.sync.push.pushing"))
 
 	ctx := context.Background()
 	result, err := a.syncSvc.Push(ctx)
@@ -269,7 +270,7 @@ func (a *App) syncPushAction(c *cli.Context) error {
 		return fmt.Errorf("push failed: %w", err)
 	}
 
-	fmt.Printf("Push completed: %s\n", result.Message)
+	fmt.Printf("%s %s\n", i18n.T("cmd.sync.push.completed"), result.Message)
 	return nil
 }
 
@@ -279,7 +280,7 @@ func (a *App) syncPullAction(c *cli.Context) error {
 		return fmt.Errorf("sync service not available")
 	}
 
-	fmt.Println("Pulling server configurations from cloud...")
+	fmt.Println(i18n.T("cmd.sync.pull.pulling"))
 
 	ctx := context.Background()
 	result, err := a.syncSvc.Pull(ctx)
@@ -287,9 +288,9 @@ func (a *App) syncPullAction(c *cli.Context) error {
 		return fmt.Errorf("pull failed: %w", err)
 	}
 
-	fmt.Printf("Pull completed: %s\n", result.Message)
+	fmt.Printf("%s %s\n", i18n.T("cmd.sync.pull.completed"), result.Message)
 	if result.Conflicts > 0 {
-		fmt.Printf("  Conflicts: %d (cloud versions saved with _cloud_<ts> suffix)\n", result.Conflicts)
+		fmt.Println(i18n.T("cmd.sync.pull.conflicts", map[string]interface{}{"Count": result.Conflicts}))
 	}
 	return nil
 }
@@ -307,15 +308,15 @@ func (a *App) syncHistoryAction(c *cli.Context) error {
 	}
 
 	if len(histories) == 0 {
-		fmt.Println("No sync history.")
+		fmt.Println(i18n.T("cmd.sync.history.empty"))
 		return nil
 	}
 
-	fmt.Println("Sync History:")
+	fmt.Println(i18n.T("cmd.sync.history.title"))
 	for _, h := range histories {
-		direction := "↑ Push"
+		direction := "↑ " + i18n.T("cmd.sync.direction.push")
 		if h.Direction == domain.SyncDirectionPull {
-			direction = "↓ Pull"
+			direction = "↓ " + i18n.T("cmd.sync.direction.pull")
 		}
 		status := "✓"
 		if h.Status == domain.SyncStatusFailed {
@@ -338,7 +339,7 @@ func (a *App) syncHistoryAction(c *cli.Context) error {
 // 用于安全显示密钥等敏感信息。
 func maskString(s string, visible int) string {
 	if s == "" {
-		return "(not set)"
+		return i18n.T("common.not_set")
 	}
 	if len(s) <= visible+4 {
 		return s[:visible] + "****"

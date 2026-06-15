@@ -19,6 +19,7 @@ import (
 	"assh/asshc/domain"
 	"assh/asshc/port"
 	"assh/config"
+	"assh/internal/i18n"
 	"assh/log"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -445,9 +446,9 @@ func (c *Connector) handleUnknownHost(hostname string, key ssh.PublicKey, knownH
 	fingerprint := ssh.FingerprintSHA256(key)
 
 	if term.IsTerminal(int(os.Stdin.Fd())) {
-		fmt.Printf("The authenticity of host '%s' can't be established.\n", hostname)
-		fmt.Printf("%s key fingerprint is %s\n", key.Type(), fingerprint)
-		fmt.Printf("Are you sure you want to continue connecting (yes/no/[fingerprint])? ")
+		fmt.Println(i18n.T("infra.ssh.hostkey.unverified", map[string]interface{}{"Host": hostname}))
+		fmt.Println(i18n.T("infra.ssh.hostkey.fingerprint", map[string]interface{}{"Type": key.Type(), "Fingerprint": fingerprint}))
+		fmt.Print(i18n.T("infra.ssh.hostkey.continue_prompt"))
 
 		var response string
 		fmt.Scanln(&response)
@@ -458,7 +459,7 @@ func (c *Connector) handleUnknownHost(hostname string, key ssh.PublicKey, knownH
 		case fingerprint:
 			return c.addToKnownHosts(hostname, key, knownHostsPath)
 		default:
-			return fmt.Errorf("host key verification failed: user rejected")
+			return fmt.Errorf("%s", i18n.T("infra.ssh.hostkey.rejected"))
 		}
 	}
 

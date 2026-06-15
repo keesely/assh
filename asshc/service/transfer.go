@@ -10,6 +10,7 @@ import (
 	"assh/asshc/domain"
 	"assh/asshc/port"
 	"assh/asshc/infra/sftp"
+	"assh/internal/i18n"
 	gsftp "github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -48,11 +49,11 @@ func (s *TransferService) connectWithChain(name, chainExpr string) (*ssh.Client,
 		return nil, nil
 	}
 	if s.connectSvc == nil {
-		return nil, fmt.Errorf("jump chain support not available")
+		return nil, fmt.Errorf("%s", i18n.T("service.transfer.error.jump_chain_not_available"))
 	}
 	client, _, err := s.connectSvc.ConnectChain(name, chainExpr)
 	if err != nil {
-		return nil, fmt.Errorf("jump connection failed: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("service.transfer.error.jump_connection_failed"), err)
 	}
 	return client, nil
 }
@@ -65,16 +66,16 @@ func (s *TransferService) PushFile(ctx context.Context, name, localPath, remoteP
 
 	localPath, err = filepath.Abs(localPath)
 	if err != nil {
-		return fmt.Errorf("invalid local path: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.invalid_local_path", map[string]interface{}{"Path": localPath}), err)
 	}
 
 	if !s.localExists(localPath) {
-		return fmt.Errorf("local file does not exist: %s", localPath)
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.file_not_exist", map[string]interface{}{"Path": localPath}))
 	}
 
 	isDir := s.localIsDir(localPath)
 	if isDir && !opts.Recursive {
-		return fmt.Errorf("omitting directory, use -r to upload directory")
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.directory_omitted"))
 	}
 
 	remotePath = s.ensureRemoteSlash(remotePath)
@@ -90,15 +91,15 @@ func (s *TransferService) PushFile(ctx context.Context, name, localPath, remoteP
 	}
 
 	if !s.transfer.IsDir(server, s.remoteDir(remotePath)) {
-		fmt.Printf("remote directory %s does not exist, create? ", s.remoteDir(remotePath))
+		fmt.Printf("%s", i18n.T("service.transfer.error.remote_dir_not_exist", map[string]interface{}{"Path": s.remoteDir(remotePath)}))
 		var answer string
 		fmt.Scanln(&answer)
 		if answer == "y" || answer == "Y" || answer == "yes" {
 			if err := s.transfer.Mkdir(server, s.remoteDir(remotePath)); err != nil {
-				return fmt.Errorf("create remote directory failed: %w", err)
+				return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.create_dir_failed"), err)
 			}
 		} else {
-			return fmt.Errorf("aborted")
+			return fmt.Errorf("%s", i18n.T("service.transfer.error.aborted"))
 		}
 	}
 
@@ -122,15 +123,15 @@ func (s *TransferService) PushFile(ctx context.Context, name, localPath, remoteP
 	}
 
 	if err := s.transfer.Push(ctx, server, localPath, remotePath, s.toPortOpts(opts), progress); err != nil {
-		return fmt.Errorf("push failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.push_failed"), err)
 	}
 
 	if opts.VerifyChecksum {
-		fmt.Printf("\nverifying: %s\n", filepath.Base(localPath))
+		fmt.Printf("\n%s\n", i18n.T("service.transfer.verify.verifying", map[string]interface{}{"Path": filepath.Base(localPath)}))
 		if err := s.transfer.VerifyUpload(server, localPath, remotePath, true); err != nil {
-			return fmt.Errorf("verification failed: %w", err)
+			return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.verification_failed"), err)
 		}
-		fmt.Printf("  size match\n")
+		fmt.Println(i18n.T("service.transfer.verify.size_match"))
 	}
 
 	return nil
@@ -141,16 +142,16 @@ func (s *TransferService) PushFile(ctx context.Context, name, localPath, remoteP
 func (s *TransferService) PushFileDirect(ctx context.Context, server *domain.Server, localPath, remotePath string, opts TransferOptions) error {
 	localPath, err := filepath.Abs(localPath)
 	if err != nil {
-		return fmt.Errorf("invalid local path: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.invalid_local_path", map[string]interface{}{"Path": localPath}), err)
 	}
 
 	if !s.localExists(localPath) {
-		return fmt.Errorf("local file does not exist: %s", localPath)
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.file_not_exist", map[string]interface{}{"Path": localPath}))
 	}
 
 	isDir := s.localIsDir(localPath)
 	if isDir && !opts.Recursive {
-		return fmt.Errorf("omitting directory, use -r to upload directory")
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.directory_omitted"))
 	}
 
 	remotePath = s.ensureRemoteSlash(remotePath)
@@ -166,15 +167,15 @@ func (s *TransferService) PushFileDirect(ctx context.Context, server *domain.Ser
 	}
 
 	if !s.transfer.IsDir(server, s.remoteDir(remotePath)) {
-		fmt.Printf("remote directory %s does not exist, create? ", s.remoteDir(remotePath))
+		fmt.Printf("%s", i18n.T("service.transfer.error.remote_dir_not_exist", map[string]interface{}{"Path": s.remoteDir(remotePath)}))
 		var answer string
 		fmt.Scanln(&answer)
 		if answer == "y" || answer == "Y" || answer == "yes" {
 			if err := s.transfer.Mkdir(server, s.remoteDir(remotePath)); err != nil {
-				return fmt.Errorf("create remote directory failed: %w", err)
+				return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.create_dir_failed"), err)
 			}
 		} else {
-			return fmt.Errorf("aborted")
+			return fmt.Errorf("%s", i18n.T("service.transfer.error.aborted"))
 		}
 	}
 
@@ -198,15 +199,15 @@ func (s *TransferService) PushFileDirect(ctx context.Context, server *domain.Ser
 	}
 
 	if err := s.transfer.Push(ctx, server, localPath, remotePath, s.toPortOpts(opts), progress); err != nil {
-		return fmt.Errorf("push failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.push_failed"), err)
 	}
 
 	if opts.VerifyChecksum {
-		fmt.Printf("\nverifying: %s\n", filepath.Base(localPath))
+		fmt.Printf("\n%s\n", i18n.T("service.transfer.verify.verifying", map[string]interface{}{"Path": filepath.Base(localPath)}))
 		if err := s.transfer.VerifyUpload(server, localPath, remotePath, true); err != nil {
-			return fmt.Errorf("verification failed: %w", err)
+			return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.verification_failed"), err)
 		}
-		fmt.Printf("  size match\n")
+		fmt.Println(i18n.T("service.transfer.verify.size_match"))
 	}
 
 	return nil
@@ -221,17 +222,17 @@ func (s *TransferService) PullFile(ctx context.Context, name, remotePath, localP
 	remotePath = s.normalizeRemotePath(remotePath)
 
 	if !s.transfer.Exists(server, remotePath) {
-		return fmt.Errorf("remote path does not exist: %s", remotePath)
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.remote_path_not_exist", map[string]interface{}{"Path": remotePath}))
 	}
 
 	remoteIsDir := s.transfer.IsDir(server, remotePath)
 	if remoteIsDir && !opts.Recursive {
-		return fmt.Errorf("omitting directory, use -r to download directory")
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.omit_download_dir"))
 	}
 
 	localPath, err = filepath.Abs(localPath)
 	if err != nil {
-		return fmt.Errorf("invalid local path: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.invalid_local_path", map[string]interface{}{"Path": localPath}), err)
 	}
 
 	if remoteIsDir {
@@ -243,15 +244,15 @@ func (s *TransferService) PullFile(ctx context.Context, name, remotePath, localP
 	}
 
 	if !s.localExists(filepath.Dir(localPath)) {
-		fmt.Printf("local directory %s does not exist, create? ", filepath.Dir(localPath))
+		fmt.Printf("%s", i18n.T("service.transfer.error.local_dir_not_exist", map[string]interface{}{"Path": filepath.Dir(localPath)}))
 		var answer string
 		fmt.Scanln(&answer)
 		if answer == "y" || answer == "Y" || answer == "yes" {
 			if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
-				return fmt.Errorf("create local directory failed: %w", err)
+				return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.create_local_dir_failed"), err)
 			}
 		} else {
-			return fmt.Errorf("aborted")
+			return fmt.Errorf("%s", i18n.T("service.transfer.error.aborted"))
 		}
 	}
 
@@ -280,7 +281,7 @@ func (s *TransferService) PullFile(ctx context.Context, name, remotePath, localP
 	}
 
 	if err := s.transfer.Pull(ctx, server, remotePath, localPath, s.toPortOpts(opts), progress); err != nil {
-		return fmt.Errorf("pull failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.pull_failed"), err)
 	}
 
 	fmt.Println()
@@ -297,12 +298,12 @@ func (s *TransferService) PullFileDirect(ctx context.Context, server *domain.Ser
 
 	localPath, err := filepath.Abs(localPath)
 	if err != nil {
-		return fmt.Errorf("invalid local path: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.invalid_local_path", map[string]interface{}{"Path": localPath}), err)
 	}
 
 	remoteIsDir := s.transfer.IsDir(server, remotePath)
 	if remoteIsDir && !opts.Recursive {
-		return fmt.Errorf("omitting directory, use -r to download directory")
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.omit_download_dir"))
 	}
 
 	if remoteIsDir {
@@ -316,7 +317,7 @@ func (s *TransferService) PullFileDirect(ctx context.Context, server *domain.Ser
 	localDir := filepath.Dir(localPath)
 	if !s.localExists(localDir) {
 		if err := os.MkdirAll(localDir, 0755); err != nil {
-			return fmt.Errorf("create local directory failed: %w", err)
+			return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.create_local_dir_failed"), err)
 		}
 	}
 
@@ -340,14 +341,14 @@ func (s *TransferService) PullFileDirect(ctx context.Context, server *domain.Ser
 	}
 
 	if err := s.transfer.Pull(ctx, server, remotePath, localPath, s.toPortOpts(opts), progress); err != nil {
-		return fmt.Errorf("pull failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.pull_failed"), err)
 	}
 
 	fmt.Println()
 	return nil
 }
 
-// makeProgressCallback 构建通用的进度回调函数。
+// makeProgressCallback constructs a generic progress callback function.
 func (s *TransferService) makeProgressCallback(opts TransferOptions) port.TransferProgress {
 	if !opts.Progress {
 		return nil
@@ -369,30 +370,30 @@ func (s *TransferService) makeProgressCallback(opts TransferOptions) port.Transf
 	}
 }
 
-// PushFileWithChain 通过跳板链上传文件。
-// chainExpr 为 -J 参数值，格式与 assh -J 一致：逗号分隔的跳板列表。
+// PushFileWithChain uploads a file through a jump chain.
+// chainExpr is the -J argument value, format same as assh -J: comma-separated jump list.
 func (s *TransferService) PushFileWithChain(ctx context.Context, name, chainExpr, localPath, remotePath string, opts TransferOptions) error {
-	// 1. 验证本地路径
+	// 1. Validate local path
 	localPath, err := filepath.Abs(localPath)
 	if err != nil {
-		return fmt.Errorf("invalid local path: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.invalid_local_path", map[string]interface{}{"Path": localPath}), err)
 	}
 	if !s.localExists(localPath) {
-		return fmt.Errorf("local file does not exist: %s", localPath)
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.file_not_exist", map[string]interface{}{"Path": localPath}))
 	}
 	isDir := s.localIsDir(localPath)
 	if isDir && !opts.Recursive {
-		return fmt.Errorf("omitting directory, use -r to upload directory")
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.directory_omitted"))
 	}
 
-	// 2. 建立跳板连接
+	// 2. Establish jump connection
 	sshClient, err := s.connectWithChain(name, chainExpr)
 	if err != nil {
 		return err
 	}
 	defer sshClient.Close()
 
-	// 3. 路径标准化
+	// 3. Path normalization
 	remotePath = s.ensureRemoteSlash(remotePath)
 	if isDir {
 		baseName := filepath.Base(localPath)
@@ -404,79 +405,78 @@ func (s *TransferService) PushFileWithChain(ctx context.Context, name, chainExpr
 		remotePath += filepath.Base(localPath)
 	}
 
-	// 4. 检查远程目录
-	// 对于链连接，使用 sshClient 直接创建 SFTP 客户端检查
+	// 4. Check remote directory
 	gsftpClient, err := gsftp.NewClient(sshClient)
 	if err != nil {
-		return fmt.Errorf("sftp client creation failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.sftp_client_creation_failed"), err)
 	}
 
 	if !isDirExist(gsftpClient, s.remoteDir(remotePath)) {
-		fmt.Printf("remote directory %s does not exist, create? ", s.remoteDir(remotePath))
+		fmt.Printf("%s", i18n.T("service.transfer.error.remote_dir_not_exist", map[string]interface{}{"Path": s.remoteDir(remotePath)}))
 		var answer string
 		fmt.Scanln(&answer)
 		if answer == "y" || answer == "Y" || answer == "yes" {
 			if err := gsftpClient.MkdirAll(s.remoteDir(remotePath)); err != nil {
 				gsftpClient.Close()
-				return fmt.Errorf("create remote directory failed: %w", err)
+				return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.create_dir_failed"), err)
 			}
 		} else {
 			gsftpClient.Close()
-			return fmt.Errorf("aborted")
+			return fmt.Errorf("%s", i18n.T("service.transfer.error.aborted"))
 		}
 	}
 	gsftpClient.Close()
 
-	// 5. 传输
+	// 5. Transfer
 	progress := s.makeProgressCallback(opts)
 	if err := s.transfer.PushWithSSHClient(ctx, sshClient, localPath, remotePath, s.toPortOpts(opts), progress); err != nil {
-		return fmt.Errorf("push failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.push_failed"), err)
 	}
 
 	if opts.VerifyChecksum {
-		fmt.Printf("\nverifying: %s\n", filepath.Base(localPath))
+		fmt.Printf("\n%s\n", i18n.T("service.transfer.verify.verifying", map[string]interface{}{"Path": filepath.Base(localPath)}))
 		if err := s.transfer.VerifyUploadWithSSHClient(sshClient, localPath, remotePath, true); err != nil {
-			return fmt.Errorf("verification failed: %w", err)
+			return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.verification_failed"), err)
 		}
-		fmt.Printf("  size match\n")
+		fmt.Println(i18n.T("service.transfer.verify.size_match"))
 	}
 
 	return nil
 }
 
-// PullFileWithChain 通过跳板链下载文件。
-// chainExpr 为 -J 参数值，格式与 assh -J 一致。
+// PullFileWithChain downloads a file through a jump chain.
+// chainExpr is the -J argument value, format same as assh -J.
 func (s *TransferService) PullFileWithChain(ctx context.Context, name, chainExpr, remotePath, localPath string, opts TransferOptions) error {
-	// 1. 建立跳板连接（先连接，需要用于 Exists/IsDir 检查）
+	// 1. Establish jump connection
 	sshClient, err := s.connectWithChain(name, chainExpr)
 	if err != nil {
 		return err
 	}
 	defer sshClient.Close()
 
-	// 2. 创建 SFTP 客户端用于检查
+	// 2. Create SFTP client for checks
 	gsftpClient, err := gsftp.NewClient(sshClient)
 	if err != nil {
-		return fmt.Errorf("sftp client creation failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.sftp_client_creation_failed"), err)
 	}
 
-	// 3. 验证远程路径
+	// 3. Validate remote path
 	remotePath = s.normalizeRemotePath(remotePath)
 	if !exists(gsftpClient, remotePath) {
 		gsftpClient.Close()
-		return fmt.Errorf("remote path does not exist: %s", remotePath)
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.remote_path_not_exist", map[string]interface{}{"Path": remotePath}))
 	}
 	remoteIsDir := isDir(gsftpClient, remotePath)
 	if remoteIsDir && !opts.Recursive {
 		gsftpClient.Close()
-		return fmt.Errorf("omitting directory, use -r to download directory")
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.omit_download_dir"))
 	}
 
-	// 4. 处理本地路径
+	// 4. Handle local path
 	localPath, err = filepath.Abs(localPath)
 	if err != nil {
 		gsftpClient.Close()
-		return fmt.Errorf("invalid local path: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.invalid_local_path", map[string]interface{}{"Path": localPath}), err)
 	}
 	if remoteIsDir {
 		baseName := s.remoteBaseName(remotePath)
@@ -487,15 +487,15 @@ func (s *TransferService) PullFileWithChain(ctx context.Context, name, chainExpr
 	if !s.localExists(filepath.Dir(localPath)) {
 		if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
 			gsftpClient.Close()
-			return fmt.Errorf("create local directory failed: %w", err)
+			return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.create_local_dir_failed"), err)
 		}
 	}
 	gsftpClient.Close()
 
-	// 5. 传输
+	// 5. Transfer
 	progress := s.makeProgressCallback(opts)
 	if err := s.transfer.PullWithSSHClient(ctx, sshClient, remotePath, localPath, s.toPortOpts(opts), progress); err != nil {
-		return fmt.Errorf("pull failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.pull_failed"), err)
 	}
 
 	fmt.Println()
@@ -538,7 +538,7 @@ func (s *TransferService) ListRemote(name, remotePath string) ([]port.FileInfo, 
 
 	files, err := s.transfer.List(server, remotePath)
 	if err != nil {
-		return nil, fmt.Errorf("list failed: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("service.transfer.error.list_failed"), err)
 	}
 
 	return files, nil
@@ -552,7 +552,7 @@ func (s *TransferService) ListRemoteDirect(server *domain.Server, remotePath str
 
 	files, err := s.transfer.List(server, remotePath)
 	if err != nil {
-		return nil, fmt.Errorf("list failed: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("service.transfer.error.list_failed"), err)
 	}
 
 	return files, nil
@@ -565,7 +565,7 @@ func (s *TransferService) RemoveRemote(name, remotePath string) error {
 	}
 
 	if err := s.transfer.Remove(server, remotePath); err != nil {
-		return fmt.Errorf("remove failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.remove_failed"), err)
 	}
 
 	return nil
@@ -578,7 +578,7 @@ func (s *TransferService) MkdirRemote(name, remotePath string) error {
 	}
 
 	if err := s.transfer.Mkdir(server, remotePath); err != nil {
-		return fmt.Errorf("mkdir failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.mkdir_failed"), err)
 	}
 
 	return nil
@@ -591,7 +591,7 @@ func (s *TransferService) getServer(name string) (*domain.Server, error) {
 
 	server, err := s.repo.Get(name)
 	if err != nil {
-		return nil, fmt.Errorf("server not found: %s", name)
+		return nil, fmt.Errorf("%s", i18n.T("service.transfer.error.server_not_found", map[string]interface{}{"Name": name}))
 	}
 	return server, nil
 }
@@ -610,7 +610,7 @@ func (s *TransferService) parseDirectServer(name string) (*domain.Server, error)
 	}
 
 	if host == "" {
-		return nil, fmt.Errorf("host is required")
+		return nil, fmt.Errorf("%s", i18n.T("service.transfer.error.host_required"))
 	}
 
 	return &domain.Server{
@@ -693,17 +693,17 @@ func (s *TransferService) GlobLocal(pattern string) ([]string, error) {
 func (s *TransferService) PushGlob(ctx context.Context, name, pattern, remotePath string, opts TransferOptions) error {
 	files, err := s.GlobLocal(pattern)
 	if err != nil {
-		return fmt.Errorf("glob failed: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("service.transfer.error.glob_failed"), err)
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf("no files matched pattern: %s", pattern)
+		return fmt.Errorf("%s", i18n.T("service.transfer.error.no_matching_files", map[string]interface{}{"Pattern": pattern}))
 	}
 
 	for i, file := range files {
-		fmt.Printf("(%d/%d) %s\n", i+1, len(files), filepath.Base(file))
+		fmt.Printf("%s\n", i18n.T("service.transfer.progress.file_counter", map[string]interface{}{"Current": i + 1, "Total": len(files), "Name": filepath.Base(file)}))
 		if err := s.PushFile(ctx, name, file, remotePath, opts); err != nil {
-			fmt.Printf("  failed: %v\n", err)
+			fmt.Printf("%s\n", i18n.T("service.transfer.progress.failed", map[string]interface{}{"Error": err}))
 		}
 	}
 

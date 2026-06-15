@@ -7,6 +7,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/port"
+	"assh/internal/i18n"
 )
 
 // VulnService 实现漏洞检查服务。
@@ -67,7 +68,7 @@ func (s *VulnService) Check(ctx context.Context, server *domain.Server, vulnInfo
 		detail, err := s.cveFetcher.Fetch(ctx, vulnInfo)
 		if err != nil {
 			// CVE 查询失败，继续使用用户输入
-			fmt.Printf("Warning: Failed to fetch CVE details: %v\n", err)
+			fmt.Printf("%s\n", i18n.T("service.vuln.warning.fetch_cve_failed", map[string]interface{}{"Error": err}))
 		} else {
 			cveDetail = detail
 		}

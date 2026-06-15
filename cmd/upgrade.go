@@ -7,6 +7,7 @@ import (
 
 	"assh/asshc/domain"
 	"assh/asshc/service"
+	"assh/internal/i18n"
 
 	"github.com/urfave/cli"
 )
@@ -17,36 +18,27 @@ func (a *App) registerUpgradeCommands() {
 		Name:    "upgrade",
 		Aliases: []string{"update"},
 		Usage:   "Check for updates and upgrade ASSH",
-		Description: `Check for new versions and upgrade ASSH to the latest version.
-
-Examples:
-  assh upgrade                    # Check and upgrade to latest
-  assh upgrade --check            # Only check, don't upgrade
-  assh upgrade --version v2.0.2   # Upgrade to specific version
-  assh upgrade --force            # Force upgrade (skip version check)
-  assh upgrade --rollback         # Rollback to previous version
-  assh upgrade --source URL       # Custom update source
-  assh upgrade -y                 # Auto-confirm (no prompt)`,
+		Description: i18n.T("cmd.upgrade.description"),
 		Flags: []cli.Flag{
 			cli.BoolFlag{
 				Name:  "check,c",
-				Usage: "Only check for updates, don't upgrade",
+				Usage: i18n.T("cmd.upgrade.flag.check_only"),
 			},
 			cli.StringFlag{
 				Name:  "version,v",
-				Usage: "Upgrade to specific version",
+				Usage: i18n.T("cmd.upgrade.flag.version"),
 			},
 			cli.BoolFlag{
 				Name:  "force,f",
-				Usage: "Force upgrade (skip version check)",
+				Usage: i18n.T("cmd.upgrade.flag.force"),
 			},
 			cli.BoolFlag{
 				Name:  "rollback,r",
-				Usage: "Rollback to previous version",
+				Usage: i18n.T("cmd.upgrade.flag.rollback"),
 			},
 			cli.BoolFlag{
 				Name:  "yes,y",
-				Usage: "Auto-confirm (no prompt)",
+				Usage: i18n.T("cmd.upgrade.flag.yes"),
 			},
 		},
 		Action: a.upgradeAction,
@@ -59,7 +51,7 @@ Examples:
 func (a *App) upgradeAction(c *cli.Context) error {
 	// 检查是否有升级服务
 	if a.upgradeSvc == nil {
-		return fmt.Errorf("upgrade service not available")
+		return fmt.Errorf("%s", i18n.T("cmd.upgrade.error.service_unavailable"))
 	}
 
 	// 处理回滚
@@ -78,24 +70,24 @@ func (a *App) upgradeAction(c *cli.Context) error {
 
 // handleCheck 处理检查更新。
 func (a *App) handleCheck() error {
-	fmt.Printf("Current version: %s\n", a.upgradeSvc.GetCurrentVersion())
-	fmt.Println("Checking for updates...")
+	fmt.Println(i18n.T("cmd.upgrade.current_version", map[string]interface{}{"Version": a.upgradeSvc.GetCurrentVersion()}))
+	fmt.Println(i18n.T("cmd.upgrade.checking"))
 
 	info, err := a.upgradeSvc.CheckUpdate()
 	if err != nil {
 		if err == domain.ErrAlreadyLatest {
-			fmt.Println("✓ Already up to date!")
+			fmt.Println(i18n.T("cmd.upgrade.up_to_date"))
 			return nil
 		}
 		return fmt.Errorf("check failed: %w", err)
 	}
 
-	fmt.Printf("\nNew version available: %s\n", info.Version)
-	fmt.Printf("Release date: %s\n", info.ReleaseDate.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Download size: %s\n", formatSize(info.FileSize))
+	fmt.Println(i18n.T("cmd.upgrade.new_version", map[string]interface{}{"Version": info.Version}))
+	fmt.Println(i18n.T("cmd.upgrade.release_date", map[string]interface{}{"Date": info.ReleaseDate.Format("2006-01-02 15:04:05")}))
+	fmt.Println(i18n.T("cmd.upgrade.download_size", map[string]interface{}{"Size": formatSize(info.FileSize)}))
 
 	if info.ReleaseNotes != "" {
-		fmt.Printf("\nRelease notes:\n%s\n", info.ReleaseNotes)
+		fmt.Printf("\n%s\n%s\n", i18n.T("cmd.upgrade.release_notes"), info.ReleaseNotes)
 	}
 
 	return nil
@@ -103,13 +95,13 @@ func (a *App) handleCheck() error {
 
 // handleRollback 处理回滚。
 func (a *App) handleRollback() error {
-	fmt.Println("Rolling back to previous version...")
+	fmt.Println(i18n.T("cmd.upgrade.rolling_back"))
 
 	if err := a.upgradeSvc.Rollback(); err != nil {
 		return fmt.Errorf("rollback failed: %w", err)
 	}
 
-	fmt.Println("✓ Rollback successful!")
+	fmt.Println(i18n.T("cmd.upgrade.rollback_success"))
 	return nil
 }
 
@@ -123,43 +115,40 @@ func (a *App) handleUpgrade(c *cli.Context) error {
 	}
 
 	// 检查更新
-	fmt.Printf("Current version: %s\n", a.upgradeSvc.GetCurrentVersion())
+	fmt.Println(i18n.T("cmd.upgrade.current_version", map[string]interface{}{"Version": a.upgradeSvc.GetCurrentVersion()}))
 
 	if !options.Force || options.Version == "" {
-		fmt.Println("Checking for updates...")
+		fmt.Println(i18n.T("cmd.upgrade.checking"))
 		info, err := a.upgradeSvc.CheckUpdate()
 		if err != nil {
 			if err == domain.ErrAlreadyLatest {
-				fmt.Println("✓ Already up to date!")
+				fmt.Println(i18n.T("cmd.upgrade.up_to_date"))
 				return nil
 			}
 			return fmt.Errorf("check failed: %w", err)
 		}
 
-		fmt.Printf("\nNew version available: %s\n", info.Version)
-		fmt.Printf("Release date: %s\n", info.ReleaseDate.Format("2006-01-02 15:04:05"))
-		fmt.Printf("Download size: %s\n", formatSize(info.FileSize))
+		fmt.Println(i18n.T("cmd.upgrade.new_version", map[string]interface{}{"Version": info.Version}))
+		fmt.Println(i18n.T("cmd.upgrade.release_date", map[string]interface{}{"Date": info.ReleaseDate.Format("2006-01-02 15:04:05")}))
+		fmt.Println(i18n.T("cmd.upgrade.download_size", map[string]interface{}{"Size": formatSize(info.FileSize)}))
 
-		// 确认升级
 		if !options.Yes {
-			fmt.Print("\nDo you want to upgrade? [y/N]: ")
+			fmt.Print(i18n.T("cmd.upgrade.confirm"))
 			var response string
 			fmt.Scanln(&response)
 			response = strings.ToLower(strings.TrimSpace(response))
 			if response != "y" && response != "yes" {
-				fmt.Println("Upgrade cancelled.")
+				fmt.Println(i18n.T("cmd.upgrade.cancelled"))
 				return nil
 			}
 		}
 
-		// 传递预先获取的 UpdateInfo，避免重复 API 调用
 		options.UpdateInfo = info
 	}
 
-	// 执行升级
-	fmt.Println("\nDownloading update...")
+	fmt.Println("\n" + i18n.T("cmd.upgrade.downloading"))
 	progress := func(downloaded, total int64, percent float64) {
-		fmt.Printf("\rDownloading: %.1f%% (%s/%s)", percent*100, formatSize(downloaded), formatSize(total))
+		fmt.Printf("\r%s", i18n.T("cmd.upgrade.downloading_progress", map[string]interface{}{"Percent": fmt.Sprintf("%.1f%%", percent*100), "Current": formatSize(downloaded), "Total": formatSize(total)}))
 	}
 
 	info, err := a.upgradeSvc.Upgrade(context.Background(), options, progress)
@@ -167,8 +156,8 @@ func (a *App) handleUpgrade(c *cli.Context) error {
 		return fmt.Errorf("upgrade failed: %w", err)
 	}
 
-	fmt.Printf("\n\n✓ Successfully upgraded to %s!\n", info.Version)
-	fmt.Println("Please restart ASSH to use the new version.")
+	fmt.Printf("\n\n%s\n", i18n.T("cmd.upgrade.success", map[string]interface{}{"Version": info.Version}))
+	fmt.Println(i18n.T("cmd.upgrade.restart_hint"))
 
 	return nil
 }

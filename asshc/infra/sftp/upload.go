@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"assh/internal/i18n"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -95,13 +96,13 @@ func pushSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Cli
 	if remoteExists && shouldAsk {
 		switch opts.Overwrite {
 		case "skip":
-			fmt.Printf("remote file %s exists, skipping\n", remotePath)
+			fmt.Println(i18n.T("infra.sftp.upload.file_exists_skip", map[string]interface{}{"Path": remotePath}))
 			return nil
 		case "force":
 			// proceed with overwrite
 		case "":
 			// Default: ask interactively
-			fmt.Printf("remote file %s exists, overwrite? (y/N) ", remotePath)
+			fmt.Print(i18n.T("infra.sftp.upload.file_exists_overwrite", map[string]interface{}{"Path": remotePath}))
 			var answer string
 			fmt.Scanln(&answer)
 			if answer != "y" && answer != "Y" && answer != "yes" {
@@ -143,7 +144,7 @@ func pushSingleFile(ctx context.Context, client *sftp.Client, sshClient *ssh.Cli
 		if _, err := localFile.Seek(resumeOffset, io.SeekStart); err != nil {
 			return fmt.Errorf("seek local file failed: %w", err)
 		}
-		fmt.Printf("resuming from offset %d\n", resumeOffset)
+		fmt.Println(i18n.T("infra.sftp.upload.resuming", map[string]interface{}{"Offset": resumeOffset}))
 	}
 
 	startTime := time.Now()
