@@ -44,7 +44,7 @@ func (h *PushCommandHandler) Execute(ctx context.Context, args []string, session
 		errMsg := fmt.Sprintf("local file not found: %s", localPath)
 		result.Success = false
 		result.Error = errMsg
-		return result, fmt.Errorf(errMsg)
+		return result, fmt.Errorf("%s", errMsg)
 	}
 
 	// 如果没有指定远程路径，使用当前目录

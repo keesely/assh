@@ -76,11 +76,11 @@ func (e *VirtualCommandError) Error() string {
 
 // 预定义的虚拟命令错误。
 var (
-	ErrCommandNotFound = &VirtualCommandError{Message: "command not found"}
-	ErrCommandDisabled = &VirtualCommandError{Message: "command is disabled"}
-	ErrInvalidArgs     = &VirtualCommandError{Message: "invalid arguments"}
-	ErrTimeout         = &VirtualCommandError{Message: "command timeout"}
-	ErrExecutionFailed = &VirtualCommandError{Message: "execution failed"}
+	ErrCommandNotFound        = &VirtualCommandError{Message: "command not found"}
+	ErrCommandDisabled        = &VirtualCommandError{Message: "command is disabled"}
+	ErrInvalidArgs            = &VirtualCommandError{Message: "invalid arguments"}
+	ErrVirtualTimeout         = &VirtualCommandError{Message: "command timeout"}
+	ErrVirtualExecutionFailed = &VirtualCommandError{Message: "execution failed"}
 )
 
 // IsVirtualCommand 检查输入是否是虚拟命令（以 @ 开头）。
