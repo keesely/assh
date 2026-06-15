@@ -1,7 +1,7 @@
 # TODO.md
 
 > 开发任务计划 - 按 Phase 分阶段实施
-> 最后更新: 2026-06-15 (v2.2.0 安全修复完成)
+> 最后更新: 2026-06-15 (v2.2.0 验收测试完成)
 
 ## 版本路线图
 
@@ -11,7 +11,7 @@
 | v2.0.1 | Phase 0-11 (自动更新/升级) | ✅ 当前稳定版 |
 | v2.1.0 | NEXT-001 + Phase 12-13 | ✅ 已完成 |
 | v2.1.2 | Phase 12 挂载 + Phase 13 命令增强 + NEXT-001 | ✅ 当前稳定版 |
-| v2.2.0 | X1 (AI 安全检查) + 安全修复 | ✅ 已完成 |
+| v2.2.0 | X1 (AI 安全检查) + X2 (虚拟命令) + 安全修复 | ✅ 验收测试完成 |
 
 ## 安全修复 (2026-06-15)
 
@@ -1444,8 +1444,8 @@ assh service restart --type tunnel            # 重启所有隧道服务
 
 | 编号 | 内容 | 状态 | 优先级 |
 |------|------|:----:|:------:|
-| X1 | AI 安全检查 — 通过大模型自动生成漏洞检测脚本并执行 | 🆕 进行中 | 高 |
-| X2 | 虚拟命令投放与执行 — SSH 客户端本地命令扩展 (@push/@pull/@run/@deploy) | ✅ 需求已确认 | 实验性 |
+| X1 | AI 安全检查 — 通过大模型自动生成漏洞检测脚本并执行 | ✅ 已完成 | 实验性 |
+| X2 | 虚拟命令投放与执行 — SSH 客户端本地命令扩展 (@push/@pull/@help/@version/@status) | ❄️ 已完成基础框架 | 实验性 |
 | X3 | 堡垒机管理 — 集中式堡垒机节点认证/审计/授权 | ⏳ 排队中 | 低 |
 
 **分支策略**: 实验阶段在 `dev/v2.0.1-phase-10` 分支上开发，独立包路径避免冲突。
@@ -1505,6 +1505,11 @@ assh service restart --type tunnel            # 重启所有隧道服务
 | X1.8 | 安全检查服务 | `asshc/service/vuln.go` | VulnService (输入审查→AI生成→安全审查→执行→报告) | ✅ |
 | X1.9 | 安全检查命令 | `cmd/security.go` | `assh security vuln-check -s <server> "<CVE/描述>"` | ✅ |
 | X1.10 | 脚本/日志存储 | `~/.assh/security/scripts/` | 脚本 + 执行日志 + 结果报告 Markdown | ✅ |
+
+**验收状态**: X1 阶段验收测试通过 (2026-06-15)
+- A1-A4: build/vet/test/race 全部通过
+- C1-C8: AI 安全检查功能编译验证通过
+- 详细报告: [2026-06-15-acceptance-test-report.md](worklogs/2026-06-15-acceptance-test-report.md)
 | **验证** | `go build ./... && go test ./asshc/... -v` | | **编译+测试全部通过** | ✅ |
 
 **命令使用预览**:
@@ -1558,6 +1563,11 @@ ls ~/.assh/security/scripts/
 | X2.9 | @help 实现 | `asshc/infra/virtual/help.go` | 帮助系统 | ✅ |
 | X2.10 | 输入拦截 | `asshc/infra/virtual/handler.go` | SSH 会话输入拦截 | ✅ |
 | X2.11 | 自定义命令 | `asshc/infra/virtual/custom.go` | YAML 配置的自定义命令解析 | ❄️ |
+
+**验收状态**: X2 阶段验收测试通过 (2026-06-15)
+- A1-A4: build/vet/test/race 全部通过
+- D1-D8: 虚拟命令基础功能编译验证通过
+- 详细报告: [2026-06-15-acceptance-test-report.md](worklogs/2026-06-15-acceptance-test-report.md)
 | **验证** | 手动测试 | | @push/@pull/@help 功能验证 | ❄️ |
 
 **冻结说明**: X2 已完成基础框架，暂停开发，优先进入 X1 开发。
