@@ -45,38 +45,42 @@
 | 创建翻译模板 | `i18n/template.yaml` | ✅ |
 | 单元测试 | `internal/i18n/i18n_test.go` | ✅ |
 
-### Phase 2: cmd/ 模块国际化
+### Phase 2: cmd/ 模块国际化 ✅
 
 | 任务 | 文件 | 消息数 | 状态 |
 |------|------|:------:|:----:|
-| 服务器管理 | `cmd/server.go` | ~55 | ⬜ |
-| 连接命令 | `cmd/connect.go` | ~18 | ⬜ |
-| CLI 元数据 | `cmd/app.go` | ~62 | ⬜ |
-| 云同步 | `cmd/sync.go` | ~42 | ⬜ |
-| 密钥生成 | `cmd/keygen.go` | ~38 | ⬜ |
-| 健康检查 | `cmd/health.go` | ~22 | ⬜ |
-| 自动升级 | `cmd/upgrade.go` | ~25 | ⬜ |
-| 安全检查 | `cmd/security.go` | ~28 | ⬜ |
-| 代理 | `cmd/proxy.go` | ~18 | ⬜ |
-| 隧道 | `cmd/tunnel.go` | ~14 | ⬜ |
-| 跳板机 | `cmd/jump.go` | ~14 | ⬜ |
+| 服务器管理 | `cmd/server.go` | ~55 | ✅ |
+| 连接命令 | `cmd/connect.go` | ~18 | ✅ |
+| CLI 元数据 | `cmd/app.go` | ~62 | ✅ |
+| 云同步 | `cmd/sync.go` | ~42 | ✅ |
+| 密钥生成 | `cmd/keygen.go` | ~38 | ✅ |
+| 健康检查 | `cmd/health.go` | ~22 | ✅ |
+| 自动升级 | `cmd/upgrade.go` | ~25 | ✅ |
+| 安全检查 | `cmd/security.go` | ~28 | ✅ |
+| 代理 | `cmd/proxy.go` | ~18 | ✅ |
+| 隧道 | `cmd/tunnel.go` | ~14 | ✅ |
+| 跳板机 | `cmd/jump.go` | ~14 | ✅ |
 
-### Phase 3: service/ 和 infra/ 模块国际化
+### Phase 3: service/ 和 infra/ 模块国际化 ✅
 
 | 任务 | 文件 | 消息数 | 状态 |
 |------|------|:------:|:----:|
-| 文件传输服务 | `asshc/service/transfer.go` | ~22 | ⬜ |
-| 密钥服务 | `asshc/service/key.go` | ~6 | ⬜ |
-| SSH 客户端 | `asshc/infra/ssh/client.go` | ~4 | ⬜ |
-| SFTP 模块 | `asshc/infra/sftp/*.go` | ~13 | ⬜ |
-| 虚拟命令 | `asshc/infra/virtual/handler.go` | ~4 | ⬜ |
+| 文件传输服务 | `asshc/service/transfer.go` | ~22 | ✅ |
+| 密钥服务 | `asshc/service/key.go` | ~6 | ✅ |
+| 漏洞服务 | `asshc/service/vuln.go` | ~1 | ✅ |
+| SSH 客户端 | `asshc/infra/ssh/client.go` | ~4 | ✅ |
+| SFTP 校验 | `asshc/infra/sftp/verify.go` | ~7 | ✅ |
+| SFTP 上传 | `asshc/infra/sftp/upload.go` | ~4 | ✅ |
+| SFTP 下载 | `asshc/infra/sftp/download.go` | ~2 | ✅ |
+| SFTP 进度 | `asshc/infra/sftp/progress.go` | ~2 | ✅ |
+| 虚拟命令 | `asshc/infra/virtual/handler.go` | ~4 | ✅ |
+| 数据库 | `asshc/infra/store/db.go` | ~1 | ✅ |
 
 ### Phase 4: 测试与文档
 
 | 任务 | 状态 |
 |------|:----:|
-| 单元测试 | ⬜ |
-| 集成测试 | ⬜ |
+| 单元测试 | ✅ |
 | USAGE.md 更新 | ⬜ |
 | README.md 更新 | ⬜ |
 
