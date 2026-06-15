@@ -1,7 +1,7 @@
 # TODO.md
 
 > 开发任务计划 - 按 Phase 分阶段实施
-> 最后更新: 2026-06-15 (v2.2.0 验收测试完成)
+> 最后更新: 2026-06-15 (v2.3.0 国际化开发中)
 
 ## 版本路线图
 
@@ -12,6 +12,7 @@
 | v2.1.0 | NEXT-001 + Phase 12-13 | ✅ 已完成 |
 | v2.1.2 | Phase 12 挂载 + Phase 13 命令增强 + NEXT-001 | ✅ 当前稳定版 |
 | v2.2.0 | X1 (AI 安全检查) + X2 (虚拟命令) + 安全修复 | ✅ 验收测试完成 |
+| v2.3.0 | i18n (项目国际化) | 🚧 开发中 |
 
 ## 安全修复 (2026-06-15)
 
@@ -30,6 +31,54 @@
 | SQL 注入风险 | `db.go` | ✅ |
 | generateID 不安全 fallback | `port.go` | ✅ |
 | AES-ECB 模式可用 | `aes.go` | ✅ |
+
+## 国际化 i18n (v2.3.0)
+
+### Phase 1: 基础设施搭建
+
+| 任务 | 文件 | 状态 |
+|------|------|:----:|
+| 添加 go-i18n 依赖 | `go.mod` | ✅ |
+| 创建 i18n 包 | `internal/i18n/i18n.go` | ✅ |
+| 创建中文翻译文件 | `i18n/zh-CN.yaml` | ✅ |
+| 创建英文翻译文件 | `i18n/en-US.yaml` | ✅ |
+| 创建翻译模板 | `i18n/template.yaml` | ✅ |
+| 单元测试 | `internal/i18n/i18n_test.go` | ✅ |
+
+### Phase 2: cmd/ 模块国际化
+
+| 任务 | 文件 | 消息数 | 状态 |
+|------|------|:------:|:----:|
+| 服务器管理 | `cmd/server.go` | ~55 | ⬜ |
+| 连接命令 | `cmd/connect.go` | ~18 | ⬜ |
+| CLI 元数据 | `cmd/app.go` | ~62 | ⬜ |
+| 云同步 | `cmd/sync.go` | ~42 | ⬜ |
+| 密钥生成 | `cmd/keygen.go` | ~38 | ⬜ |
+| 健康检查 | `cmd/health.go` | ~22 | ⬜ |
+| 自动升级 | `cmd/upgrade.go` | ~25 | ⬜ |
+| 安全检查 | `cmd/security.go` | ~28 | ⬜ |
+| 代理 | `cmd/proxy.go` | ~18 | ⬜ |
+| 隧道 | `cmd/tunnel.go` | ~14 | ⬜ |
+| 跳板机 | `cmd/jump.go` | ~14 | ⬜ |
+
+### Phase 3: service/ 和 infra/ 模块国际化
+
+| 任务 | 文件 | 消息数 | 状态 |
+|------|------|:------:|:----:|
+| 文件传输服务 | `asshc/service/transfer.go` | ~22 | ⬜ |
+| 密钥服务 | `asshc/service/key.go` | ~6 | ⬜ |
+| SSH 客户端 | `asshc/infra/ssh/client.go` | ~4 | ⬜ |
+| SFTP 模块 | `asshc/infra/sftp/*.go` | ~13 | ⬜ |
+| 虚拟命令 | `asshc/infra/virtual/handler.go` | ~4 | ⬜ |
+
+### Phase 4: 测试与文档
+
+| 任务 | 状态 |
+|------|:----:|
+| 单元测试 | ⬜ |
+| 集成测试 | ⬜ |
+| USAGE.md 更新 | ⬜ |
+| README.md 更新 | ⬜ |
 
 **详细修复记录**: `docs/worklogs/2026-06-15-security-review.md`
 

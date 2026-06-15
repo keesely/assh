@@ -1,0 +1,399 @@
+# ASSH Translation Template
+# Version: v2.3.0
+# 
+# This is a template file for adding new languages.
+# To add a new language:
+# 1. Copy this file to <language-code>.yaml (e.g., ja-JP.yaml, ko-KR.yaml)
+# 2. Translate all values (keep the keys unchanged)
+# 3. Update internal/i18n/i18n.go to add the language to SupportedLanguages
+# 4. Update i18n/zh-CN.yaml and i18n/en-US.yaml if new keys are added
+#
+# Template variables use {{.VariableName}} syntax.
+# Example: "Server {{.Name}} added" -> "サーバー {{.Name}} が追加されました"
+
+# ============================================================
+# Common Messages
+# ============================================================
+common:
+  success: ""
+  error: ""
+  cancelled: ""
+  warning: ""
+  info: ""
+  yes: ""
+  no: ""
+  confirm: ""
+  abort: ""
+  skip: ""
+  retry: ""
+  back: ""
+  exit: ""
+  help: ""
+  version: ""
+  unknown: ""
+  not_set: ""
+  none: ""
+  total: ""
+
+# ============================================================
+# CLI Metadata
+# ============================================================
+cli:
+  name: ""
+  description: ""
+  fs_name: ""
+  fs_description: ""
+
+# ============================================================
+# Server Management Commands
+# ============================================================
+cmd:
+  server:
+    add:
+      description: ""
+      success: ""
+      error:
+        name_required: ""
+        host_required: ""
+    set:
+      description: ""
+      success: ""
+      created: ""
+      hint: ""
+    ls:
+      description: ""
+      empty: ""
+      header:
+        group: ""
+        name: ""
+        host: ""
+        ver: ""
+        auth: ""
+        remark: ""
+    info:
+      description: ""
+      title: ""
+      not_found: ""
+    rm:
+      description: ""
+      success: ""
+    mv:
+      description: ""
+      success: ""
+      error:
+        names_required: ""
+    rollback:
+      description: ""
+      success: ""
+      error:
+        version_required: ""
+        invalid_version: ""
+    preview:
+      title: ""
+      name: ""
+      host: ""
+      port: ""
+      user: ""
+      auth: ""
+      key: ""
+      remark: ""
+      options: ""
+    changelog:
+      title: ""
+    confirm:
+      prompt: ""
+    password:
+      prompt: ""
+    auth:
+      password_key: ""
+      password: ""
+      key: ""
+      none: ""
+
+  # Connection Commands
+  connect:
+    login:
+      description: ""
+      error:
+        no_target: ""
+        conflict: ""
+    run:
+      description: ""
+      error:
+        name_required: ""
+        cmd_required: ""
+    bc:
+      description: ""
+      error:
+        cmd_required: ""
+        servers_or_group_required: ""
+        no_servers: ""
+      output:
+        result_written: ""
+        result_error: ""
+
+  # Upgrade Command
+  upgrade:
+    description: ""
+    check:
+      current_version: ""
+      checking: ""
+      already_latest: ""
+      update_available: ""
+      release_date: ""
+      download_size: ""
+      release_notes: ""
+    rollback:
+      rolling_back: ""
+      success: ""
+    upgrade:
+      prompt: ""
+      cancelled: ""
+      downloading: ""
+      progress: ""
+      success: ""
+      restart_hint: ""
+    error:
+      service_unavailable: ""
+
+  # Health Check Command
+  health:
+    description: ""
+    check:
+      status: ""
+      latency: ""
+      checked: ""
+      error: ""
+      system_info: ""
+      uptime: ""
+      load: ""
+      memory: ""
+      disk: ""
+      healthy: ""
+      unhealthy: ""
+      timeout: ""
+    list:
+      header:
+        server: ""
+        status: ""
+        latency: ""
+        error: ""
+    summary:
+      total: ""
+      healthy: ""
+      unhealthy: ""
+      timeout: ""
+      error: ""
+    error:
+      service_unavailable: ""
+
+  # Key Generation Command
+  keygen:
+    description: ""
+    success:
+      standalone: ""
+      direct: ""
+      managed: ""
+    info:
+      server: ""
+      type: ""
+      comment: ""
+      key_file: ""
+      auth: ""
+      private_key: ""
+      public_key: ""
+      fingerprint: ""
+      public_key_contents: ""
+      host: ""
+      user: ""
+    warning:
+      deploy_failed: ""
+    info_msg:
+      deployed: ""
+      already_exists: ""
+    interactive:
+      generating: ""
+      key_type: ""
+      key_bits: ""
+      save_path: ""
+      passphrase: ""
+      passphrase_confirm: ""
+    error:
+      passphrase_mismatch: ""
+
+  # Proxy Command
+  proxy:
+    description: ""
+    error:
+      service_unavailable: ""
+    autoproxy:
+      loaded: ""
+    log:
+      session_log: ""
+
+  # Tunnel Command
+  tunnel:
+    description: ""
+    error:
+      service_unavailable: ""
+      no_forward: ""
+      invalid_spec: ""
+    list:
+      empty: ""
+      header:
+        id: ""
+        type: ""
+        local: ""
+        remote: ""
+      total: ""
+
+  # Sync Command
+  sync:
+    description: ""
+    account:
+      configuring: ""
+      enter_values: ""
+      success: ""
+      info: ""
+      type: ""
+      access_key: ""
+      secret_key: ""
+      bucket: ""
+      zone: ""
+      enabled: ""
+      confirm_delete: ""
+      deleted: ""
+      testing: ""
+      test_success: ""
+      error:
+        required: ""
+    push:
+      pushing: ""
+      completed: ""
+    pull:
+      pulling: ""
+      completed: ""
+      conflicts: ""
+    history:
+      empty: ""
+      title: ""
+      direction:
+        push: ""
+        pull: ""
+
+  # Jump Command
+  jump:
+    description: ""
+    list:
+      empty: ""
+      header:
+        id: ""
+        target: ""
+        path: ""
+        hops: ""
+        use: ""
+        last_used: ""
+      total: ""
+    clear:
+      success: ""
+    delete:
+      success: ""
+    error:
+      service_unavailable: ""
+      invalid_id: ""
+
+  # Security Command (X1)
+  security:
+    description: ""
+    vuln:
+      title: ""
+      vulnerability: ""
+      target: ""
+      status: ""
+      details: ""
+      suggestion: ""
+      report_title: ""
+      time: ""
+      status_safe: ""
+      status_vulnerable: ""
+      status_error: ""
+      status_unknown: ""
+    check:
+      checking_server: ""
+      checking_group: ""
+    rules:
+      title: ""
+      name_required: ""
+      pattern_required: ""
+      added: ""
+      removed: ""
+    error:
+      vuln_required: ""
+      target_required: ""
+
+# ============================================================
+# Service Layer Messages
+# ============================================================
+service:
+  transfer:
+    push:
+      success: ""
+      failed: ""
+    pull:
+      success: ""
+      failed: ""
+    verify:
+      verifying: ""
+      size_match: ""
+      size_mismatch: ""
+      sha256: ""
+      hash_match: ""
+      hash_mismatch: ""
+      error: ""
+    error:
+      invalid_local_path: ""
+      file_not_exist: ""
+      directory_omitted: ""
+      remote_dir_not_exist: ""
+      create_dir_failed: ""
+      aborted: ""
+      no_matching_files: ""
+      glob_found: ""
+    key:
+      warning:
+        deploy_failed: ""
+      info:
+        deployed: ""
+        already_exists: ""
+    vuln:
+      warning:
+        fetch_cve_failed: ""
+
+# ============================================================
+# Infrastructure Layer Messages
+# ============================================================
+infra:
+  ssh:
+    hostkey:
+      unverified: ""
+      fingerprint: ""
+      continue_prompt: ""
+      rejected: ""
+  sftp:
+    upload:
+      file_exists_skip: ""
+      file_exists_overwrite: ""
+      resuming: ""
+    download:
+      resuming: ""
+  virtual:
+    error: ""
+
+# ============================================================
+# Initialization Messages
+# ============================================================
+init:
+  error:
+    resolve_db_path: ""
+    init_store: ""
+    create_config_dir: ""

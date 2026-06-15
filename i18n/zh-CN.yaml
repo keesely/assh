@@ -1,0 +1,390 @@
+# ASSH 国际化翻译文件 - 简体中文
+# 版本: v2.3.0
+# 更新日期: 2026-06-15
+
+# ============================================================
+# 通用消息
+# ============================================================
+common:
+  success: "操作成功"
+  error: "错误"
+  cancelled: "已取消"
+  warning: "警告"
+  info: "信息"
+  yes: "是"
+  no: "否"
+  confirm: "确认"
+  abort: "中止"
+  skip: "跳过"
+  retry: "重试"
+  back: "返回"
+  exit: "退出"
+  help: "帮助"
+  version: "版本"
+  unknown: "未知"
+  not_set: "未设置"
+  none: "无"
+  total: "总计"
+
+# ============================================================
+# CLI 元数据
+# ============================================================
+cli:
+  name: "ASSH - An SSH Client"
+  description: "一个 SSH 客户端"
+  fs_name: "ASSH-FS - SFTP 文件传输"
+  fs_description: "SFTP 文件传输客户端"
+
+# ============================================================
+# 服务器管理命令
+# ============================================================
+cmd:
+  server:
+    add:
+      description: "添加服务器"
+      success: "服务器 {{.Name}} 已添加 (v{{.Version}})"
+      error:
+        name_required: "服务器名称不能为空"
+        host_required: "必须指定 --host/-H 参数"
+    set:
+      description: "创建或更新服务器参数"
+      success: "服务器 {{.Name}} 已更新 (v{{.Version}})"
+      created: "服务器 {{.Name}} 已创建 (v{{.Version}})"
+      hint: "提示: 使用标志修改参数，如 --host, -p, -P, --remark"
+    ls:
+      description: "列出服务器"
+      empty: "没有找到服务器"
+      header:
+        group: "分组"
+        name: "名称"
+        host: "地址"
+        ver: "版本"
+        auth: "认证"
+        remark: "备注"
+    info:
+      description: "显示服务器详情"
+      title: "服务器详情"
+      not_found: "服务器 {{.Name}} 未找到，是否指 {{.Suggestion}}？"
+    rm:
+      description: "删除服务器"
+      success: "服务器 {{.Name}} 已删除"
+    mv:
+      description: "重命名/移动服务器"
+      success: "服务器 {{.Name}} 已移动到 {{.NewName}}"
+      error:
+        names_required: "需要同时指定 <from> 和 <to> 名称"
+    rollback:
+      description: "回滚服务器配置到指定版本"
+      success: "服务器 {{.Name}} 已回滚到 v{{.Version}}"
+      error:
+        version_required: "需要版本号（使用 --list 查看可用版本）"
+        invalid_version: "无效的版本号: {{.Version}}"
+    preview:
+      title: "=== 服务器预览 ==="
+      name: "名称:"
+      host: "地址:"
+      port: "端口:"
+      user: "用户:"
+      auth: "认证:"
+      key: "密钥:"
+      remark: "备注:"
+      options: "选项:"
+    changelog:
+      title: "{{.Name}} 的变更历史:"
+    confirm:
+      prompt: " [Y/n]: "
+    password:
+      prompt: "请输入密码: "
+    auth:
+      password_key: "密码+密钥"
+      password: "密码"
+      key: "密钥"
+      none: "无"
+
+  # 连接命令
+  connect:
+    login:
+      description: "SSH 登录（自动检测：名称 / user@host / -H host）"
+      error:
+        no_target: "未指定目标：使用 <名称>, <user@host>, 或 -H <host>"
+        conflict: "不能同时指定 target 和 -H/--host"
+    run:
+      description: "在远程服务器上执行命令"
+      error:
+        name_required: "服务器名称不能为空"
+        cmd_required: "命令不能为空"
+    bc:
+      description: "批量执行命令"
+      error:
+        cmd_required: "命令不能为空"
+        servers_or_group_required: "需要 --servers 或 --group 参数"
+        no_servers: "没有可执行的服务器"
+      output:
+        result_written: "结果已写入 {{.Path}}"
+        result_error: "写入结果失败: {{.Error}}"
+
+  # 升级命令
+  upgrade:
+    description: "检查并升级 ASSH 到最新版本"
+    check:
+      current_version: "当前版本: {{.Version}}"
+      checking: "正在检查更新..."
+      already_latest: "已是最新版本!"
+      update_available: "发现新版本: {{.Version}}"
+      release_date: "发布日期: {{.Date}}"
+      download_size: "下载大小: {{.Size}}"
+      release_notes: "发布说明: ..."
+    rollback:
+      rolling_back: "正在回滚到上一版本..."
+      success: "回滚成功!"
+    upgrade:
+      prompt: "是否升级? [y/N]: "
+      cancelled: "升级已取消"
+      downloading: "正在下载更新..."
+      progress: "下载中: {{.Percent}} ({{.Current}}/{{.Total}})"
+      success: "已成功升级到 {{.Version}}!"
+      restart_hint: "请重启 ASSH 以使用新版本"
+    error:
+      service_unavailable: "升级服务不可用"
+
+  # 健康检查命令
+  health:
+    description: "检查服务器健康状态"
+    check:
+      status: "状态"
+      latency: "延迟"
+      checked: "检查时间"
+      error: "错误"
+      system_info: "--- 系统信息 ---"
+      uptime: "运行时间"
+      load: "负载"
+      memory: "内存"
+      disk: "磁盘"
+      healthy: "健康"
+      unhealthy: "异常"
+      timeout: "超时"
+    list:
+      header:
+        server: "服务器"
+        status: "状态"
+        latency: "延迟"
+        error: "错误"
+    summary:
+      total: "总计: {{.Count}}"
+      healthy: "{{.Count}} 健康"
+      unhealthy: "{{.Count}} 异常"
+      timeout: "{{.Count}} 超时"
+      error: "{{.Count}} 错误"
+    error:
+      service_unavailable: "健康检查服务不可用"
+
+  # 密钥生成命令
+  keygen:
+    description: "生成 SSH 密钥对"
+    success:
+      standalone: "SSH 密钥对生成成功"
+      direct: "SSH 密钥对生成成功（直连模式）"
+      managed: "SSH 密钥对生成成功"
+    info:
+      server: "  服务器:     {{.Server}}"
+      type: "  类型:       {{.Type}} ({{.Bits}} 位)"
+      comment: "  注释:       {{.Comment}}"
+      key_file: "  密钥文件:   {{.Path}}"
+      auth: "  认证:       {{.Auth}}"
+      private_key: "  私钥: {{.Path}}"
+      public_key: "  公钥: {{.Path}}"
+      fingerprint: "  指纹: {{.Fingerprint}}"
+      public_key_contents: "  公钥内容:"
+      host: "  主机:       {{.Host}}:{{.Port}}"
+      user: "  用户:       {{.User}}"
+    warning:
+      deploy_failed: "警告: 部署公钥失败: {{.Error}}"
+    info_msg:
+      deployed: "信息: 公钥已部署到 {{.User}}@{{.Host}}:{{.Port}}"
+      already_exists: "信息: 公钥已存在于 {{.User}}@{{.Host}}:{{.Port}}（已跳过）"
+    interactive:
+      generating: "正在生成公/私 SSH 密钥对。"
+      key_type: "密钥类型 (rsa/ed25519/ecdsa) [{{.Default}}]: "
+      key_bits: "密钥位数 [{{.Default}}]: "
+      save_path: "输入保存密钥的文件 ({{.Default}}): "
+      passphrase: "输入密码短语（无密码短语直接回车）: "
+      passphrase_confirm: "再次输入密码短语: "
+    error:
+      passphrase_mismatch: "密码短语不匹配"
+
+  # 代理命令
+  proxy:
+    description: "启动 SOCKS5/HTTP CONNECT 代理"
+    error:
+      service_unavailable: "代理服务不可用"
+    autoproxy:
+      loaded: "AutoProxy 规则已加载"
+    log:
+      session_log: "{{.Session}} 的会话日志: (日志查看器待实现)"
+
+  # 隧道命令
+  tunnel:
+    description: "管理 SSH 端口转发隧道"
+    error:
+      service_unavailable: "代理服务不可用"
+      no_forward: "至少需要一个 -L 或 -R 参数"
+      invalid_spec: "无效的 {{.Type}} 规范: {{.Spec}}（预期 [bind_addr:]port:host:hostport）"
+    list:
+      empty: "没有活动的隧道"
+      header:
+        id: "ID"
+        type: "类型"
+        local: "本地"
+        remote: "远程"
+      total: "总计: {{.Count}} 个隧道"
+
+  # 云同步命令
+  sync:
+    description: "云同步服务器配置"
+    account:
+      configuring: "正在配置云同步账户 (七牛云)"
+      enter_values: "输入值（如果显示当前值，按 Enter 保持）:"
+      success: "云账户配置成功"
+      info: "云同步账户:"
+      type: "  类型:"
+      access_key: "  AccessKey:"
+      secret_key: "  SecretKey:"
+      bucket: "  Bucket:"
+      zone: "  区域:"
+      enabled: "  启用:"
+      confirm_delete: "确定要删除云账户吗? [y/N]: "
+      deleted: "云账户已删除"
+      testing: "正在测试云账户连接..."
+      test_success: "连接成功!"
+      error:
+        required: "access key, secret key, 和 bucket 不能为空"
+    push:
+      pushing: "正在推送服务器配置到云端..."
+      completed: "推送完成: {{.Time}}"
+    pull:
+      pulling: "正在从云端拉取服务器配置..."
+      completed: "拉取完成: {{.Time}}"
+      conflicts: "  冲突: {{.Count}}（云端版本保存为 _cloud_<ts> 后缀）"
+    history:
+      empty: "没有同步历史"
+      title: "同步历史:"
+      direction:
+        push: "推送"
+        pull: "拉取"
+
+  # 跳板机历史命令
+  jump:
+    description: "管理跳板机历史"
+    list:
+      empty: "没有跳板机历史记录"
+      header:
+        id: "ID"
+        target: "目标"
+        path: "路径"
+        hops: "跳数"
+        use: "使用次数"
+        last_used: "最后使用"
+      total: "总计: {{.Count}} 条记录"
+    clear:
+      success: "跳板机历史已清除"
+    delete:
+      success: "跳板机历史 #{{.ID}} 已删除"
+    error:
+      service_unavailable: "跳板机服务不可用"
+      invalid_id: "无效的 ID: {{.ID}}"
+
+  # 安全检查命令 (X1)
+  security:
+    description: "安全漏洞检查"
+    vuln:
+      title: "AI 安全检查"
+      vulnerability: "漏洞:"
+      target: "目标:"
+      status: "状态:"
+      details: "详情:"
+      suggestion: "建议:"
+      report_title: "AI 安全检查报告"
+      time: "时间:"
+      status_safe: "安全"
+      status_vulnerable: "存在漏洞"
+      status_error: "错误"
+      status_unknown: "未知"
+    check:
+      checking_server: "正在检查服务器: {{.Server}}，漏洞: {{.Vuln}}"
+      checking_group: "正在检查分组: {{.Group}}，漏洞: {{.Vuln}}"
+    rules:
+      title: "安全规则:"
+      name_required: "规则名称不能为空"
+      pattern_required: "规则模式不能为空"
+      added: "规则已添加: {{.Name}}"
+      removed: "规则已删除: {{.Name}}"
+    error:
+      vuln_required: "漏洞信息不能为空"
+      target_required: "服务器或分组不能为空"
+
+# ============================================================
+# 服务层消息
+# ============================================================
+service:
+  transfer:
+    push:
+      success: "上传完成"
+      failed: "上传失败: {{.Error}}"
+    pull:
+      success: "下载完成"
+      failed: "下载失败: {{.Error}}"
+    verify:
+      verifying: "正在校验: {{.Path}}"
+      size_match: "  大小匹配"
+      size_mismatch: "  大小不匹配"
+      sha256: "  sha256: {{.Hash}}"
+      hash_match: "  哈希匹配"
+      hash_mismatch: "  哈希不匹配"
+      error: "  校验错误: {{.Error}}"
+    error:
+      invalid_local_path: "无效的本地路径: {{.Path}}"
+      file_not_exist: "本地文件不存在: {{.Path}}"
+      directory_omitted: "忽略目录，使用 -r 上传目录"
+      remote_dir_not_exist: "远程目录 {{.Path}} 不存在，是否创建? "
+      create_dir_failed: "创建远程目录失败: {{.Error}}"
+      aborted: "已中止"
+      no_matching_files: "没有匹配的文件: {{.Pattern}}"
+      glob_found: "找到 {{.Count}} 个匹配的文件，{{.Action}}中..."
+    key:
+      warning:
+        deploy_failed: "警告: 部署公钥失败: {{.Error}}"
+      info:
+        deployed: "信息: 公钥已部署到 {{.Server}}"
+        already_exists: "信息: 公钥已存在于 {{.Server}}（已跳过）"
+    vuln:
+      warning:
+        fetch_cve_failed: "警告: 获取 CVE 详情失败: {{.Error}}"
+
+# ============================================================
+# 基础设施层消息
+# ============================================================
+infra:
+  ssh:
+    hostkey:
+      unverified: "无法验证主机 '{{.Host}}' 的真实性。"
+      fingerprint: "{{.Type}} 密钥指纹为 {{.Fingerprint}}"
+      continue_prompt: "是否继续连接 (yes/no/[fingerprint])? "
+      rejected: "主机密钥验证失败: 用户拒绝"
+  sftp:
+    upload:
+      file_exists_skip: "远程文件 {{.Path}} 已存在，跳过"
+      file_exists_overwrite: "远程文件 {{.Path}} 已存在，是否覆盖? (y/N) "
+      resuming: "从偏移 {{.Offset}} 处恢复"
+    download:
+      resuming: "从偏移 {{.Offset}} 处恢复"
+  virtual:
+    error: "[错误] {{.Error}}"
+
+# ============================================================
+# 初始化消息
+# ============================================================
+init:
+  error:
+    resolve_db_path: "解析数据库路径失败: {{.Error}}"
+    init_store: "初始化存储失败: {{.Error}}"
+    create_config_dir: "创建配置目录失败: {{.Error}}"

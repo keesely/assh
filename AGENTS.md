@@ -212,6 +212,10 @@ bugfix/<issue>     # Bug 修复分支
 - [x] `asshc/infra/virtual/version.go` — @version 命令处理器 (X2)
 - [x] `asshc/infra/virtual/status.go` — @status 命令处理器 (X2)
 - [x] `asshc/infra/virtual/handler.go` — 输入拦截处理器 (X2)
+- [x] `internal/i18n/i18n.go` — 国际化基础设施 (i18n, v2.3.0)
+- [x] `i18n/zh-CN.yaml` — 中文翻译文件
+- [x] `i18n/en-US.yaml` — 英文翻译文件
+- [x] `i18n/template.yaml` — 翻译模板
 
 ## 开发命令
 

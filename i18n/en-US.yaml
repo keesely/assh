@@ -1,0 +1,390 @@
+# ASSH Internationalization - English (US)
+# Version: v2.3.0
+# Updated: 2026-06-15
+
+# ============================================================
+# Common Messages
+# ============================================================
+common:
+  success: "Success"
+  error: "Error"
+  cancelled: "Cancelled"
+  warning: "Warning"
+  info: "Info"
+  yes: "Yes"
+  no: "No"
+  confirm: "Confirm"
+  abort: "Abort"
+  skip: "Skip"
+  retry: "Retry"
+  back: "Back"
+  exit: "Exit"
+  help: "Help"
+  version: "Version"
+  unknown: "Unknown"
+  not_set: "Not set"
+  none: "None"
+  total: "Total"
+
+# ============================================================
+# CLI Metadata
+# ============================================================
+cli:
+  name: "ASSH - An SSH Client"
+  description: "An SSH Client"
+  fs_name: "ASSH-FS - SFTP File Transfer"
+  fs_description: "SFTP File Transfer Client"
+
+# ============================================================
+# Server Management Commands
+# ============================================================
+cmd:
+  server:
+    add:
+      description: "Add a server"
+      success: "Server {{.Name}} added (v{{.Version}})"
+      error:
+        name_required: "Server name is required"
+        host_required: "--host/-H is required"
+    set:
+      description: "Create or update server parameters"
+      success: "Server {{.Name}} updated (v{{.Version}})"
+      created: "Server {{.Name}} created (v{{.Version}})"
+      hint: "Hint: use flags to modify parameters, e.g. --host, -p, -P, --remark"
+    ls:
+      description: "List servers"
+      empty: "No servers found"
+      header:
+        group: "Group"
+        name: "Name"
+        host: "Host"
+        ver: "Ver"
+        auth: "Auth"
+        remark: "Remark"
+    info:
+      description: "Show server details"
+      title: "Server Details"
+      not_found: "Server {{.Name}} not found, did you mean {{.Suggestion}}?"
+    rm:
+      description: "Remove a server"
+      success: "Server {{.Name}} removed"
+    mv:
+      description: "Rename/move a server"
+      success: "Server {{.Name}} moved to {{.NewName}}"
+      error:
+        names_required: "Both <from> and <to> names are required"
+    rollback:
+      description: "Rollback server configuration to a previous version"
+      success: "Server {{.Name}} rolled back to v{{.Version}}"
+      error:
+        version_required: "Version number is required (use --list to see available versions)"
+        invalid_version: "Invalid version number: {{.Version}}"
+    preview:
+      title: "=== Server Preview ==="
+      name: "Name:"
+      host: "Host:"
+      port: "Port:"
+      user: "User:"
+      auth: "Auth:"
+      key: "Key:"
+      remark: "Remark:"
+      options: "Options:"
+    changelog:
+      title: "Changelog for {{.Name}}:"
+    confirm:
+      prompt: " [Y/n]: "
+    password:
+      prompt: "Enter password: "
+    auth:
+      password_key: "password+key"
+      password: "password"
+      key: "key"
+      none: "none"
+
+  # Connection Commands
+  connect:
+    login:
+      description: "SSH login (auto-detect: name / user@host / -H host)"
+      error:
+        no_target: "No target specified: use <name>, <user@host>, or -H <host>"
+        conflict: "Cannot specify both target and -H/--host"
+    run:
+      description: "Run a command on a remote server"
+      error:
+        name_required: "Server name is required"
+        cmd_required: "Command is required"
+    bc:
+      description: "Batch execute command on multiple servers"
+      error:
+        cmd_required: "Command is required"
+        servers_or_group_required: "Either --servers or --group is required"
+        no_servers: "No servers to execute on"
+      output:
+        result_written: "Result written to {{.Path}}"
+        result_error: "Failed to write result: {{.Error}}"
+
+  # Upgrade Command
+  upgrade:
+    description: "Check and upgrade ASSH to latest version"
+    check:
+      current_version: "Current version: {{.Version}}"
+      checking: "Checking for updates..."
+      already_latest: "Already up to date!"
+      update_available: "New version available: {{.Version}}"
+      release_date: "Release date: {{.Date}}"
+      download_size: "Download size: {{.Size}}"
+      release_notes: "Release notes: ..."
+    rollback:
+      rolling_back: "Rolling back to previous version..."
+      success: "Rollback successful!"
+    upgrade:
+      prompt: "Do you want to upgrade? [y/N]: "
+      cancelled: "Upgrade cancelled."
+      downloading: "Downloading update..."
+      progress: "Downloading: {{.Percent}} ({{.Current}}/{{.Total}})"
+      success: "Successfully upgraded to {{.Version}}!"
+      restart_hint: "Please restart ASSH to use the new version."
+    error:
+      service_unavailable: "Upgrade service not available"
+
+  # Health Check Command
+  health:
+    description: "Check server health status"
+    check:
+      status: "Status"
+      latency: "Latency"
+      checked: "Checked"
+      error: "Error"
+      system_info: "--- System Info ---"
+      uptime: "Uptime"
+      load: "Load"
+      memory: "Memory"
+      disk: "Disk"
+      healthy: "Healthy"
+      unhealthy: "Unhealthy"
+      timeout: "Timeout"
+    list:
+      header:
+        server: "SERVER"
+        status: "STATUS"
+        latency: "LATENCY"
+        error: "ERROR"
+    summary:
+      total: "Total: {{.Count}}"
+      healthy: "{{.Count}} healthy"
+      unhealthy: "{{.Count}} unhealthy"
+      timeout: "{{.Count}} timeout"
+      error: "{{.Count}} error"
+    error:
+      service_unavailable: "Health service not available"
+
+  # Key Generation Command
+  keygen:
+    description: "Generate SSH key pair"
+    success:
+      standalone: "SSH key pair generated successfully"
+      direct: "SSH key pair generated successfully (direct mode)"
+      managed: "SSH key pair generated successfully"
+    info:
+      server: "  Server:     {{.Server}}"
+      type: "  Type:       {{.Type}} ({{.Bits}} bits)"
+      comment: "  Comment:    {{.Comment}}"
+      key_file: "  Key file:   {{.Path}}"
+      auth: "  Auth:       {{.Auth}}"
+      private_key: "  Private key: {{.Path}}"
+      public_key: "  Public key:  {{.Path}}"
+      fingerprint: "  Fingerprint: {{.Fingerprint}}"
+      public_key_contents: "  Public key contents:"
+      host: "  Host:       {{.Host}}:{{.Port}}"
+      user: "  User:       {{.User}}"
+    warning:
+      deploy_failed: "Warning: failed to deploy public key: {{.Error}}"
+    info_msg:
+      deployed: "Info: public key deployed to {{.User}}@{{.Host}}:{{.Port}}"
+      already_exists: "Info: public key already exists on {{.User}}@{{.Host}}:{{.Port}} (skipped)"
+    interactive:
+      generating: "Generating public/private SSH key pair."
+      key_type: "Key type (rsa/ed25519/ecdsa) [{{.Default}}]: "
+      key_bits: "Key bits [{{.Default}}]: "
+      save_path: "Enter file in which to save the key ({{.Default}}): "
+      passphrase: "Enter passphrase (empty for no passphrase): "
+      passphrase_confirm: "Enter same passphrase again: "
+    error:
+      passphrase_mismatch: "Passphrases do not match"
+
+  # Proxy Command
+  proxy:
+    description: "Start SOCKS5/HTTP CONNECT proxy"
+    error:
+      service_unavailable: "Proxy service not available"
+    autoproxy:
+      loaded: "AutoProxy rules loaded"
+    log:
+      session_log: "Session log for {{.Session}}: (log viewer TBD)"
+
+  # Tunnel Command
+  tunnel:
+    description: "Manage SSH port forwarding tunnels"
+    error:
+      service_unavailable: "Proxy service not available"
+      no_forward: "At least one -L or -R flag is required"
+      invalid_spec: "Invalid {{.Type}} spec: {{.Spec}} (expected [bind_addr:]port:host:hostport)"
+    list:
+      empty: "No active tunnels"
+      header:
+        id: "ID"
+        type: "TYPE"
+        local: "LOCAL"
+        remote: "REMOTE"
+      total: "Total: {{.Count}} tunnel(s)"
+
+  # Sync Command
+  sync:
+    description: "Cloud synchronization of server configurations"
+    account:
+      configuring: "Configuring cloud sync account (Qiniu)"
+      enter_values: "Enter values (press Enter to keep current value if shown):"
+      success: "Cloud account configured successfully."
+      info: "Cloud Sync Account:"
+      type: "  Type:"
+      access_key: "  AccessKey:"
+      secret_key: "  SecretKey:"
+      bucket: "  Bucket:"
+      zone: "  Zone:"
+      enabled: "  Enabled:"
+      confirm_delete: "Are you sure you want to delete the cloud account? [y/N]: "
+      deleted: "Cloud account deleted."
+      testing: "Testing cloud account connection..."
+      test_success: "Connection successful!"
+      error:
+        required: "Access key, secret key, and bucket are required"
+    push:
+      pushing: "Pushing server configurations to cloud..."
+      completed: "Push completed: {{.Time}}"
+    pull:
+      pulling: "Pulling server configurations from cloud..."
+      completed: "Pull completed: {{.Time}}"
+      conflicts: "  Conflicts: {{.Count}} (cloud versions saved with _cloud_<ts> suffix)"
+    history:
+      empty: "No sync history."
+      title: "Sync History:"
+      direction:
+        push: "Push"
+        pull: "Pull"
+
+  # Jump Command
+  jump:
+    description: "Manage jump host history"
+    list:
+      empty: "No jump history records found"
+      header:
+        id: "ID"
+        target: "TARGET"
+        path: "PATH"
+        hops: "HOPS"
+        use: "USE"
+        last_used: "LAST USED"
+      total: "Total: {{.Count}} record(s)"
+    clear:
+      success: "Jump history cleared"
+    delete:
+      success: "Jump history #{{.ID}} deleted"
+    error:
+      service_unavailable: "Jump service not available"
+      invalid_id: "Invalid ID: {{.ID}}"
+
+  # Security Command (X1)
+  security:
+    description: "Security vulnerability checking"
+    vuln:
+      title: "AI Security Check"
+      vulnerability: "Vulnerability:"
+      target: "Target:"
+      status: "Status:"
+      details: "Details:"
+      suggestion: "Suggestion:"
+      report_title: "AI Security Check Report"
+      time: "Time:"
+      status_safe: "Safe"
+      status_vulnerable: "Vulnerable"
+      status_error: "Error"
+      status_unknown: "Unknown"
+    check:
+      checking_server: "Checking server: {{.Server}} for vulnerability: {{.Vuln}}"
+      checking_group: "Checking group: {{.Group}} for vulnerability: {{.Vuln}}"
+    rules:
+      title: "Security Rules:"
+      name_required: "Rule name is required"
+      pattern_required: "Rule pattern is required"
+      added: "Rule added: {{.Name}}"
+      removed: "Rule removed: {{.Name}}"
+    error:
+      vuln_required: "Vulnerability information is required"
+      target_required: "Server or group is required"
+
+# ============================================================
+# Service Layer Messages
+# ============================================================
+service:
+  transfer:
+    push:
+      success: "Push completed"
+      failed: "Push failed: {{.Error}}"
+    pull:
+      success: "Pull completed"
+      failed: "Pull failed: {{.Error}}"
+    verify:
+      verifying: "Verifying: {{.Path}}"
+      size_match: "  Size match"
+      size_mismatch: "  Size mismatch"
+      sha256: "  SHA256: {{.Hash}}"
+      hash_match: "  Hash match"
+      hash_mismatch: "  Hash mismatch"
+      error: "  Verification error: {{.Error}}"
+    error:
+      invalid_local_path: "Invalid local path: {{.Path}}"
+      file_not_exist: "Local file does not exist: {{.Path}}"
+      directory_omitted: "Omitting directory, use -r to upload directory"
+      remote_dir_not_exist: "Remote directory {{.Path}} does not exist, create? "
+      create_dir_failed: "Create remote directory failed: {{.Error}}"
+      aborted: "Aborted"
+      no_matching_files: "No matching files: {{.Pattern}}"
+      glob_found: "Found {{.Count}} files matching pattern, {{.Action}}..."
+    key:
+      warning:
+        deploy_failed: "Warning: failed to deploy public key: {{.Error}}"
+      info:
+        deployed: "Info: public key deployed to {{.Server}}"
+        already_exists: "Info: public key already exists on {{.Server}} (skipped)"
+    vuln:
+      warning:
+        fetch_cve_failed: "Warning: Failed to fetch CVE details: {{.Error}}"
+
+# ============================================================
+# Infrastructure Layer Messages
+# ============================================================
+infra:
+  ssh:
+    hostkey:
+      unverified: "The authenticity of host '{{.Host}}' can't be established."
+      fingerprint: "{{.Type}} key fingerprint is {{.Fingerprint}}"
+      continue_prompt: "Are you sure you want to continue connecting (yes/no/[fingerprint])? "
+      rejected: "Host key verification failed: user rejected"
+  sftp:
+    upload:
+      file_exists_skip: "Remote file {{.Path}} exists, skipping"
+      file_exists_overwrite: "Remote file {{.Path}} exists, overwrite? (y/N) "
+      resuming: "Resuming from offset {{.Offset}}"
+    download:
+      resuming: "Resuming from offset {{.Offset}}"
+  virtual:
+    error: "[ERROR] {{.Error}}"
+
+# ============================================================
+# Initialization Messages
+# ============================================================
+init:
+  error:
+    resolve_db_path: "Failed to resolve db path: {{.Error}}"
+    init_store: "Failed to initialize store: {{.Error}}"
+    create_config_dir: "Failed to create config directory: {{.Error}}"
