@@ -81,8 +81,9 @@
 | 任务 | 状态 |
 |------|:----:|
 | 单元测试 | ✅ |
-| USAGE.md 更新 | ⬜ |
-| README.md 更新 | ⬜ |
+| USAGE.md 更新 | ✅ |
+| README.md 更新 | ✅ |
+| CHANGELOG.md 更新 | ✅ |
 
 **详细修复记录**: `docs/worklogs/2026-06-15-security-review.md`
 

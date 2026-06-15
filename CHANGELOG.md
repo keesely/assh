@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.3.0 (2026-06-15)
+
+### 国际化 (i18n)
+
+#### 基础设施 (`internal/i18n/`)
+- `i18n.go` — 国际化核心包 (语言检测 + 翻译加载 + T() 函数)
+- `i18n_test.go` — 测试 (语言规范化/检测/切换)
+- 依赖: `github.com/nicksnyder/go-i18n/v2 v2.6.1` + `golang.org/x/text v0.37.0`
+
+#### 翻译文件 (`i18n/`)
+- `zh-CN.yaml` — 简体中文翻译 (~424 条消息)
+- `en-US.yaml` — English translations (~424 messages)
+- `template.yaml` — 新语言翻译模板
+
+#### 消息国际化 (19 个 Go 源文件)
+- **cmd/** (11 文件): server.go, connect.go, app.go, sync.go, keygen.go, health.go, upgrade.go, security.go, proxy.go, tunnel.go, jump.go
+- **service/** (3 文件): transfer.go, key.go, vuln.go
+- **infra/** (5 文件): ssh/client.go, sftp/verify.go, sftp/upload.go, sftp/download.go, sftp/progress.go, virtual/handler.go, store/db.go
+
+#### 语言切换
+- 环境变量: `ASSH_LANG` > `LC_ALL` > `LANG` > `zh-CN` (默认)
+- 支持语言: `zh-CN` (简体中文), `en-US` (English)
+
+#### 文档
+- 更新 `USAGE.md` — 新增国际化章节 (第 15 章)
+- 更新 `README.md` — 版本号 + i18n 特性 + 环境变量 + 项目结构
+- 更新 `CHANGELOG.md` — 本条目
+
+---
+
 ## v2.2.0 (2026-06-14)
 
 ### X1: AI 安全检查

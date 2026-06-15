@@ -2,7 +2,7 @@
 
 > ASSH (An SSH Client) — 使用 Go 开发的 SSH 客户端，适用于服务器管理、维护和快速使用。
 > 基于 SQLite 加密存储，支持多认证方式，双二进制架构（`assh` + `assh-fs`）。
-> 当前版本：v2.2.0
+> 当前版本：v2.3.0
 
 ---
 
@@ -17,15 +17,15 @@
 7. [密钥管理](#7-密钥管理)
 8. [代理与隧道](#8-代理与隧道)
 9. [云同步](#9-云同步)
-<<<<<<< HEAD
 10. [跳板机](#10-跳板机)
 11. [健康检查](#11-健康检查)
 12. [自动更新](#12-自动更新)
 13. [AI 安全检查](#13-ai-安全检查)
 14. [虚拟命令](#14-虚拟命令)
-13. [配置参考](#13-配置参考)
-14. [命令速查表](#14-命令速查表)
-15. [常见问题与技巧](#15-常见问题与技巧)
+15. [国际化 (i18n)](#15-国际化-i18n)
+16. [配置参考](#16-配置参考)
+17. [命令速查表](#17-命令速查表)
+18. [常见问题与技巧](#18-常见问题与技巧)
 
 ---
 
@@ -42,11 +42,11 @@
 | 代理 & 隧道 | SOCKS5/HTTP CONNECT/AutoProxy/端口转发 | `assh proxy/tunnel` | Phase 7 |
 | 云同步 | 七牛云加密同步服务器配置 | `assh sync` | Phase 8 |
 | 健康检查 | SSH 连接延迟 + 系统指标采集 | `assh health` | Phase 9 |
-<<<<<<< HEAD
 | 跳板机 | 多跳 SSH 连接、历史复用 | `assh login -J / jump` | Phase 10 |
 | 自动更新 | 版本检查、自动升级、回滚、SHA256 校验 | `assh upgrade` | Phase 11 |
 | AI 安全检查 | AI 自动生成漏洞检测脚本 | `assh security vuln-check` | X1 |
 | 虚拟命令 | SSH 会话中使用 @push/@pull 等命令 | `@push/@pull/@help` | X2 |
+| 国际化 | CLI 输出消息中英双语支持 | 环境变量切换 | i18n |
 | 加密存储 | AES-256-GCM + SQLite，自动密钥管理 | 内置 | Phase 2 |
 | 版本回滚 | 配置变更自动快照，支持任意版本回滚 | `assh rollback` | Phase 4 |
 
@@ -1212,9 +1212,61 @@ assh health check root@10.0.0.1:2222
 
 ---
 
-## 13. 配置参考
+## 15. 国际化 (i18n)
 
-ASSH 支持自动检查和升级，确保用户始终运行最新安全版本。
+ASSH v2.3.0 起支持 CLI 输出消息的国际化，内置中文（zh-CN）和英文（en-US）两种语言。
+
+### 15.1 语言切换
+
+语言通过环境变量自动检测，优先级从高到低：
+
+| 优先级 | 环境变量 | 说明 |
+|:------:|----------|------|
+| 1 | `ASSH_LANG` | ASSH 专用语言变量 |
+| 2 | `LC_ALL` | POSIX locale |
+| 3 | `LANG` | 系统默认 locale |
+
+```bash
+# 使用英文
+ASSH_LANG=en-US assh ls
+
+# 使用中文（默认）
+ASSH_LANG=zh-CN assh ls
+
+# 系统 locale 自动检测
+LANG=en_US.UTF-8 assh ls    # 自动使用英文
+LANG=zh_CN.UTF-8 assh ls    # 自动使用中文
+```
+
+### 15.2 支持的语言
+
+| 语言代码 | 语言 | 文件 |
+|----------|------|------|
+| `zh-CN` | 简体中文（默认） | `i18n/zh-CN.yaml` |
+| `en-US` | English | `i18n/en-US.yaml` |
+
+### 15.3 添加新语言
+
+1. 复制 `i18n/template.yaml` 为 `i18n/<语言代码>.yaml`
+2. 翻译所有值（保持 key 不变）
+3. 设置环境变量测试：`ASSH_LANG=<语言代码> assh <command>`
+
+### 15.4 翻译覆盖范围
+
+i18n 覆盖以下用户可见消息：
+
+| 模块 | 消息类型 | 数量 |
+|------|----------|------|
+| `cmd/` | 命令描述、标志说明、错误消息、输出消息 | ~342 |
+| `service/` | 业务错误消息、提示信息 | ~29 |
+| `infra/` | 连接提示、校验结果、存储警告 | ~24 |
+| **合计** | | **~395** |
+
+> **注意**：日志消息（`log.Debug/Warn/Error`）和内部错误链（`fmt.Errorf` 包装）不包含在 i18n 范围内。
+
+---
+
+## 12. 自动更新
 
 ### 12.1 检查更新
 
@@ -1270,9 +1322,9 @@ assh upgrade --rollback
 
 ---
 
-## 13. 配置参考
+## 16. 配置参考
 
-### 13.1 存储路径
+### 16.1 存储路径
 
 ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 
@@ -1286,13 +1338,13 @@ ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 | `~/.assh/v2/.account` | 加密的密码文件 |
 | `~/.assh/v2/data/keys/` | 密钥备份目录（按指纹命名子目录） |
 
-### 13.2 环境变量
+### 16.2 环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `ASSH_CONFIG_DIR` | 配置目录路径 | `~/.assh/v2` |
 
-### 13.3 全局命令行标志
+### 16.3 全局命令行标志
 
 | 标志 | 简写 | 说明 |
 |------|:----:|------|
@@ -1303,7 +1355,7 @@ ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 
 > **组合短参数**：支持组合使用，例如 `-qv` 等价于 `-q -v`。
 
-### 13.4 日志级别
+### 16.4 日志级别
 
 | 级别 | 值 | 说明 |
 |------|:---:|------|
@@ -1326,7 +1378,7 @@ assh -q run myserver "uptime"
 assh -F ~/.assh/custom.yml login myserver
 ```
 
-### 13.5 认证配置
+### 16.5 认证配置
 
 服务器支持的认证方式及优先级：
 
@@ -1338,7 +1390,7 @@ assh -F ~/.assh/custom.yml login myserver
 | 4 | 密码 | `-P <password>` 或交互输入 |
 | 5 | 认证回退 | 密钥失败 → 自动尝试密码 |
 
-### 13.6 SSH 选项
+### 16.6 SSH 选项
 
 通过 `-o` 参数可以设置额外的 SSH 选项：
 
@@ -1350,7 +1402,7 @@ assh set myserver -o timeout=10      # 连接超时（秒）
 assh proxy myserver -o keepalive=15
 ```
 
-### 13.7 直连模式
+### 16.7 直连模式
 
 所有命令都支持直连模式，不依赖已保存的配置：
 
@@ -1367,7 +1419,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 
 ---
 
-## 14. 命令速查表
+## 17. 命令速查表
 
 ### 14.1 assh 命令
 
@@ -1397,9 +1449,11 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `health check` | 健康检查 | `<server>[,server2,...]` | `assh health check web-01` |
 | `health list` | 批量检查 | `--group --concurrency --detail` | `assh health list --detail` |
 | `jump history` | 跳板历史 | `--limit --json --clear` | `assh jump history` |
+| `security vuln-check` | AI 安全漏洞检查 | `--server --group --output` | `assh security vuln-check --server web-01 CVE-2024-xxx` |
+| `security rules` | 安全规则管理 | `list / add / remove` | `assh security rules list` |
 | `version` | 版本信息 | — | `assh version` |
 
-### 14.2 assh-fs 命令
+### 17.2 assh-fs 命令
 
 | 命令 | 功能 | 常用参数 | 示例 |
 |------|------|----------|------|
@@ -1407,7 +1461,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `pull` | 拉取文件 | `-r --resume --checksum -H -u -P` | `assh-fs pull myserver /remote/file ./` |
 | `<server>` | 交互式 SFTP | 交互式命令 | `assh-fs myserver` |
 
-### 14.3 快捷键一览
+### 17.3 快捷键一览
 
 | 命令行模式 | 操作 |
 |-----------|------|
@@ -1417,7 +1471,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 
 ---
 
-## 15. 常见问题与技巧
+## 18. 常见问题与技巧
 
 ### 15.1 首次运行
 
