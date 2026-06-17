@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"time"
 
@@ -16,6 +17,12 @@ import (
 type NVDClient struct {
 	baseURL    string
 	httpClient *http.Client
+	debug      bool // --show-logs 时输出 HTTP 请求/响应详情
+}
+
+// SetDebug 启用或禁用 HTTP 调试日志。
+func (c *NVDClient) SetDebug(on bool) {
+	c.debug = on
 }
 
 // NewNVDClient 创建 NVDClient 实例。
@@ -79,6 +86,16 @@ func (c *NVDClient) Fetch(ctx context.Context, cveID string) (*domain.CVEDetail,
 	// 设置请求头
 	req.Header.Set("User-Agent", "assh/2.2.0")
 
+	// --show-logs 调试输出
+	if c.debug {
+		fmt.Fprintf(os.Stderr, "\n── CVE Request ─────────────────────────────\n")
+		fmt.Fprintf(os.Stderr, "GET %s\n", url)
+		fmt.Fprintf(os.Stderr, "Headers:\n")
+		for k, v := range req.Header {
+			fmt.Fprintf(os.Stderr, "  %s: %s\n", k, v)
+		}
+	}
+
 	// 发送请求
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -88,13 +105,30 @@ func (c *NVDClient) Fetch(ctx context.Context, cveID string) (*domain.CVEDetail,
 
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
+
+	// --show-logs 调试输出
+	if c.debug {
+		fmt.Fprintf(os.Stderr, "\n── CVE Response ────────────────────────────\n")
+		fmt.Fprintf(os.Stderr, "Status: %s\n", resp.Status)
+		bodyPreview := string(body)
+		if len(bodyPreview) > 800 {
+			bodyPreview = bodyPreview[:800] + "\n... (truncated)"
+		}
+		fmt.Fprintf(os.Stderr, "Body:\n%s\n", bodyPreview)
+		fmt.Fprintf(os.Stderr, "────────────────────────────────────────────\n\n")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// 检查状态码
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("NVD API returned error: %s - %s", resp.Status, string(body))
+		// 只取 body 前 120 字符用于诊断，避免打印完整 HTML 页面
+		bodyPreview := string(body)
+		if len(bodyPreview) > 120 {
+			bodyPreview = bodyPreview[:120] + "..."
+		}
+		return nil, fmt.Errorf("NVD API returned HTTP %d (%s)", resp.StatusCode, bodyPreview)
 	}
 
 	// 解析响应
