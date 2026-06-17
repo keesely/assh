@@ -62,10 +62,11 @@ type VulnReport struct {
 	Score     float64       `json:"score"`     // 风险评分
 	Severity  VulnSeverity  `json:"severity"`  // 严重程度
 	Suggestion string       `json:"suggestion"` // 修复建议
-	Timestamp time.Time     `json:"timestamp"` // 检查时间
-	Duration  time.Duration `json:"duration"`  // 执行时长
-	Script    string        `json:"script"`    // 执行的脚本
-	Logs      []string      `json:"logs"`      // 执行日志
+	Timestamp  time.Time     `json:"timestamp"`  // 检查时间
+	Duration   time.Duration `json:"duration"`   // 执行时长
+	Script     string        `json:"script"`     // 执行的脚本
+	Logs       []string      `json:"logs"`       // 执行日志
+	AIAnalysis string        `json:"aiAnalysis"` // AI 分析结果（执行后的汇总分析）
 }
 
 // VulnResult 表示漏洞检查结果。
@@ -186,11 +187,12 @@ type ExecResult struct {
 
 // AIConfig 表示 AI 服务配置。
 type AIConfig struct {
-	Endpoint    string  `yaml:"endpoint"`    // API 地址
+	Endpoint    string  `yaml:"base_url"`    // API 地址（兼容 OpenAI 格式的 base_url）
 	Model       string  `yaml:"model"`       // 模型名称
 	APIKey      string  `yaml:"api_key"`     // API 密钥
 	MaxTokens   int     `yaml:"max_tokens"`  // 最大 Token 数
 	Temperature float64 `yaml:"temperature"` // 温度参数
+	Timeout     int     `yaml:"timeout"`     // API 请求超时（秒）
 }
 
 // SecurityConfig 表示安全配置。

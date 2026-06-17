@@ -17,6 +17,10 @@ type AIProvider interface {
 	// GenerateScript 根据漏洞信息生成检测脚本。
 	GenerateScript(ctx context.Context, vulnInfo string, cveDetail *domain.CVEDetail) (string, error)
 
+	// AnalyzeExecution 分析脚本执行结果，给出修复建议或安全确认。
+	// 在脚本执行完成后调用，将执行输出 + 退出码发送给 AI 进行汇总分析。
+	AnalyzeExecution(ctx context.Context, vulnInfo string, script string, output string, exitCode int) (string, error)
+
 	// ValidateConnection 验证 AI 服务连接。
 	ValidateConnection(ctx context.Context) error
 
