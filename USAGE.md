@@ -17,9 +17,10 @@
 8. [代理与隧道](#8-代理与隧道)
 9. [云同步](#9-云同步)
 10. [健康检查](#10-健康检查)
-11. [配置参考](#11-配置参考)
-12. [命令速查表](#12-命令速查表)
-13. [常见问题与技巧](#13-常见问题与技巧)
+11. [安全检查](#11-安全检查)
+12. [配置参考](#12-配置参考)
+13. [命令速查表](#13-命令速查表)
+14. [常见问题与技巧](#14-常见问题与技巧)
 
 ---
 
@@ -36,6 +37,7 @@
 | 代理 & 隧道 | SOCKS5/HTTP CONNECT/AutoProxy/端口转发 | `assh proxy/tunnel` | Phase 7 |
 | 云同步 | 七牛云加密同步服务器配置 | `assh sync` | Phase 8 |
 | 健康检查 | SSH 连接延迟 + 系统指标采集 | `assh health` | Phase 9 |
+| 安全检查 | AI 驱动的 CVE 漏洞检测 + 内置安全规则 | `assh security` | X1 |
 | 加密存储 | AES-256-GCM + SQLite，自动密钥管理 | 内置 | Phase 2 |
 | 版本回滚 | 配置变更自动快照，支持任意版本回滚 | `assh rollback` | Phase 4 |
 
@@ -51,7 +53,8 @@ SSH 连接/管理      文件系统操作
 ├── keygen
 ├── proxy/tunnel
 ├── sync
-└── health
+├── health
+└── security
     │
     └── 共用核心层 (asshc/)
 ```
@@ -1090,9 +1093,192 @@ assh health check root@10.0.0.1:2222
 
 ---
 
-## 11. 配置参考
+## 11. 安全检查
 
-### 11.1 存储路径
+ASSH 提供 AI 驱动的安全检查功能，支持 CVE 漏洞检测和内置安全规则验证。
+功能位于实验阶段（X1），通过 `assh security` 命令组访问。
+
+### 11.1 漏洞检查（vuln-check）
+
+通过 AI 分析 CVE 漏洞信息，自动生成检测脚本并在远程服务器上执行：
+
+```bash
+# 检查单台服务器是否存在指定漏洞
+assh security vuln-check -s myserver 'CVE-2024-3094'
+
+# 检查多台服务器
+assh security vuln-check -s web-01,web-02,db-01 'CVE-2024-3094'
+
+# 按分组检查所有服务器
+assh security vuln-check -g prod 'CVE-2024-3094'
+
+# 仅生成检测脚本，不执行
+assh security vuln-check -s myserver 'CVE-2024-3094' --no-execute
+
+# 跳过高危操作确认
+assh security vuln-check -s myserver 'CVE-2024-3094' --no-confirm
+
+# 指定输出格式（text/json/markdown）
+assh security vuln-check -s myserver 'CVE-2024-3094' -o json
+
+# 指定超时时间（默认 5 分钟）
+assh security vuln-check -s myserver 'CVE-2024-3094' --timeout 10m
+
+# 调试模式：显示 AI / CVE 的完整 HTTP 请求和响应
+assh security vuln-check -s myserver 'CVE-2024-3094' --show-logs
+```
+
+**检测流程**：
+```
+输入 CVE 信息 → AI 分析漏洞详情 → 生成检测脚本
+→ 安全规则审查（12 条内置规则） → SSH 远程执行 → 输出报告
+```
+
+**输出示例**：
+
+```text
+═══════════════════════════════════════════════════════════
+  Vulnerability Check Report
+  Server:    myserver (192.168.1.100:22)
+  CVE:       CVE-2024-3094
+  Timestamp: 2026-06-17T10:30:00+08:00
+─────────────────────────────────────────────────────────
+  AI Analysis:
+    Severity:     CRITICAL
+    Description:  XZ Utils 5.6.0/5.6.1 被发现包含恶意代码（后门）
+    Affected:     xz-utils >= 5.6.0
+    Detection:    检查 xz 版本并验证二进制完整性
+
+  Generated Script:  ✅ AI generated
+  Security Review:   ✅ Passed (12/12 rules)
+  Execution:         ✅ Executed on myserver
+    Status:          VULNERABLE (exit code 1)
+    Duration:        2.3s
+    Output:
+      xz (XZ Utils) 5.6.1
+      ⚠️ 受影响版本，建议立即升级到 5.6.3+
+─────────────────────────────────────────────────────────
+  Result: VULNERABLE — 建议立即处理
+═══════════════════════════════════════════════════════════
+```
+
+### 11.2 安全规则管理（rules）
+
+内置 12 条安全规则，用于审查 AI 生成的检测脚本，防止执行危险操作：
+
+```bash
+# 列出所有安全规则
+assh security rules list
+# 输出：
+#   ✅ 禁止删除根目录               [high]
+#   ✅ 禁止格式化操作               [high]
+#   ✅ 禁止 777 权限                [medium]
+#   ✅ 禁止直接写块设备              [high]
+#   ✅ 禁止管道执行下载内容           [high]
+#   ✅ 禁止 fork 炸弹               [high]
+#   ✅ 禁止清空防火墙规则             [high]
+#   ✅ 禁止修改密码                 [medium]
+#   ✅ 服务操作                    [medium]
+#   ✅ 用户管理                    [medium]
+#   ✅ 定时任务                    [medium]
+#   ✅ 挂载操作                    [low]
+
+# 添加自定义规则
+assh security rules add '禁止修改主机名' 'hostnamectl.*set-hostname'
+
+# 移除规则
+assh security rules remove '禁止删除根目录'
+```
+
+**规则字段说明**：
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| 名称 | 规则描述 | `禁止删除根目录` |
+| 模式 | 正则匹配 | `^\s*rm\s+-rf\s+/\s*$` |
+| 严重级别 | high / medium / low | `high` |
+| 是否启用 | 默认启用 | `true` |
+
+### 11.3 AI 配置
+
+安全检查依赖 AI API 生成检测脚本和漏洞分析。首次使用时需配置 API Key：
+
+**配置文件路径**：`~/.assh/v2/ai.yml`
+
+```yaml
+# ~/.assh/v2/ai.yml
+api_key: "sk-your-api-key-here"
+model: "gpt-4o"                    # 可选，默认 gpt-4o
+base_url: "https://api.openai.com/v1"  # 可选，兼容 OpenAI 的 API 端点
+timeout: 120                        # 可选，API 请求超时（秒）
+```
+
+**流式配置方式**（文件不存在时自动创建）：
+
+```bash
+# 直接编辑配置文件
+vim ~/.assh/v2/ai.yml
+
+# 或使用环境变量（将覆盖配置文件中的值）
+export ASSH_AI_API_KEY="sk-your-api-key-here"
+export ASSH_AI_MODEL="gpt-4o"
+```
+
+> ⚠️ **注意**：未配置 API Key 时，vuln-check 仍可执行，但 AI 分析步骤会失败并回退。
+> 建议至少配置一个 API Key 以获得完整的 CVE 分析和脚本生成能力。
+
+### 11.4 数据存储
+
+安全检查结果存储在 `~/.assh/v2/data/security/` 目录下，包含每次检查的详细报告：
+
+```text
+~/.assh/v2/data/security/
+├── checks/               # 检查记录
+│   ├── 20260617/         # 按日期分目录
+│   │   ├── 170830001.json   # 检查报告（JSON 格式）
+│   │   └── ...
+│   └── ...
+└── index.db              # 检查历史索引（SQLite）
+```
+
+### 11.5 安全检查示例集合
+
+```bash
+# === 常见场景 ===
+
+# 场景：检查已知漏洞
+assh security vuln-check -s web-01 'CVE-2024-3094'
+
+# 场景：批量检查多台服务器
+assh security vuln-check -s web-01,web-02,db-01 'CVE-2024-6387'
+
+# 场景：按分组检查
+assh security vuln-check -g production 'CVE-2024-6387'
+
+# 场景：只看 AI 分析结果，不实际执行
+assh security vuln-check -s myserver 'CVE-2024-3094' --no-execute
+
+# 场景：调试模式 — 查看 AI/CVE API 的完整请求和响应
+assh security vuln-check -s myserver 'CVE-2024-3094' --show-logs
+
+# 场景：导出 JSON 格式报告供后续分析
+assh security vuln-check -s all 'CVE-2024-3094' -o json > report.json
+
+# 场景：添加自定义安全规则
+assh security rules add '禁止修改 SELinux 模式' 'setenforce\s+(0|1|Permissive|Enforcing)'
+
+# 场景：查看当前所有生效规则
+assh security rules list
+
+# 场景：移除不再需要的自定义规则
+assh security rules remove '禁止修改主机名'
+```
+
+---
+
+## 12. 配置参考
+
+### 12.1 存储路径
 
 ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 
@@ -1105,14 +1291,18 @@ ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 | `~/.assh/v2/.rsa.pub` | RSA 公钥 |
 | `~/.assh/v2/.account` | 加密的密码文件 |
 | `~/.assh/v2/data/keys/` | 密钥备份目录（按指纹命名子目录） |
+| `~/.assh/v2/data/security/` | 安全检查结果存储目录 |
+| `~/.assh/v2/ai.yml` | AI API 配置（OpenAI 兼容 API Key/Model） |
 
-### 11.2 环境变量
+### 12.2 环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `ASSH_CONFIG_DIR` | 配置目录路径 | `~/.assh/v2` |
+| `ASSH_AI_API_KEY` | AI API Key（覆盖 `ai.yml` 配置） | — |
+| `ASSH_AI_MODEL` | AI 模型名称（覆盖 `ai.yml` 配置） | — |
 
-### 11.3 全局命令行标志
+### 12.3 全局命令行标志
 
 | 标志 | 简写 | 说明 |
 |------|:----:|------|
@@ -1131,7 +1321,7 @@ ASSH v2 使用独立的 v2 路径，与 v1.x 隔离：
 
 > **组合短参数**：支持组合使用，例如 `-qv` 等价于 `-q -v`。
 
-### 11.4 日志级别
+### 12.4 日志级别
 
 | 级别 | 值 | 说明 |
 |------|:---:|------|
@@ -1154,7 +1344,7 @@ assh -q run myserver "uptime"
 assh -F ~/.assh/custom.yml login myserver
 ```
 
-### 11.5 认证配置
+### 12.5 认证配置
 
 服务器支持的认证方式及优先级：
 
@@ -1166,7 +1356,7 @@ assh -F ~/.assh/custom.yml login myserver
 | 4 | 密码 | `-P <password>` 或交互输入 |
 | 5 | 认证回退 | 密钥失败 → 自动尝试密码 |
 
-### 11.6 SSH 选项
+### 12.6 SSH 选项
 
 通过 `-o` 参数可以设置额外的 SSH 选项：
 
@@ -1178,7 +1368,7 @@ assh set myserver -o timeout=10      # 连接超时（秒）
 assh proxy myserver -o keepalive=15
 ```
 
-### 11.7 直连模式
+### 12.7 直连模式
 
 所有命令都支持直连模式，不依赖已保存的配置：
 
@@ -1195,9 +1385,9 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 
 ---
 
-## 12. 命令速查表
+## 13. 命令速查表
 
-### 12.1 assh 命令
+### 13.1 assh 命令
 
 | 命令 | 功能 | 常用参数 | 示例 |
 |------|------|----------|------|
@@ -1224,9 +1414,13 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `sync history` | 同步历史 | — | `assh sync history` |
 | `health check` | 健康检查 | `<server>[,server2,...]` | `assh health check web-01` |
 | `health list` | 批量检查 | `--group --concurrency --detail` | `assh health list --detail` |
+| `security vuln-check` | AI 漏洞检测 | `-s -g -o --no-execute --no-confirm --timeout` | `assh security vuln-check -s myserver 'CVE-2024-3094'` |
+| `security rules list` | 列出安全规则 | — | `assh security rules list` |
+| `security rules add` | 添加安全规则 | `<name> <regex>` | `assh security rules add '规则名' 'pattern'` |
+| `security rules remove` | 移除安全规则 | `<name>` | `assh security rules remove '规则名'` |
 | `version` | 版本信息 | — | `assh version` |
 
-### 12.2 assh-fs 命令
+### 13.2 assh-fs 命令
 
 | 命令 | 功能 | 常用参数 | 示例 |
 |------|------|----------|------|
@@ -1234,7 +1428,7 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 | `pull` | 拉取文件 | `-r --resume --checksum -H -u -P` | `assh-fs pull myserver /remote/file ./` |
 | `<server>` | 交互式 SFTP | 交互式命令 | `assh-fs myserver` |
 
-### 12.3 快捷键一览
+### 13.3 快捷键一览
 
 | 命令行模式 | 操作 |
 |-----------|------|
@@ -1243,9 +1437,9 @@ assh keygen -H <host> -u <user> -P password -t ed25519
 
 ---
 
-## 13. 常见问题与技巧
+## 14. 常见问题与技巧
 
-### 13.1 首次运行
+### 14.1 首次运行
 
 **Q: 第一次运行 assh 需要做什么？**
 
@@ -1257,13 +1451,13 @@ A: 下载二进制后直接运行即可。首次运行会自动：
 
 不需要手动配置，添加服务器即可开始使用。
 
-### 13.2 密码存储安全
+### 14.2 密码存储安全
 
 **Q: 密码存储在本地安全吗？**
 
 A: 密码使用 AES-256-GCM 加密存储在 SQLite 中。加密密钥在首次运行时自动生成，单独存储在同一数据库的 `config` 表中，并通过 Base64 编码持久化。理论上需要同时获取数据库文件和破解 AES-256 才能解密。
 
-### 13.3 跨设备同步配置
+### 14.3 跨设备同步配置
 
 **Q: 如何在多台电脑之间同步服务器配置？**
 
@@ -1278,7 +1472,7 @@ assh sync account set
 assh sync pull
 ```
 
-### 13.4 代理保持后台运行
+### 14.4 代理保持后台运行
 
 **Q: 关闭终端后代理会停止吗？**
 
@@ -1288,7 +1482,7 @@ assh proxy myserver --socks5 :1080 --daemon
 ```
 关闭终端后代理继续运行。使用 `ps aux | grep assh` 查看进程，`kill` 停止。
 
-### 13.5 端口转发场景
+### 14.5 端口转发场景
 
 **Q: 如何访问内网数据库？**
 
@@ -1300,7 +1494,7 @@ assh tunnel start jump-server -L 3306:rds.internal:3306
 mysql -h 127.0.0.1 -P 3306 -u admin -p
 ```
 
-### 13.6 文件传输效率
+### 14.6 文件传输效率
 
 **Q: 大文件传输中断了怎么办？**
 
@@ -1310,7 +1504,7 @@ assh-fs push --resume myserver ./large-file.iso /remote/
 ```
 传输中断后重新执行相同命令，会自动从断点处继续。
 
-### 13.7 批量服务器管理
+### 14.7 批量服务器管理
 
 **Q: 如何对多台服务器执行相同命令？**
 
@@ -1326,7 +1520,7 @@ assh bc "systemctl restart nginx" --group prod
 assh bc "date" --servers s1,s2 --log ./result.json
 ```
 
-### 13.8 常用组合技巧
+### 14.8 常用组合技巧
 
 ```bash
 # 快速查看所有服务器的磁盘使用
@@ -1350,7 +1544,7 @@ assh health list --concurrency 20
 assh -v proxy myserver --socks5 :1080 --log-dir ./logs
 ```
 
-### 13.9 故障排查
+### 14.9 故障排查
 
 **Q: 连接失败怎么办？**
 
@@ -1377,7 +1571,7 @@ A: `assh-fs` 是独立的二进制文件，需要确保：
 1. 构建时同时生成了 `assh-fs`（`build.sh` 自动构建两个二进制）
 2. 两个二进制都在 `PATH` 中
 
-### 13.10 最佳实践总结
+### 14.10 最佳实践总结
 
 | 实践 | 说明 |
 |------|------|
@@ -1391,6 +1585,7 @@ A: `assh-fs` 是独立的二进制文件，需要确保：
 | 代理加规则引擎 | `--autoproxy` 智能分流，不必全局走代理 |
 | 启动时用 -v 调试 | 第一次连接遇到问题时加 `-v` 查看详情 |
 | 回滚是安全网 | 修改配置后如果出错，`rollback` 一键恢复 |
+| AI 安全检查 | 使用 `assh security vuln-check` 快速检测已知 CVE 漏洞 |
 
 
 

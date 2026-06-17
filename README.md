@@ -20,6 +20,7 @@
 | 🔄 **代理 & 隧道** | SOCKS5/HTTP CONNECT 代理、AutoProxy 规则引擎、端口转发 |
 | ☁️ **云同步** | 七牛云加密同步服务器配置，跨设备共享 |
 | ❤️ **健康检查** | 连接延迟 + 系统指标采集，单机/批量/分组巡检 |
+| 🛡️ **AI 安全检查** | AI 驱动的 CVE 漏洞检测 + 内置安全规则审查 |
 | ⚡ **批量执行** | 多服务器并发命令执行、三通道输出 |
 | 🔌 **直连模式** | 不依赖已保存配置，直接指定 host/user/password 连接 |
 | 🔧 **双二进制** | `assh`（连接管理）+ `assh-fs`（文件操作）各自独立编译 |
@@ -401,6 +402,7 @@ assh tunnel list          # 列出活跃隧道
 | `proxy log` | 查看代理日志 | ✅ Phase 7 |
 | `sync` | 云同步（push/pull/account/history） | ✅ Phase 8 |
 | `health` | 服务器健康检查（check/list） | ✅ Phase 9 |
+| `security` | AI 安全检查（vuln-check/rules） | 🚧 X1 |
 
 ### assh-fs（文件操作）
 
@@ -437,16 +439,13 @@ assh tunnel list          # 列出活跃隧道
 | 7 | 代理 & 隧道 (SOCKS5/HTTP CONNECT/AutoProxy/端口转发) | ✅ 完成 | 2026-05-13 |
 | 8 | 云同步 (Qiniu) | ✅ 完成 | 2026-05-16 |
 | 9 | 服务器健康检查 | ✅ 完成 | 2026-05-17 |
-| 10 | 跳板机/堡垒机支持 | ⏳ 待开始 | — |
-| 11 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ 待开始 | — |
-| 12 | 自动更新/升级 | ⏳ 待开始 | — |
-| 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ⏳ 待开始 | — |
-| 10 | 跳板机/堡垒机支持 | ⏳ 待开始 | — |
-| 11 | 远程服务器挂载 (sshfs/webdav/samba) | ⏳ 待开始 | — |
-| 12 | 自动更新/升级 | ⏳ 待开始 | — |
-| 13 | 远程命令执行增强 (超时/输出格式化/变量替换) | ⏳ 待开始 | — |
-| X1 | 实验：AI 安全检查 | 🆕 进行中 (2026-05-17) | — |
-| X2 | 实验：虚拟命令投放与执行 | ⏳ 待开始 | — |
+| 10 | 跳板机/堡垒机支持 | ✅ 完成 | 2026-05-22 |
+| 11 | 自动更新/升级 | ✅ 完成 | 2026-06-14 |
+| 12 | 远程服务器挂载 (sshfs/webdav) | ✅ 完成 | 2026-06-14 |
+| 13 | 远程命令执行增强 (超时/格式化/变量替换) | ✅ 完成 | 2026-06-14 |
+| NEXT-001 | 代理/隧道增强 (HTTP/TCP/SOCKS 重构, tunnel 简化, SQLite 服务管理) | ✅ 完成 | 2026-06-14 |
+| X1 | 实验：AI 安全检查 | 🚧 开发中 (2026-06-17) | — |
+| X2 | 实验：虚拟命令投放与执行 | ❄️ 已冻结 | — |
 
 > 📖 **完整使用手册**：[USAGE.md](USAGE.md) — 涵盖所有功能的中文示例驱动文档，含 150+ 场景示例和最佳实践
 
@@ -504,7 +503,8 @@ asshv2/
 │   ├── keygen.go            # 密钥生成命令
 │   ├── sync.go              # 云同步命令（account/push/pull/history）
 │   ├── health.go            # 健康检查命令（check/list）
-│   ├── bootstrap.go         # 公共初始化逻辑
+│   ├── security.go          # 安全检查命令（vuln-check/rules）(X1)
+│   ├── bootstrap.go         # 公共初始化逻辑（DB/SSH 连接工厂）
 │   └── fs/
 │       └── main.go          # assh-fs 入口（DI 组合根）
 │
@@ -525,6 +525,9 @@ asshv2/
 │   │   ├── keymanager.go    # KeyManager 接口
 │   │   ├── syncer.go        # Syncer 接口（云同步）
 │   │   ├── health.go        # HealthChecker 接口
+│   │   ├── mounter.go       # FileMounter/MountManager 接口 (Phase 12)
+│   │   ├── servicemgr.go    # ServiceManager 接口 (NEXT-001)
+│   │   ├── vuln.go          # VulnerabilityChecker / VulnStore / AIProvider 接口 (X1)
 │   │   └── cryptor.go       # Cryptor 接口
 │   ├── service/             # 用例编排（依赖 port 接口）
 │   │   ├── server.go        # 服务器 CRUD + 版本回滚
@@ -535,7 +538,10 @@ asshv2/
 │   │   ├── key.go           # 密钥管理服务
 │   │   ├── deploy.go        # 公钥部署服务
 │   │   ├── sync.go          # 云同步服务
-│   │   └── health.go        # 健康检查服务
+│   │   ├── health.go        # 健康检查服务
+│   │   ├── mount.go         # 远程挂载服务 (Phase 12)
+│   │   ├── servicemgr.go    # 服务管理 (NEXT-001)
+│   │   └── vuln.go          # AI 漏洞检查服务 (X1)
 │   └── infra/               # 接口实现
 │       ├── store/           # SQLite 持久化
 │       │   ├── db.go        # 连接管理 + 自动迁移
@@ -570,6 +576,21 @@ asshv2/
 │       ├── sync/            # 云同步实现
 │       │   └── qiniu/       # 七牛云 Syncer 实现
 │       │       └── qiniu.go
+│       ├── ai/              # AI 服务实现 (X1)
+│       │   ├── config.go    # AI 配置加载器 (ai.yml → AIConfig)
+│       │   └── openai.go    # OpenAI 兼容 API 客户端
+│       ├── cve/             # CVE 漏洞详情获取 (X1)
+│       │   └── nvd.go       # NVD NIST API 客户端
+│       ├── security/        # 安全规则引擎 (X1)
+│       │   └── scanner.go   # 12 条内置安全规则 + 脚本审查
+│       ├── vulnstore/       # 检查结果持久化 (X1)
+│       │   └── store.go     # 文件存储 + SQLite 索引
+│       ├── mount/           # 远程挂载实现 (Phase 12)
+│       │   ├── sshfs.go     # SSHFS 挂载器
+│       │   ├── webdav.go    # WebDAV 挂载器
+│       │   ├── manager.go   # 挂载管理器
+│       │   ├── detect.go    # 依赖检测
+│       │   └── port.go      # WebDAV 端口管理
 │       └── keymgr/          # 密钥管理实现
 │           ├── generate.go  # 密钥生成（RSA/Ed25519/ECDSA）
 │           └── backup.go    # 密钥备份
