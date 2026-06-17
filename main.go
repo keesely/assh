@@ -16,10 +16,14 @@ import (
 	"strings"
 
 	"assh/cmd"
+	"assh/asshc/infra/ai"
+	"assh/asshc/infra/cve"
 	"assh/asshc/infra/keymgr"
 	"assh/asshc/infra/proxy"
+	"assh/asshc/infra/security"
 	sshinfra "assh/asshc/infra/ssh"
 	"assh/asshc/infra/store"
+	"assh/asshc/infra/vulnstore"
 	qiniusync "assh/asshc/infra/sync/qiniu"
 	"assh/asshc/port"
 	"assh/asshc/service"
@@ -89,8 +93,27 @@ func main() {
 	healthChecker := sshinfra.NewHealthChecker(connector)
 	healthSvc := service.NewHealthService(healthChecker, repo)
 
-	// 10. 创建 CLI 应用并运行
-	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc)
+	// 10. 创建漏洞检查服务（X1: AI 安全检查）
+	// AI 配置：默认使用 OpenAI 兼容 API，用户可通过 ~/.assh/v2/ai.yml 自定义
+	aiConfigLoader := ai.NewConfigLoader("")
+	aiCfg, _ := aiConfigLoader.Load()
+	if aiCfg.APIKey == "" {
+		// 无 API Key 时仍可使用，但 AI 生成会失败回退
+		fmt.Fprintf(os.Stderr, "Warning: AI API key not configured (set in ~/.assh/v2/ai.yml)\n")
+	}
+	aiProvider := ai.NewOpenAIClient(aiCfg)
+	cveFetcher := cve.NewNVDClient()
+	securityScanner := security.NewScanner()
+	vulnDBPath, _ := config.ExpandPath(filepath.Join(config.DataPath, "security"))
+	vulnStore, err := vulnstore.NewStore(vulnDBPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to init vuln store: %v\n", err)
+		vulnStore = nil
+	}
+	vulnSvc := service.NewVulnService(aiProvider, cveFetcher, securityScanner, connector, vulnStore)
+
+	// 11. 创建 CLI 应用并运行
+	app := cmd.NewApp(Version, Build, connectSvc, serverSvc, repo, keySvc, km, proxySvc, syncSvc, healthSvc, vulnSvc)
 	if err := app.Run(args); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

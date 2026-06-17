@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -10,13 +12,9 @@ import (
 )
 
 // registerSecurityCommands 注册安全检查命令。
+// 通过闭包捕获 App 实例，访问 vulnSvc 和 serverSvc 执行实际检查。
 func (a *App) registerSecurityCommands() {
-	a.cli.Commands = append(a.cli.Commands, securityCommand())
-}
-
-// securityCommand 定义安全检查命令。
-func securityCommand() cli.Command {
-	return cli.Command{
+	a.cli.Commands = append(a.cli.Commands, cli.Command{
 		Name:  "security",
 		Usage: "Security vulnerability checking",
 		Subcommands: []cli.Command{
@@ -50,70 +48,162 @@ func securityCommand() cli.Command {
 						Usage: "Execution timeout",
 						Value: 300 * time.Second,
 					},
+					cli.BoolFlag{
+						Name:  "show-logs",
+						Usage: "Show full HTTP request/response details (debug)",
+					},
 				},
-				Action: vulnCheckAction,
+				Action: func(c *cli.Context) error {
+					server := c.String("server")
+					group := c.String("group")
+					vulnInfo := c.Args().First()
+					format := c.String("output")
+					noExec := c.Bool("no-execute")
+					execTimeout := c.Duration("timeout")
+					showLogs := c.Bool("show-logs")
+
+					if vulnInfo == "" {
+						return fmt.Errorf("vulnerability information is required")
+					}
+					if server == "" && group == "" {
+						return fmt.Errorf("server or group is required")
+					}
+					if a.vulnSvc == nil {
+						return fmt.Errorf("vulnerability check service not available")
+					}
+
+					// 启用 HTTP 请求/响应调试（输出到 stderr）
+					a.vulnSvc.SetShowLogs(showLogs)
+
+					ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+					defer cancel()
+
+					if server != "" {
+						servers := strings.Split(server, ",")
+						for _, s := range servers {
+							s = strings.TrimSpace(s)
+							if s == "" {
+								continue
+							}
+							if err := a.runVulnCheck(ctx, s, vulnInfo, format, noExec, showLogs); err != nil {
+								fmt.Fprintf(c.App.Writer, "Error checking %s: %v\n", s, err)
+							}
+						}
+					} else if group != "" {
+						fmt.Fprintf(c.App.Writer, "Group check not yet implemented\n")
+					}
+					return nil
+				},
 			},
 			{
 				Name:  "rules",
 				Usage: "Manage security rules",
 				Subcommands: []cli.Command{
 					{
-						Name:   "list",
-						Usage:  "List all security rules",
-						Action: rulesListAction,
+						Name:  "list",
+						Usage: "List all security rules",
+						Action: func(c *cli.Context) error {
+							if a.vulnSvc == nil {
+								return fmt.Errorf("vulnerability check service not available")
+							}
+							rules := a.vulnSvc.ListRules()
+							fmt.Fprintln(c.App.Writer, "Security Rules:")
+							fmt.Fprintln(c.App.Writer, "─────────────────────────────────")
+							if len(rules) == 0 {
+								fmt.Fprintln(c.App.Writer, "  (no rules)")
+							}
+							for _, r := range rules {
+								status := "✅"
+								if !r.Enabled {
+									status = "⛔"
+								}
+								fmt.Fprintf(c.App.Writer, "  %s %-30s [%s] %s\n",
+									status, r.Name, r.RiskLevel, r.Message)
+							}
+							return nil
+						},
 					},
 					{
-						Name:   "add",
-						Usage:  "Add a security rule",
-						Action: rulesAddAction,
+						Name:  "add",
+						Usage: "Add a security rule: <name> <regex-pattern>",
+						Action: func(c *cli.Context) error {
+							if a.vulnSvc == nil {
+								return fmt.Errorf("vulnerability check service not available")
+							}
+							name := c.Args().First()
+							if name == "" {
+								return fmt.Errorf("rule name is required")
+							}
+							pattern := c.Args().Get(1)
+							if pattern == "" {
+								return fmt.Errorf("rule regex pattern is required")
+							}
+							rule := &domain.SecurityRule{
+								Name:      name,
+								Pattern:   pattern,
+								RiskLevel: domain.RiskMedium,
+								Message:   "Custom rule: " + name,
+								Enabled:   true,
+								Custom:    true,
+							}
+							if err := a.vulnSvc.AddRule(rule); err != nil {
+								return fmt.Errorf("failed to add rule: %w", err)
+							}
+							fmt.Fprintf(c.App.Writer, "Rule added: %s\n", name)
+							return nil
+						},
 					},
 					{
-						Name:   "remove",
-						Usage:  "Remove a security rule",
-						Action: rulesRemoveAction,
+						Name:  "remove",
+						Usage: "Remove a security rule: <name>",
+						Action: func(c *cli.Context) error {
+							if a.vulnSvc == nil {
+								return fmt.Errorf("vulnerability check service not available")
+							}
+							name := c.Args().First()
+							if name == "" {
+								return fmt.Errorf("rule name is required")
+							}
+							if err := a.vulnSvc.RemoveRule(name); err != nil {
+								return fmt.Errorf("failed to remove rule: %w", err)
+							}
+							fmt.Fprintf(c.App.Writer, "Rule removed: %s\n", name)
+							return nil
+						},
 					},
 				},
 			},
 		},
-	}
+	})
 }
 
-// vulnCheckAction 执行漏洞检查。
-func vulnCheckAction(c *cli.Context) error {
-	// 获取参数
-	server := c.String("server")
-	group := c.String("group")
-	vulnInfo := c.Args().First()
-
-	// 验证参数
-	if vulnInfo == "" {
-		return fmt.Errorf("vulnerability information is required")
+// runVulnCheck 对单台服务器执行漏洞检查并输出报告。
+func (a *App) runVulnCheck(ctx context.Context, serverName, vulnInfo, format string, noExec, showLogs bool) error {
+	svr, err := a.serverSvc.GetServer(serverName)
+	if err != nil {
+		return fmt.Errorf("server '%s' not found: %w", serverName, err)
 	}
 
-	if server == "" && group == "" {
-		return fmt.Errorf("server or group is required")
-	}
-
-	// TODO: 获取应用组件并执行检查
-	// 这里需要实现实际的检查逻辑
-
-	if server != "" {
-		// 检查单台或多台服务器
-		servers := strings.Split(server, ",")
-		for _, s := range servers {
-			s = strings.TrimSpace(s)
-			if s == "" {
-				continue
-			}
-
-			// TODO: 获取服务器配置并执行检查
-			fmt.Printf("Checking server: %s for vulnerability: %s\n", s, vulnInfo)
+	if noExec {
+		fmt.Fprintf(os.Stderr, "🔍 服务器: %s  漏洞: %s (仅生成脚本)\n", serverName, vulnInfo)
+		script, err := a.vulnSvc.GenerateScript(ctx, vulnInfo, nil)
+		if err != nil {
+			return fmt.Errorf("failed to generate script: %w", err)
 		}
-	} else if group != "" {
-		// 检查分组服务器
-		fmt.Printf("Checking group: %s for vulnerability: %s\n", group, vulnInfo)
+		fmt.Fprintln(os.Stderr, "── 生成的检测脚本 ────────────────────")
+		fmt.Fprintln(os.Stderr, script)
+		fmt.Fprintln(os.Stderr, "──────────────────────────────────────")
+		fmt.Fprintln(os.Stderr, "(未执行，--no-execute 指定)")
+		return nil
 	}
 
+	// VulnService.Check() 内部已输出详细执行日志到 stderr
+	report, err := a.vulnSvc.Check(ctx, svr, vulnInfo)
+	if err != nil {
+		return fmt.Errorf("check failed: %w", err)
+	}
+
+	outputReport(report, format)
 	return nil
 }
 
@@ -131,30 +221,68 @@ func outputReport(report *domain.VulnReport, format string) {
 
 // outputText 输出文本格式。
 func outputText(report *domain.VulnReport) {
-	fmt.Println("┌─ AI 安全检查 ─────────────────────┐")
-	fmt.Printf("│ 漏洞: %-28s │\n", report.VulnID)
-	fmt.Printf("│ 目标: %-28s │\n", report.Target)
-	fmt.Printf("│ 状态: %-28s │\n", getStatusText(report.Status))
-	fmt.Printf("│ 详情: %-28s │\n", truncate(report.Details, 28))
-	fmt.Printf("│ 建议: %-28s │\n", truncate(report.Suggestion, 28))
-	fmt.Println("└────────────────────────────────────┘")
+	fmt.Println("\n═══════════════════════════════════════════════════════════")
+	fmt.Printf("  Vulnerability Check Report\n")
+	fmt.Printf("  Vulnerability: %s\n", report.VulnID)
+	fmt.Printf("  Target:        %s\n", report.Target)
+	fmt.Printf("  Timestamp:     %s\n", report.Timestamp.Format("2006-01-02 15:04:05"))
+	fmt.Printf("  Duration:      %s\n", report.Duration.Round(time.Millisecond))
+	fmt.Println("─────────────────────────────────────────────────────────")
+	if report.Score > 0 {
+		fmt.Printf("  CVSS Score:    %.1f (%s)\n", report.Score, report.Severity)
+	}
+	fmt.Printf("  Result:        %s\n", getStatusText(report.Status))
+	if report.Details != "" {
+		fmt.Println("── Script Execution Output ──────────────")
+		fmt.Println(report.Details)
+	}
+	if report.AIAnalysis != "" {
+		fmt.Println("── AI Analysis ───────────────────────────")
+		fmt.Println(report.AIAnalysis)
+	}
+	fmt.Println("═══════════════════════════════════════════════════════════")
 }
 
 // outputJSON 输出 JSON 格式。
 func outputJSON(report *domain.VulnReport) {
-	// TODO: 实现 JSON 输出
 	fmt.Printf("JSON output not implemented yet\n")
 }
 
 // outputMarkdown 输出 Markdown 格式。
 func outputMarkdown(report *domain.VulnReport) {
-	fmt.Printf("# AI 安全检查报告\n\n")
-	fmt.Printf("- **漏洞**: %s\n", report.VulnID)
-	fmt.Printf("- **目标**: %s\n", report.Target)
-	fmt.Printf("- **时间**: %s\n", report.Timestamp.Format("2006-01-02 15:04:05"))
-	fmt.Printf("- **状态**: %s\n", getStatusText(report.Status))
-	fmt.Printf("- **详情**: %s\n", report.Details)
-	fmt.Printf("- **建议**: %s\n", report.Suggestion)
+	fmt.Printf("# Vulnerability Check Report\n\n")
+	fmt.Printf("| Field | Value |\n")
+	fmt.Printf("|-------|-------|\n")
+	fmt.Printf("| Vulnerability | %s |\n", report.VulnID)
+	fmt.Printf("| Target | %s |\n", report.Target)
+	fmt.Printf("| Timestamp | %s |\n", report.Timestamp.Format("2006-01-02 15:04:05"))
+	fmt.Printf("| Duration | %s |\n", report.Duration.Round(time.Millisecond))
+	if report.Score > 0 {
+		fmt.Printf("| CVSS Score | %.1f (%s) |\n", report.Score, report.Severity)
+	}
+	fmt.Printf("| Result | %s |\n", getStatusText(report.Status))
+	fmt.Println()
+	if report.Details != "" {
+		fmt.Println("## Script Execution Output")
+		fmt.Println()
+		fmt.Println("```")
+		fmt.Println(report.Details)
+		fmt.Println("```")
+		fmt.Println()
+	}
+	if report.AIAnalysis != "" {
+		fmt.Println("## AI Analysis & Recommendations")
+		fmt.Println()
+		fmt.Println(report.AIAnalysis)
+		fmt.Println()
+	}
+	if report.Script != "" {
+		fmt.Println("## Generated Script")
+		fmt.Println()
+		fmt.Println("```bash")
+		fmt.Println(report.Script)
+		fmt.Println("```")
+	}
 }
 
 // getStatusText 获取状态文本。
