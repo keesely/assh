@@ -9,8 +9,13 @@ import (
 	"github.com/urfave/cli"
 )
 
-// SecurityCommand 定义安全检查命令。
-func SecurityCommand() cli.Command {
+// registerSecurityCommands 注册安全检查命令。
+func (a *App) registerSecurityCommands() {
+	a.cli.Commands = append(a.cli.Commands, securityCommand())
+}
+
+// securityCommand 定义安全检查命令。
+func securityCommand() cli.Command {
 	return cli.Command{
 		Name:  "security",
 		Usage: "Security vulnerability checking",
